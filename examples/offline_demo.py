@@ -159,7 +159,7 @@ def main():
     line('  下一步（接上真机后）:')
     line('    python doctor.py                              # 环境自检')
     line('    python examples/dump_tree.py --bundle <包名>   # 核对真实控件树')
-    line('    python examples/run_case.py cases/login.yaml --bundle <包名>')
+    line('    python examples/run_case.py examples/cases/login.yaml --bundle <包名>')
     return 0
 
 

@@ -22,9 +22,9 @@
 用法
 ----
 
-    python ci/static_check.py                # 检查（默认只报 error 级）
-    python ci/static_check.py --all          # 连 warning 一起报
-    python ci/static_check.py --quiet        # 只输出汇总与退出码
+    python tools/static_check.py                # 检查（默认只报 error 级）
+    python tools/static_check.py --all          # 连 warning 一起报
+    python tools/static_check.py --quiet        # 只输出汇总与退出码
 
 退出码：0 = 通过，1 = 有 error 级问题（CI 应据此阻断）。
 """

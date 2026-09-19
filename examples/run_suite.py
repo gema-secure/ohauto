@@ -7,20 +7,20 @@
 
 用法:
     # 跑一个用例
-    python examples/run_suite.py cases/login.yaml --bundle com.example.app
+    python examples/run_suite.py examples/cases/login.yaml --bundle com.example.app
 
     # 批量跑多个用例
-    python examples/run_suite.py cases/*.yaml --bundle com.example.app
+    python examples/run_suite.py examples/cases/*.yaml --bundle com.example.app
 
     # ★ 执行引擎 验收：把同一个用例循环到 50 步，量成功率
-    python examples/run_suite.py cases/note_stability.yaml --repeat 5 \\
+    python examples/run_suite.py examples/cases/note_stability.yaml --repeat 5 \\
         --bundle com.ohos.note --ability MainAbility
 
     # 对照实验：关掉重试，看引擎到底救回了多少步
-    python examples/run_suite.py cases/note_stability.yaml --repeat 5 --no-retry
+    python examples/run_suite.py examples/cases/note_stability.yaml --repeat 5 --no-retry
 
     # 无真机自检（CI 用）
-    python examples/run_suite.py cases/login.yaml --sim --repeat 5
+    python examples/run_suite.py examples/cases/login.yaml --sim --repeat 5
 
 退出码：0 = 达标；1 = 未达标（可直接用于 CI 质量门禁）
 """

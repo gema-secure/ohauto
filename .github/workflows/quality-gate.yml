@@ -6,11 +6,11 @@
 #
 # ★ 设计原则：**检查逻辑只写一遍**
 # 早期版本把「静态检查 / 测试 / 覆盖率 / 端到端」在 workflow 里又抄了一遍，
-# 而 `ci/quality_gate.py` 里还有一套 —— 两套必然漂移。现在只调 `ci/quality_gate.py`，
+# 而 `tools/quality_gate.py` 里还有一套 —— 两套必然漂移。现在只调 `tools/quality_gate.py`，
 # workflow 自己只负责「跑」和「归档产物」。
 #
 # ★ 仓库根假设已被消除
-# 本配置**不假设**仓库根在哪，第一步会自动探测 `ci/quality_gate.py` 的位置
+# 本配置**不假设**仓库根在哪，第一步会自动探测 `tools/quality_gate.py` 的位置
 # （`./` 或 `ohauto/`），所以上传整个 guochuang-2026/ 或只上传 ohauto/ 都能跑。
 
 name: 质量门禁
@@ -44,14 +44,14 @@ jobs:
       # ★ 自动探测项目目录 —— 消除「仓库根在哪」这个假设
       - name: 探测项目目录
         run: |
-          if [ -f ci/quality_gate.py ]; then
+          if [ -f tools/quality_gate.py ]; then
             echo "PROJ=." > proj_dir.txt
             echo "✓ 仓库根就是项目根"
-          elif [ -f ohauto/ci/quality_gate.py ]; then
+          elif [ -f ohauto/tools/quality_gate.py ]; then
             echo "PROJ=ohauto" > proj_dir.txt
             echo "✓ 项目在 ohauto/ 子目录下"
           else
-            echo "✗ 找不到 ci/quality_gate.py（期望 ./ 或 ./ohauto/）"
+            echo "✗ 找不到 tools/quality_gate.py（期望 ./ 或 ./ohauto/）"
             exit 1
           fi
 
@@ -68,7 +68,7 @@ jobs:
         run: |
           PROJ=$(cut -d= -f2 proj_dir.txt)
           cd "$PROJ"
-          python ci/quality_gate.py --json _out/ci_result.json
+          python tools/quality_gate.py --json _out/ci_result.json
 
       # 以下只是「产出报告」，不重复任何检查逻辑
       - name: 生成覆盖率 HTML（供人查阅）

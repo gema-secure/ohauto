@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ohauto"
+version = "0.1.0"
+description = "面向 OpenHarmony 的多模态智能 UI 测试系统 —— 基于 hdc 命令行通路，设备侧零部署"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "见仓库说明（暂未选定开源协议）" }
+keywords = ["openharmony", "harmonyos", "ui-automation", "testing", "hdc"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Testing",
+]
+
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "coverage>=7.0",
+]
+
+# 命令行入口：安装后可直接 `ohauto-doctor` 跑环境自检
+[project.scripts]
+ohauto-doctor = "doctor:main"
+
+[tool.setuptools]
+# doctor.py 在仓库根目录，作为独立模块一起打包
+py-modules = ["doctor"]
+packages = ["ohauto"]
+
+[tool.setuptools.package-data]
+# 形态档案（77 条设备形态数据）是运行时依赖，必须随包分发
+ohauto = ["devices/*.json", "devices/*.md"]

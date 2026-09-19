@@ -23,14 +23,22 @@
 
 | 想了解什么 | 看哪 |
 |---|---|
-| **系统设计**（技术路线、为什么这么选） | [`docs/系统设计.md`](docs/系统设计.md) |
-| **真机适配实测**（踩过的坑与修复） | [`docs/实测-真机适配.md`](docs/实测-真机适配.md) |
-| **执行引擎健壮性实测**（重试 / 设备自愈） | [`docs/实测-执行引擎健壮性.md`](docs/实测-执行引擎健壮性.md) |
-| **跨形态测试实测**（折叠屏 / 平板差异比对） | [`docs/实测-跨形态测试.md`](docs/实测-跨形态测试.md) |
+| **系统设计**（技术路线、分层架构） | [`docs/系统设计.md`](docs/系统设计.md) |
 | **折叠屏模拟器操作指南** | [`docs/指南-折叠屏模拟器.md`](docs/指南-折叠屏模拟器.md) |
 | **结果信号采集说明**（崩溃 / 白屏 / 无响应） | [`docs/信号采集-说明.md`](docs/信号采集-说明.md) |
-| **真机采集素材**（7 个应用的真实控件树与截图） | [`samples/真机采集-20260919/`](samples/真机采集-20260919/) |
-| **质量门禁与覆盖率** | [`ci/README.md`](ci/README.md) |
+
+## 安装
+
+```bash
+# 方式一：直接用源码（推荐，无需安装）
+python -c "import ohauto"          # 需在项目根目录
+
+# 方式二：装成包，并拿到命令行工具
+pip install .
+ohauto-doctor                      # 环境自检
+```
+
+依赖：`Python >= 3.9` + `pyyaml>=6.0`（可选，缺失时 Action DSL 自动退化为 JSON）。
 
 ## 目录
 
@@ -138,7 +146,7 @@ python examples/offline_demo.py
 ```bash
 python examples/dump_tree.py --bundle <包名>      # 第一步：核对真实控件树结构
 python examples/smoke_test.py --bundle <包名>     # 第二步：最小闭环
-python examples/run_case.py cases/login.yaml --bundle <包名>
+python examples/run_case.py examples/cases/login.yaml --bundle <包名>
 ```
 
 ---
@@ -254,7 +262,7 @@ steps:
 from ohauto import action, report
 from ohauto.driver import Driver
 
-case = action.load_case('cases/login.yaml')
+case = action.load_case('examples/cases/login.yaml')
 with Driver(bundle='com.example.app') as d:
     rep = action.run_case(d, case)
     print(rep.ok, rep.passed, rep.total)
@@ -399,13 +407,13 @@ python -m unittest tests.test_integration_sim -v
 ## 质量门禁（CI）
 
 ```bash
-python ci/quality_gate.py            # 四道关卡全跑（约 100s）
-python ci/quality_gate.py --fast     # 跳过覆盖率，本地快速自测
+python tools/quality_gate.py            # 四道关卡全跑（约 100s）
+python tools/quality_gate.py --fast     # 跳过覆盖率，本地快速自测
 ```
 
 | # | 关卡 | 阻断条件 |
 |---|---|---|
-| 1 | 静态检查（`ci/static_check.py`，**零依赖**） | 有 error |
+| 1 | 静态检查（`tools/static_check.py`，**零依赖**） | 有 error |
 | 2 | 单元测试（589 项） | 任一失败 |
 | 3 | 覆盖率（`.coveragerc` 的 `fail_under`） | < **70%** |
 | 4 | 离线端到端（`examples/offline_demo.py`） | 非零退出 |
@@ -415,7 +423,7 @@ python ci/quality_gate.py --fast     # 跳过覆盖率，本地快速自测
 
 > 静态检查**不引 flake8/mypy** —— 项目红线是「只用标准库，不引入新依赖」，
 > 所以用 `ast` 实现了类型注解、命名规范、危险模式等检查。
-> 详见 `ci/README.md`。
+> 详见 本仓库「质量门禁（CI）」章节。
 
 ---
 

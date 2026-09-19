@@ -4,7 +4,7 @@
 
 | 规划要求 | 本脚本的关卡 |
 |---|---|
-| 静态检查 | [1/3] `ci/static_check.py`（零依赖，见该文件说明） |
+| 静态检查 | [1/3] `tools/static_check.py`（零依赖，见该文件说明） |
 | 单元测试 | [2/3] `unittest discover`（589 项） |
 | 覆盖率 ≥70% | [2/3] `coverage report`（`.coveragerc` 里 `fail_under`） |
 | 模拟端到端 | [3/3] `examples/offline_demo.py`（不需要真机） |
@@ -22,10 +22,10 @@
 用法
 ----
 
-    python ci/quality_gate.py                 # 全部关卡
-    python ci/quality_gate.py --fast          # 跳过覆盖率（本地快速自测）
-    python ci/quality_gate.py --only style    # 只跑某一关
-    python ci/quality_gate.py --json out.json # 额外输出机器可读结果
+    python tools/quality_gate.py                 # 全部关卡
+    python tools/quality_gate.py --fast          # 跳过覆盖率（本地快速自测）
+    python tools/quality_gate.py --only style    # 只跑某一关
+    python tools/quality_gate.py --json out.json # 额外输出机器可读结果
 
 退出码：0 = 全绿；1 = 有失败关卡。
 """
@@ -134,7 +134,7 @@ def build_stages(include_coverage: bool = True) -> List[Stage]:
 
     stages.append(Stage(
         'style', '静态检查（零依赖）',
-        [PY, os.path.join('ci', 'static_check.py'), '--quiet'],
+        [PY, os.path.join('tools', 'static_check.py'), '--quiet'],
         # 这里不再从输出里猜「有没有 error」—— 早期版本加过一个
         # `has_error` 字段，用了 `--quiet` 后它恒为 False，而且从没被读取，
         # 属于纯误导的死代码。**判定一律用返回码**（static_check 有 error 时返回 1）。

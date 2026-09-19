@@ -3,10 +3,10 @@
 =================
 
 用法:
-    python examples/run_case.py cases/login.yaml --bundle com.example.app
-    python examples/run_case.py cases/login.yaml --bundle com.example.app \\
+    python examples/run_case.py examples/cases/login.yaml --bundle com.example.app
+    python examples/run_case.py examples/cases/login.yaml --bundle com.example.app \\
         --sim           # 用模拟设备跑（验证用例语法是否正确）
-    python examples/run_case.py cases/login.yaml --bundle com.example.app \\
+    python examples/run_case.py examples/cases/login.yaml --bundle com.example.app \\
         --ability EntryAbility --out ./run_out
 """
 import argparse

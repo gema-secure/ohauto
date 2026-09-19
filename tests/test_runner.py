@@ -728,7 +728,7 @@ class TestContractEntry(unittest.TestCase):
         self.assertEqual(rep.total, 1)
 
     def test_accepts_case_file_path(self):
-        path = os.path.join(ROOT, 'cases', 'login.yaml')
+        path = os.path.join(ROOT, 'examples', 'cases', 'login.yaml')
         self.assertTrue(os.path.isfile(path), f'缺少用例文件 {path}')
         # login.yaml 是示例用例，模拟设备上没有对应控件，只要链路通即可
         rep = R.run([path], {'sim': True}, **self.FAST)

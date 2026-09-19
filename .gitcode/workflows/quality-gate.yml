@@ -13,7 +13,7 @@
 #    这正是把 `.github/workflows/` 的配置直接搬到 AtomGit 会踩的坑。
 #
 # ⚠️ **仓库根假设**：本配置**不假设**仓库根在哪 ——
-#    第一步会自动探测 `ci/quality_gate.py` 的位置（`./` 还是 `ohauto/`），
+#    第一步会自动探测 `tools/quality_gate.py` 的位置（`./` 还是 `ohauto/`），
 #    所以「上传整个 guochuang-2026/」或「只上传 ohauto/」都能跑。
 #    探测失败会明确报错，而不是给一堆莫名的路径错误。
 
@@ -50,15 +50,15 @@ jobs:
       # ★ 自动探测项目目录 —— 消除「仓库根在哪」这个假设
       - name: 探测项目目录
         run: |
-          if [ -f ci/quality_gate.py ]; then
+          if [ -f tools/quality_gate.py ]; then
             echo "PROJ=." > proj_dir.txt
-            echo "✓ 检测到仓库根就是项目根（ci/quality_gate.py 在根目录）"
-          elif [ -f ohauto/ci/quality_gate.py ]; then
+            echo "✓ 检测到仓库根就是项目根（tools/quality_gate.py 在根目录）"
+          elif [ -f ohauto/tools/quality_gate.py ]; then
             echo "PROJ=ohauto" > proj_dir.txt
             echo "✓ 检测到项目在 ohauto/ 子目录下"
           else
-            echo "✗ 找不到 ci/quality_gate.py"
-            echo "  期望位置：./ci/quality_gate.py  或  ./ohauto/ci/quality_gate.py"
+            echo "✗ 找不到 tools/quality_gate.py"
+            echo "  期望位置：./tools/quality_gate.py  或  ./ohauto/tools/quality_gate.py"
             echo "  请确认上传的目录结构包含 ohauto 项目"
             exit 1
           fi
@@ -71,13 +71,13 @@ jobs:
           pip install -r requirements.txt
           pip install coverage
 
-      # ★ 唯一的质量门禁入口 —— 与本地 `python ci/quality_gate.py` 完全一致
+      # ★ 唯一的质量门禁入口 —— 与本地 `python tools/quality_gate.py` 完全一致
       #   （检查逻辑只写一遍，平台配置不重复实现）
       - name: 质量门禁
         run: |
           PROJ=$(cut -d= -f2 proj_dir.txt)
           cd "$PROJ"
-          python ci/quality_gate.py --json _out/ci_result.json
+          python tools/quality_gate.py --json _out/ci_result.json
 
       # 以下是「产出报告」，不重复任何检查逻辑
       - name: 生成覆盖率 HTML
