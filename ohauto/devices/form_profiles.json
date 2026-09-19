@@ -1,0 +1,2738 @@
+{
+ "generated_from": "C:\\Users\\<user>\\AppData\\Local\\Huawei\\Emulator26.0\\productConfig.json",
+ "total": 77,
+ "counts": {
+  "car": 2,
+  "foldable": 4,
+  "foldable_folded": 4,
+  "pc": 2,
+  "pc_foldable": 1,
+  "pc_foldable_folded": 1,
+  "phone": 47,
+  "tablet": 6,
+  "triple_fold": 1,
+  "triple_fold_double": 1,
+  "triple_fold_folded": 1,
+  "tv": 1,
+  "wearable": 2,
+  "wide_fold": 2,
+  "wide_fold_folded": 2
+ },
+ "profiles": [
+  {
+   "name": "Pura X View",
+   "device": "Pura X View",
+   "kind": "phone",
+   "width": 1320,
+   "height": 2232,
+   "density": 480,
+   "diagonal": 6.39,
+   "corner_radius": [
+    54.6
+   ],
+   "cutouts": [
+    [
+     624,
+     42,
+     70,
+     70
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "VOL",
+    "raw_cutout": "M624 42 L694 42 v 70 h -70 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1320,
+    2232
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura 90 Pro",
+   "device": "Pura 90 Pro",
+   "kind": "phone",
+   "width": 1256,
+   "height": 2760,
+   "density": 560,
+   "diagonal": 6.6,
+   "corner_radius": [
+    44.0
+   ],
+   "cutouts": [
+    [
+     591,
+     34,
+     74,
+     74
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "MLN",
+    "raw_cutout": "M591 34 L665 34 v 74 h -74 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1256,
+    2760
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura 90",
+   "device": "Pura 90",
+   "kind": "phone",
+   "width": 1320,
+   "height": 2856,
+   "density": 560,
+   "diagonal": 6.8,
+   "corner_radius": [
+    56.0
+   ],
+   "cutouts": [
+    [
+     517,
+     45,
+     285,
+     103
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "KEE",
+    "raw_cutout": "M517 45 L802 45 v 103 h -285 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1320,
+    2856
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura 90 Pro Max",
+   "device": "Pura 90 Pro Max",
+   "kind": "phone",
+   "width": 1308,
+   "height": 2880,
+   "density": 560,
+   "diagonal": 6.9,
+   "corner_radius": [
+    48.3
+   ],
+   "cutouts": [
+    [
+     615,
+     50,
+     78,
+     78
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "SCA",
+    "raw_cutout": "M615 50 L693 50 v 78 h -78 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1308,
+    2880
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 16 Pro",
+   "device": "nova 16 Pro",
+   "kind": "phone",
+   "width": 1320,
+   "height": 2856,
+   "density": 560,
+   "diagonal": 6.84,
+   "corner_radius": [
+    56.49
+   ],
+   "cutouts": [
+    [
+     517,
+     45,
+     285,
+     103
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "CRS",
+    "raw_cutout": "M517 45 L802 45 v 103 h -285 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1320,
+    2856
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 16",
+   "device": "nova 16",
+   "kind": "phone",
+   "width": 1280,
+   "height": 2800,
+   "density": 560,
+   "diagonal": 6.68,
+   "corner_radius": [
+    48.14
+   ],
+   "cutouts": [
+    [
+     600,
+     49,
+     80,
+     76
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "EMA",
+    "raw_cutout": "M600 49 L680 49 v 76 h -80 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1280,
+    2800
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 16 Ultra",
+   "device": "nova 16 Ultra",
+   "kind": "phone",
+   "width": 1320,
+   "height": 2856,
+   "density": 560,
+   "diagonal": 6.84,
+   "corner_radius": [
+    56.0
+   ],
+   "cutouts": [
+    [
+     517,
+     45,
+     285,
+     103
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "HIP",
+    "raw_cutout": "M517 45 L802 45 v 103 h -285 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1320,
+    2856
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 16z",
+   "device": "nova 16z",
+   "kind": "phone",
+   "width": 1084,
+   "height": 2412,
+   "density": 480,
+   "diagonal": 6.7,
+   "corner_radius": [
+    44.0
+   ],
+   "cutouts": [
+    [
+     504,
+     16,
+     76,
+     76
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "PKN",
+    "raw_cutout": "M504 16 L580 16 v 76 h -76 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1084,
+    2412
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate 80 Pro",
+   "device": "Mate 80 Pro",
+   "kind": "phone",
+   "width": 1280,
+   "height": 2832,
+   "density": 560,
+   "diagonal": 6.75,
+   "corner_radius": [
+    48.3
+   ],
+   "cutouts": [
+    [
+     464,
+     38,
+     352,
+     84
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "SGT",
+    "raw_cutout": "M464 38 L816 38 v 84 h -352 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1280,
+    2832
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate 80",
+   "device": "Mate 80",
+   "kind": "phone",
+   "width": 1280,
+   "height": 2832,
+   "density": 560,
+   "diagonal": 6.75,
+   "corner_radius": [
+    48.3
+   ],
+   "cutouts": [
+    [
+     464,
+     38,
+     352,
+     84
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "VYG",
+    "raw_cutout": "M464 38 L816 38 v 84 h -352 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1280,
+    2832
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate 80 Pro Max",
+   "device": "Mate 80 Pro Max",
+   "kind": "phone",
+   "width": 1320,
+   "height": 2848,
+   "density": 540,
+   "diagonal": 6.9,
+   "corner_radius": [
+    48.3
+   ],
+   "cutouts": [
+    [
+     484,
+     36,
+     352,
+     84
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "SGP",
+    "raw_cutout": "M484 36 L836 36 v 84 h -352 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1320,
+    2848
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate 80 RS",
+   "device": "Mate 80 RS",
+   "kind": "phone",
+   "width": 1320,
+   "height": 2848,
+   "density": 540,
+   "diagonal": 6.9,
+   "corner_radius": [
+    48.3
+   ],
+   "cutouts": [
+    [
+     484,
+     36,
+     352,
+     84
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "SGU",
+    "raw_cutout": "M484 36 L836 36 v 84 h -352 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1320,
+    2848
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura 80 Pro",
+   "device": "Pura 80 Pro",
+   "kind": "phone",
+   "width": 1276,
+   "height": 2848,
+   "density": 560,
+   "diagonal": 6.8,
+   "corner_radius": [
+    45.0
+   ],
+   "cutouts": [
+    [
+     600,
+     44,
+     76,
+     76
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "LMR",
+    "raw_cutout": "M600 44 L676 44 v 76 h -76 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1276,
+    2848
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura 80",
+   "device": "Pura 80",
+   "kind": "phone",
+   "width": 1256,
+   "height": 2760,
+   "density": 560,
+   "diagonal": 6.6,
+   "corner_radius": [
+    44.0
+   ],
+   "cutouts": [
+    [
+     591,
+     34,
+     74,
+     74
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "HED",
+    "raw_cutout": "M591 34 L665 34 v 74 h -74 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1256,
+    2760
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura 80 Pro+",
+   "device": "Pura 80 Pro+",
+   "kind": "phone",
+   "width": 1276,
+   "height": 2848,
+   "density": 560,
+   "diagonal": 6.8,
+   "corner_radius": [
+    45.0
+   ],
+   "cutouts": [
+    [
+     600,
+     44,
+     76,
+     76
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "LMR",
+    "raw_cutout": "M600 44 L676 44 v 76 h -76 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1276,
+    2848
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura 80 Ultra",
+   "device": "Pura 80 Ultra",
+   "kind": "phone",
+   "width": 1276,
+   "height": 2848,
+   "density": 560,
+   "diagonal": 6.8,
+   "corner_radius": [
+    45.0
+   ],
+   "cutouts": [
+    [
+     600,
+     44,
+     76,
+     76
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "LMR",
+    "raw_cutout": "M600 44 L676 44 v 76 h -76 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1276,
+    2848
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 15 Pro",
+   "device": "nova 15 Pro",
+   "kind": "phone",
+   "width": 1320,
+   "height": 2856,
+   "density": 560,
+   "diagonal": 6.84,
+   "corner_radius": [
+    56.0
+   ],
+   "cutouts": [
+    [
+     517,
+     45,
+     285,
+     103
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "KLE",
+    "raw_cutout": "M517 45 L802 45 v 103 h -285 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1320,
+    2856
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 15",
+   "device": "nova 15",
+   "kind": "phone",
+   "width": 1084,
+   "height": 2412,
+   "density": 480,
+   "diagonal": 6.7,
+   "corner_radius": [
+    44.0
+   ],
+   "cutouts": [
+    [
+     504,
+     16,
+     76,
+     76
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "PSN",
+    "raw_cutout": "M504 16 L580 16 v 76 h -76 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1084,
+    2412
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 15 Ultra",
+   "device": "nova 15 Ultra",
+   "kind": "phone",
+   "width": 1320,
+   "height": 2856,
+   "density": 560,
+   "diagonal": 6.84,
+   "corner_radius": [
+    56.0
+   ],
+   "cutouts": [
+    [
+     517,
+     45,
+     285,
+     103
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "SLY",
+    "raw_cutout": "M517 45 L802 45 v 103 h -285 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1320,
+    2856
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Enjoy 90 Plus",
+   "device": "Enjoy 90 Plus",
+   "kind": "phone",
+   "width": 720,
+   "height": 1604,
+   "density": 320,
+   "diagonal": 6.67,
+   "corner_radius": [
+    32.97
+   ],
+   "cutouts": [
+    [
+     336,
+     19,
+     47,
+     41
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "JDY",
+    "raw_cutout": "M336 19 L383 19 v 41 h -47 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    720,
+    1604
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Enjoy 90",
+   "device": "Enjoy 90",
+   "kind": "phone",
+   "width": 720,
+   "height": 1604,
+   "density": 320,
+   "diagonal": 6.67,
+   "corner_radius": [
+    32.97
+   ],
+   "cutouts": [
+    [
+     336,
+     19,
+     47,
+     41
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "JDY",
+    "raw_cutout": "M336 19 L383 19 v 41 h -47 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    720,
+    1604
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Enjoy 90 Pro Max",
+   "device": "Enjoy 90 Pro Max",
+   "kind": "phone",
+   "width": 1272,
+   "height": 2756,
+   "density": 540,
+   "diagonal": 6.84,
+   "corner_radius": [
+    55.57
+   ],
+   "cutouts": [
+    [
+     595,
+     44,
+     81,
+     82
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "CHZ",
+    "raw_cutout": "M595 44 L676 44 v 82 h -81 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1272,
+    2756
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 14 Pro",
+   "device": "nova 14 Pro",
+   "kind": "phone",
+   "width": 1224,
+   "height": 2776,
+   "density": 540,
+   "diagonal": 6.78,
+   "corner_radius": [
+    35.54
+   ],
+   "cutouts": [
+    [
+     473,
+     46,
+     277,
+     88
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "MIA",
+    "raw_cutout": "M473 46 L750 46 v 88 h -277 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1224,
+    2776
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 14",
+   "device": "nova 14",
+   "kind": "phone",
+   "width": 1084,
+   "height": 2412,
+   "density": 480,
+   "diagonal": 6.7,
+   "corner_radius": [
+    44.57
+   ],
+   "cutouts": [
+    [
+     506,
+     20,
+     72,
+     71
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "TLR",
+    "raw_cutout": "M506 20 L578 20 v 71 h -72 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1084,
+    2412
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 14 Ultra",
+   "device": "nova 14 Ultra",
+   "kind": "phone",
+   "width": 1272,
+   "height": 2860,
+   "density": 560,
+   "diagonal": 6.81,
+   "corner_radius": [
+    48.5
+   ],
+   "cutouts": [
+    [
+     496,
+     52,
+     280,
+     92
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "MRT",
+    "raw_cutout": "M496 52 L776 52 v 92 h -280 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1272,
+    2860
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate 70 Pro",
+   "device": "Mate 70 Pro",
+   "kind": "phone",
+   "width": 1316,
+   "height": 2832,
+   "density": 560,
+   "diagonal": 6.9,
+   "corner_radius": [
+    37.88
+   ],
+   "cutouts": [
+    [
+     512,
+     37,
+     292,
+     83
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "PLR",
+    "raw_cutout": "M512 37 L804 37 v 83 h -292 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1316,
+    2832
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate 70",
+   "device": "Mate 70",
+   "kind": "phone",
+   "width": 1216,
+   "height": 2688,
+   "density": 520,
+   "diagonal": 6.7,
+   "corner_radius": [
+    38.06
+   ],
+   "cutouts": [
+    [
+     572,
+     23,
+     72,
+     72
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "CLS",
+    "raw_cutout": "M572 23 L644 23 v 72 h -72 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1216,
+    2688
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate 70 Pro+",
+   "device": "Mate 70 Pro+",
+   "kind": "phone",
+   "width": 1316,
+   "height": 2832,
+   "density": 560,
+   "diagonal": 6.9,
+   "corner_radius": [
+    37.88
+   ],
+   "cutouts": [
+    [
+     512,
+     37,
+     292,
+     83
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "PLR",
+    "raw_cutout": "M512 37 L804 37 v 83 h -292 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1316,
+    2832
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate 70 RS",
+   "device": "Mate 70 RS",
+   "kind": "phone",
+   "width": 1316,
+   "height": 2832,
+   "density": 560,
+   "diagonal": 6.9,
+   "corner_radius": [
+    37.88
+   ],
+   "cutouts": [
+    [
+     512,
+     37,
+     292,
+     83
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "PLR",
+    "raw_cutout": "M512 37 L804 37 v 83 h -292 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1316,
+    2832
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate 70 Air",
+   "device": "Mate 70 Air",
+   "kind": "phone",
+   "width": 1320,
+   "height": 2760,
+   "density": 520,
+   "diagonal": 6.96,
+   "corner_radius": [
+    61.43
+   ],
+   "cutouts": [
+    [
+     618,
+     46,
+     82,
+     82
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "SUP",
+    "raw_cutout": "M618 46 L700 46 v 82 h -82 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1320,
+    2760
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura 70 Pro",
+   "device": "Pura 70 Pro",
+   "kind": "phone",
+   "width": 1260,
+   "height": 2844,
+   "density": 540,
+   "diagonal": 6.8,
+   "corner_radius": [
+    44.4
+   ],
+   "cutouts": [
+    [
+     592,
+     39,
+     76,
+     76
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "HBN",
+    "raw_cutout": "M592 39 L668 39 v 76 h -76 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1260,
+    2844
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura 70",
+   "device": "Pura 70",
+   "kind": "phone",
+   "width": 1256,
+   "height": 2760,
+   "density": 540,
+   "diagonal": 6.6,
+   "corner_radius": [
+    43.98
+   ],
+   "cutouts": [
+    [
+     591,
+     34,
+     74,
+     74
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "ADY",
+    "raw_cutout": "M591 34 L665 34 v 74 h -74 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1256,
+    2760
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura 70 Pro+",
+   "device": "Pura 70 Pro+",
+   "kind": "phone",
+   "width": 1260,
+   "height": 2844,
+   "density": 540,
+   "diagonal": 6.8,
+   "corner_radius": [
+    44.4
+   ],
+   "cutouts": [
+    [
+     592,
+     39,
+     76,
+     76
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "HBN",
+    "raw_cutout": "M592 39 L668 39 v 76 h -76 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1260,
+    2844
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura 70 Ultra",
+   "device": "Pura 70 Ultra",
+   "kind": "phone",
+   "width": 1260,
+   "height": 2844,
+   "density": 540,
+   "diagonal": 6.8,
+   "corner_radius": [
+    44.4
+   ],
+   "cutouts": [
+    [
+     592,
+     39,
+     76,
+     76
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "HBN",
+    "raw_cutout": "M592 39 L668 39 v 76 h -76 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1260,
+    2844
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 13 Pro",
+   "device": "nova 13 Pro",
+   "kind": "phone",
+   "width": 1224,
+   "height": 2776,
+   "density": 540,
+   "diagonal": 6.76,
+   "corner_radius": [
+    35.54
+   ],
+   "cutouts": [
+    [
+     477,
+     47,
+     270,
+     86
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "MIS",
+    "raw_cutout": "M477 47 L747 47 v 86 h -270 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1224,
+    2776
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 13",
+   "device": "nova 13",
+   "kind": "phone",
+   "width": 1084,
+   "height": 2412,
+   "density": 480,
+   "diagonal": 6.7,
+   "corner_radius": [
+    44.57
+   ],
+   "cutouts": [
+    [
+     506,
+     20,
+     72,
+     71
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "BLK-A180",
+    "raw_cutout": "M506 20 L578 20 v 71 h -72 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1084,
+    2412
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova flip",
+   "device": "nova flip",
+   "kind": "phone",
+   "width": 1136,
+   "height": 2690,
+   "density": 500,
+   "diagonal": 6.94,
+   "corner_radius": [
+    32.03
+   ],
+   "cutouts": [
+    [
+     533,
+     23,
+     69,
+     69
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "PSD",
+    "raw_cutout": "M533 23 L602 23 v 69 h -69 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1136,
+    2690
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova flip S",
+   "device": "nova flip S",
+   "kind": "phone",
+   "width": 1136,
+   "height": 2690,
+   "density": 500,
+   "diagonal": 6.94,
+   "corner_radius": [
+    32.03
+   ],
+   "cutouts": [
+    [
+     533,
+     23,
+     69,
+     69
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "PSD",
+    "raw_cutout": "M533 23 L602 23 v 69 h -69 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1136,
+    2690
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pocket 2",
+   "device": "Pocket 2",
+   "kind": "phone",
+   "width": 1136,
+   "height": 2690,
+   "density": 500,
+   "diagonal": 6.94,
+   "corner_radius": [
+    32.03
+   ],
+   "cutouts": [
+    [
+     533,
+     23,
+     69,
+     69
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "LEM",
+    "raw_cutout": "M533 23 L602 23 v 69 h -69 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1136,
+    2690
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate 60 Pro",
+   "device": "Mate 60 Pro",
+   "kind": "phone",
+   "width": 1260,
+   "height": 2720,
+   "density": 520,
+   "diagonal": 6.82,
+   "corner_radius": [
+    38.92
+   ],
+   "cutouts": [
+    [
+     494,
+     36,
+     273,
+     72
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "ALN",
+    "raw_cutout": "M494 36 L767 36 v 72 h -273 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1260,
+    2720
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate 60",
+   "device": "Mate 60",
+   "kind": "phone",
+   "width": 1216,
+   "height": 2688,
+   "density": 520,
+   "diagonal": 6.69,
+   "corner_radius": [
+    35.29
+   ],
+   "cutouts": [
+    [
+     572,
+     24,
+     71,
+     69
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "BRA",
+    "raw_cutout": "M572 24 L643 24 v 69 h -71 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1216,
+    2688
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate 60 Pro+",
+   "device": "Mate 60 Pro+",
+   "kind": "phone",
+   "width": 1260,
+   "height": 2720,
+   "density": 520,
+   "diagonal": 6.82,
+   "corner_radius": [
+    38.92
+   ],
+   "cutouts": [
+    [
+     494,
+     36,
+     273,
+     72
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "ALN",
+    "raw_cutout": "M494 36 L767 36 v 72 h -273 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1260,
+    2720
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate 60 RS",
+   "device": "Mate 60 RS",
+   "kind": "phone",
+   "width": 1260,
+   "height": 2720,
+   "density": 520,
+   "diagonal": 6.82,
+   "corner_radius": [
+    38.92
+   ],
+   "cutouts": [
+    [
+     494,
+     36,
+     273,
+     72
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "ALN",
+    "raw_cutout": "M494 36 L767 36 v 72 h -273 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1260,
+    2720
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 12 Pro",
+   "device": "nova 12 Pro",
+   "kind": "phone",
+   "width": 1224,
+   "height": 2776,
+   "density": 540,
+   "diagonal": 6.76,
+   "corner_radius": [
+    35.54
+   ],
+   "cutouts": [
+    [
+     477,
+     47,
+     270,
+     86
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "ADA",
+    "raw_cutout": "M477 47 L747 47 v 86 h -270 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1224,
+    2776
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 12",
+   "device": "nova 12",
+   "kind": "phone",
+   "width": 1084,
+   "height": 2412,
+   "density": 480,
+   "diagonal": 6.7,
+   "corner_radius": [
+    44.57
+   ],
+   "cutouts": [
+    [
+     506,
+     20,
+     72,
+     71
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "BLK-A100",
+    "raw_cutout": "M506 20 L578 20 v 71 h -72 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1084,
+    2412
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "nova 12 Ultra",
+   "device": "nova 12 Ultra",
+   "kind": "phone",
+   "width": 1224,
+   "height": 2776,
+   "density": 540,
+   "diagonal": 6.76,
+   "corner_radius": [
+    35.54
+   ],
+   "cutouts": [
+    [
+     477,
+     47,
+     270,
+     86
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "ADA",
+    "raw_cutout": "M477 47 L747 47 v 86 h -270 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1224,
+    2776
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "phone/Customize",
+   "device": "Customize",
+   "kind": "phone",
+   "width": 1316,
+   "height": 2832,
+   "density": 560,
+   "diagonal": 6.9,
+   "corner_radius": [],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": null,
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1316,
+    2832
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate X7_unfolded",
+   "device": "Mate X7",
+   "kind": "foldable",
+   "width": 2210,
+   "height": 2416,
+   "density": 500,
+   "diagonal": 8.0,
+   "corner_radius": [
+    26.25,
+    23.1
+   ],
+   "cutouts": [
+    [
+     2092,
+     28,
+     70,
+     70
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "EXPANDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "DEL",
+    "raw_cutout": "M2092 28 L2162 28 v 70 h -70 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    2210,
+    2416
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate X7_folded",
+   "device": "Mate X7",
+   "kind": "foldable_folded",
+   "width": 1080,
+   "height": 2444,
+   "density": 500,
+   "diagonal": 6.49,
+   "corner_radius": [
+    26.25,
+    23.1
+   ],
+   "cutouts": [
+    [
+     508,
+     24,
+     64,
+     64
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "FOLDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "DEL",
+    "raw_cutout": "M508 24 L572 24 v 64 h -64 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1080,
+    2444
+   ],
+   "is_folded": true,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate X6_unfolded",
+   "device": "Mate X6",
+   "kind": "foldable",
+   "width": 2240,
+   "height": 2440,
+   "density": 500,
+   "diagonal": 7.93,
+   "corner_radius": [
+    23.63,
+    22.31
+   ],
+   "cutouts": [
+    [
+     2121,
+     30,
+     70,
+     70
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "EXPANDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "ICL",
+    "raw_cutout": "M2121 30 L2191 30 v 70 h -70 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    2240,
+    2440
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate X6_folded",
+   "device": "Mate X6",
+   "kind": "foldable_folded",
+   "width": 1080,
+   "height": 2440,
+   "density": 500,
+   "diagonal": 6.45,
+   "corner_radius": [
+    23.63,
+    22.31
+   ],
+   "cutouts": [
+    [
+     510,
+     28,
+     64,
+     64
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "FOLDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "ICL",
+    "raw_cutout": "M510 28 L574 28 v 64 h -64 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1080,
+    2440
+   ],
+   "is_folded": true,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate X5_unfolded",
+   "device": "Mate X5",
+   "kind": "foldable",
+   "width": 2224,
+   "height": 2496,
+   "density": 500,
+   "diagonal": 7.85,
+   "corner_radius": [
+    27.95,
+    22.27
+   ],
+   "cutouts": [
+    [
+     2109,
+     28,
+     69,
+     69
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "EXPANDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "ALT",
+    "raw_cutout": "M2109 28 L2178 28 v 69 h -69 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    2224,
+    2496
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate X5_folded",
+   "device": "Mate X5",
+   "kind": "foldable_folded",
+   "width": 1080,
+   "height": 2504,
+   "density": 500,
+   "diagonal": 6.4,
+   "corner_radius": [
+    27.95,
+    22.27
+   ],
+   "cutouts": [
+    [
+     507,
+     18,
+     66,
+     66
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "FOLDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "ALT",
+    "raw_cutout": "M507 18 L573 18 v 66 h -66 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1080,
+    2504
+   ],
+   "is_folded": true,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Customize_unfolded",
+   "device": "Customize",
+   "kind": "foldable",
+   "width": 2224,
+   "height": 2496,
+   "density": 500,
+   "diagonal": 7.85,
+   "corner_radius": [],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "EXPANDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": null,
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    2224,
+    2496
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Customize_folded",
+   "device": "Customize",
+   "kind": "foldable_folded",
+   "width": 1080,
+   "height": 2504,
+   "density": 500,
+   "diagonal": 6.4,
+   "corner_radius": [],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "FOLDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": null,
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1080,
+    2504
+   ],
+   "is_folded": true,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura X Max_unfolded",
+   "device": "Pura X Max",
+   "kind": "wide_fold",
+   "width": 2584,
+   "height": 1828,
+   "density": 440,
+   "diagonal": 7.7,
+   "corner_radius": [
+    37.8,
+    31.5
+   ],
+   "cutouts": [
+    [
+     2470,
+     28,
+     72,
+     72
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "EXPANDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "HOP",
+    "raw_cutout": "M2470 28 L2542 28 v 72 h -72 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    2584,
+    1828
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura X Max_folded",
+   "device": "Pura X Max",
+   "kind": "wide_fold_folded",
+   "width": 1264,
+   "height": 1848,
+   "density": 440,
+   "diagonal": 5.4,
+   "corner_radius": [
+    37.8,
+    31.5
+   ],
+   "cutouts": [
+    [
+     599,
+     26,
+     66,
+     66
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "FOLDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "HOP",
+    "raw_cutout": "M599 26 L665 26 v 66 h -66 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1264,
+    1848
+   ],
+   "is_folded": true,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura X_unfolded",
+   "device": "Pura X",
+   "kind": "wide_fold",
+   "width": 1320,
+   "height": 2120,
+   "density": 480,
+   "diagonal": 6.3,
+   "corner_radius": [
+    25.33,
+    31.29
+   ],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "EXPANDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "VDE",
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    1320,
+    2120
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Pura X_folded",
+   "device": "Pura X",
+   "kind": "wide_fold_folded",
+   "width": 980,
+   "height": 980,
+   "density": 480,
+   "diagonal": 3.5,
+   "corner_radius": [
+    25.33,
+    31.29
+   ],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "FOLDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "VDE",
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    980,
+    980
+   ],
+   "is_folded": true,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate XT_unfolded",
+   "device": "Mate XT",
+   "kind": "triple_fold",
+   "width": 3184,
+   "height": 2232,
+   "density": 460,
+   "diagonal": 10.2,
+   "corner_radius": [
+    8.0
+   ],
+   "cutouts": [
+    [
+     479,
+     21,
+     65,
+     65
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "EXPANDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "GRL",
+    "raw_cutout": "M479 21 L544 21 v 65 h -65 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    3184,
+    2232
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate XT_double",
+   "device": "Mate XT",
+   "kind": "triple_fold_double",
+   "width": 1008,
+   "height": 2232,
+   "density": 460,
+   "diagonal": 6.4,
+   "corner_radius": [
+    8.0
+   ],
+   "cutouts": [
+    [
+     479,
+     21,
+     65,
+     65
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "DOUBLE",
+   "source": "product_config",
+   "extra": {
+    "product_series": "GRL",
+    "raw_cutout": "M479 21 L544 21 v 65 h -65 Z"
+   },
+   "caveats": [
+    "double_form_inherits_cutout: 配置里没有为双屏中间态单独给挖孔，此处沿用展开态坐标 —— 需实测复核"
+   ],
+   "safe_area": [
+    0,
+    0,
+    1008,
+    2232
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Mate XT_folded",
+   "device": "Mate XT",
+   "kind": "triple_fold_folded",
+   "width": 2048,
+   "height": 2232,
+   "density": 460,
+   "diagonal": 7.9,
+   "corner_radius": [
+    8.0
+   ],
+   "cutouts": [
+    [
+     479,
+     21,
+     65,
+     65
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "FOLDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "GRL",
+    "raw_cutout": "M479 21 L544 21 v 65 h -65 Z"
+   },
+   "caveats": [
+    "folded_form_reuses_unfolded_cutout: 配置里没有 twoCutoutPath，折叠态挖孔坐标直接复用了展开态的 —— 需实测（hidumper）复核"
+   ],
+   "safe_area": [
+    0,
+    0,
+    2048,
+    2232
+   ],
+   "is_folded": true,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "MatePad Pro 13",
+   "device": "MatePad Pro 13",
+   "kind": "tablet",
+   "width": 2880,
+   "height": 1920,
+   "density": 320,
+   "diagonal": 13.2,
+   "corner_radius": [
+    20.0
+   ],
+   "cutouts": [
+    [
+     1308,
+     0,
+     264,
+     36
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "WEB",
+    "raw_cutout": "M1308 0 L 1572 0 V 36 h -264 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    2880,
+    1920
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "MatePad Pro 12",
+   "device": "MatePad Pro 12",
+   "kind": "tablet",
+   "width": 2800,
+   "height": 1840,
+   "density": 360,
+   "diagonal": 12.2,
+   "corner_radius": [
+    11.0
+   ],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "MRO",
+    "raw_cutout": "M0 0 L0 0 v 0 h -0 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    2800,
+    1840
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "MatePad Pro 11",
+   "device": "MatePad Pro 11",
+   "kind": "tablet",
+   "width": 2560,
+   "height": 1600,
+   "density": 360,
+   "diagonal": 11.0,
+   "corner_radius": [
+    28.0
+   ],
+   "cutouts": [
+    [
+     20,
+     20,
+     47,
+     47
+    ]
+   ],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "XYAO",
+    "raw_cutout": "M20 20 L67 20 v 47 h -47 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    2560,
+    1600
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "MatePad Air 12",
+   "device": "MatePad Air 12",
+   "kind": "tablet",
+   "width": 2800,
+   "height": 1840,
+   "density": 360,
+   "diagonal": 12.0,
+   "corner_radius": [
+    11.0
+   ],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "BKY",
+    "raw_cutout": "M0 0 L0 0 v 0 h -0 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    2800,
+    1840
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "MatePad 11 S",
+   "device": "MatePad 11 S",
+   "kind": "tablet",
+   "width": 2800,
+   "height": 1840,
+   "density": 400,
+   "diagonal": 11.5,
+   "corner_radius": [
+    12.0
+   ],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "TGR",
+    "raw_cutout": "M0 0 L0 0 v 0 h -0 Z"
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    2800,
+    1840
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "tablet/Customize",
+   "device": "Customize",
+   "kind": "tablet",
+   "width": 2560,
+   "height": 1600,
+   "density": 360,
+   "diagonal": 11.0,
+   "corner_radius": [],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": null,
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    2560,
+    1600
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "MateBook Pro",
+   "device": "MateBook Pro",
+   "kind": "pc",
+   "width": 3120,
+   "height": 2080,
+   "density": 304,
+   "diagonal": 14.2,
+   "corner_radius": [],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "HAD",
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    3120,
+    2080
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "pc/Customize",
+   "device": "Customize",
+   "kind": "pc",
+   "width": 3120,
+   "height": 2080,
+   "density": 304,
+   "diagonal": 14.2,
+   "corner_radius": [],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": null,
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    3120,
+    2080
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "MateBook Fold_unfolded",
+   "device": "MateBook Fold",
+   "kind": "pc_foldable",
+   "width": 3296,
+   "height": 2472,
+   "density": 288,
+   "diagonal": 18.0,
+   "corner_radius": [],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "EXPANDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "HPR",
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    3296,
+    2472
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "MateBook Fold_folded",
+   "device": "MateBook Fold",
+   "kind": "pc_foldable_folded",
+   "width": 2472,
+   "height": 1648,
+   "density": 288,
+   "diagonal": 13.0,
+   "corner_radius": [],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": "FOLDED",
+   "source": "product_config",
+   "extra": {
+    "product_series": "HPR",
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    2472,
+    1648
+   ],
+   "is_folded": true,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "TV",
+   "device": "TV",
+   "kind": "tv",
+   "width": 3840,
+   "height": 2160,
+   "density": 480,
+   "diagonal": 98.0,
+   "corner_radius": [
+    37.0
+   ],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "EDIS",
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    3840,
+    2160
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Wearable",
+   "device": "Wearable",
+   "kind": "wearable",
+   "width": 466,
+   "height": 466,
+   "density": 320,
+   "diagonal": 1.6,
+   "corner_radius": [],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "MCH",
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    466,
+    466
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "WearableKid",
+   "device": "WearableKid",
+   "kind": "wearable",
+   "width": 480,
+   "height": 408,
+   "density": 320,
+   "diagonal": 1.6,
+   "corner_radius": [],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "DRA",
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    480,
+    408
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "Huawei_Car",
+   "device": "Huawei_Car",
+   "kind": "car",
+   "width": 3402,
+   "height": 1620,
+   "density": 432,
+   "diagonal": 17.2,
+   "corner_radius": [
+    20.0
+   ],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": "PCE",
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    3402,
+    1620
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  },
+  {
+   "name": "car/Customize",
+   "device": "Customize",
+   "kind": "car",
+   "width": 3402,
+   "height": 1620,
+   "density": 432,
+   "diagonal": 17.2,
+   "corner_radius": [],
+   "cutouts": [],
+   "status_bar_h": 0,
+   "nav_bar_h": 0,
+   "fold_status": null,
+   "source": "product_config",
+   "extra": {
+    "product_series": null,
+    "raw_cutout": null
+   },
+   "caveats": [],
+   "safe_area": [
+    0,
+    0,
+    3402,
+    1620
+   ],
+   "is_folded": false,
+   "has_measured_safe_area": false
+  }
+ ]
+}

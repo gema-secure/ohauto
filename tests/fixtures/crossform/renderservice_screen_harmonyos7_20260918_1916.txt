@@ -1,0 +1,63 @@
+### hidumper -s RenderService -a screen
+### 来源：HarmonyOS 模拟器 Mate X7（foldable，双屏折叠）
+### 实测时间：2026-09-18 19:16
+### Emulator 26.0.0.400 / 镜像 HarmonyOS 7.0.0(26.0.0)
+### 采集命令：hdc shell "hidumper -s RenderService -a screen"
+###
+### ★ 为什么这份夹具重要：
+### Mate X7 是**双屏**设备，两块屏在 RenderService 里同时注册。
+### -foldedState 切换**不改分辨率**，只改两屏的 powerStatus：
+###   open / half-open → screen[0] ON（内屏 2416x2210）
+###   close            → screen[1] ON（外屏 1080x2444）
+### 所以「折叠态是否真的生效」的判据是 powerStatus 互换，不是分辨率。
+###
+### 本文件含两段样本，用 `### === 样本` 分隔：
+###   样本 A = open 态    （screen[0] 内屏 ON）
+###   样本 B = close 态   （screen[1] 外屏 ON）
+### 两段都是**真机原文**，只改了 backlight（它随环境抖动，不影响判据）。
+
+
+### === 样本 A：open 态（内屏 2416x2210 点亮）===
+-------------------------------[ability]-------------------------------
+
+
+----------------------------------RenderService----------------------------------
+-- ScreenInfo
+screen[0]: id=0, powerStatus=POWER_STATUS_ON, backlight=1, screenType=EXTERNAL_TYPE, render resolution=2416x2210, physical resolution=2416x2210, isVirtual=false, skipFrameInterval=1, expectedRefreshRate=-1, skipFrameStrategy=0
+supportedMode[0]: 2416x2210, refreshRate=60
+activeMode: 2416x2210, refreshRate=60
+name=express_display, phyWidth=158, phyHeight=141, supportLayers=10, virtualDispCount=1, propertyCount=0, type=DISP_INTF_UNKNOW, supportWriteBack=false
+isSamplingOn=0, samplingScale=1.00, samplingTranslateX=0.00, samplingTranslateY=0.00
+enableVisibleRect=0, mainScreenVisibleRect=[0,0,0,0]
+-- ScreenInfo
+screen[1]: id=5, powerStatus=POWER_STATUS_OFF, backlight=4, screenType=EXTERNAL_TYPE, render resolution=1080x2444, physical resolution=1080x2444, isVirtual=false, skipFrameInterval=1, expectedRefreshRate=-1, skipFrameStrategy=0
+supportedMode[0]: 1080x2444, refreshRate=60
+activeMode: 1080x2444, refreshRate=60
+name=express_display, phyWidth=1080, phyHeight=2444, supportLayers=10, virtualDispCount=1, propertyCount=0, type=DISP_INTF_UNKNOW, supportWriteBack=false
+isSamplingOn=0, samplingScale=1.00, samplingTranslateX=0.00, samplingTranslateY=0.00
+enableVisibleRect=0, mainScreenVisibleRect=[0,0,0,0]
+===================
+foldScreenIds_ size is 0
+
+
+### === 样本 B：close 态（外屏 1080x2444 点亮）===
+-------------------------------[ability]-------------------------------
+
+
+----------------------------------RenderService----------------------------------
+-- ScreenInfo
+screen[0]: id=0, powerStatus=POWER_STATUS_OFF, backlight=4, screenType=EXTERNAL_TYPE, render resolution=2416x2210, physical resolution=2416x2210, isVirtual=false, skipFrameInterval=1, expectedRefreshRate=-1, skipFrameStrategy=0
+supportedMode[0]: 2416x2210, refreshRate=60
+activeMode: 2416x2210, refreshRate=60
+name=express_display, phyWidth=158, phyHeight=141, supportLayers=10, virtualDispCount=1, propertyCount=0, type=DISP_INTF_UNKNOW, supportWriteBack=false
+isSamplingOn=0, samplingScale=1.00, samplingTranslateX=0.00, samplingTranslateY=0.00
+enableVisibleRect=0, mainScreenVisibleRect=[0,0,0,0]
+-- ScreenInfo
+screen[1]: id=5, powerStatus=POWER_STATUS_ON, backlight=1, screenType=EXTERNAL_TYPE, render resolution=1080x2444, physical resolution=1080x2444, isVirtual=false, skipFrameInterval=1, expectedRefreshRate=-1, skipFrameStrategy=0
+supportedMode[0]: 1080x2444, refreshRate=60
+activeMode: 1080x2444, refreshRate=60
+name=express_display, phyWidth=1080, phyHeight=2444, supportLayers=10, virtualDispCount=1, propertyCount=0, type=DISP_INTF_UNKNOW, supportWriteBack=false
+isSamplingOn=0, samplingScale=1.00, samplingTranslateX=0.00, samplingTranslateY=0.00
+enableVisibleRect=0, mainScreenVisibleRect=[0,0,0,0]
+===================
+foldScreenIds_ size is 0

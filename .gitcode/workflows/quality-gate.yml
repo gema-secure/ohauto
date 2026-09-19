@@ -1,0 +1,125 @@
+# AtomGit 流水线 —— 质量门禁
+#
+# ★★ 三个与 GitHub Actions 的关键差异（官方文档 docs.atomgit.com）
+#
+# | 项 | AtomGit | GitHub Actions |
+# |---|---|---|
+# | 目录 | **`.gitcode/workflows/`** | `.github/workflows/` |
+# | Action 引用 | `uses: checkout`（无前缀无版本） | `uses: actions/checkout@v4` |
+# | 环境变量 | `$ATOMGIT_*` | `$GITHUB_*` |
+# | runner 标签 | `runs-on: [ubuntu-latest, x64, small]` | `runs-on: ubuntu-latest` |
+#
+# ⚠️ **目录名写错会导致流水线完全不被识别** —— 不是报错，是静默不跑。
+#    这正是把 `.github/workflows/` 的配置直接搬到 AtomGit 会踩的坑。
+#
+# ⚠️ **仓库根假设**：本配置**不假设**仓库根在哪 ——
+#    第一步会自动探测 `ci/quality_gate.py` 的位置（`./` 还是 `ohauto/`），
+#    所以「上传整个 guochuang-2026/」或「只上传 ohauto/」都能跑。
+#    探测失败会明确报错，而不是给一堆莫名的路径错误。
+
+name: 质量门禁
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  max: 1
+  exceed-action: QUEUE
+
+permissions:
+  repository: read
+
+jobs:
+  quality-gate:
+    name: 质量门禁（静态检查 + 单测 + 覆盖率 + 端到端）
+    runs-on: [ubuntu-latest, x64, small]
+
+    steps:
+      - name: 检出代码
+        uses: checkout
+
+      - name: 安装 Python
+        uses: setup-python
+        with:
+          python-version: '3.13'
+
+      # ★ 自动探测项目目录 —— 消除「仓库根在哪」这个假设
+      - name: 探测项目目录
+        run: |
+          if [ -f ci/quality_gate.py ]; then
+            echo "PROJ=." > proj_dir.txt
+            echo "✓ 检测到仓库根就是项目根（ci/quality_gate.py 在根目录）"
+          elif [ -f ohauto/ci/quality_gate.py ]; then
+            echo "PROJ=ohauto" > proj_dir.txt
+            echo "✓ 检测到项目在 ohauto/ 子目录下"
+          else
+            echo "✗ 找不到 ci/quality_gate.py"
+            echo "  期望位置：./ci/quality_gate.py  或  ./ohauto/ci/quality_gate.py"
+            echo "  请确认上传的目录结构包含 ohauto 项目"
+            exit 1
+          fi
+
+      - name: 安装依赖
+        run: |
+          PROJ=$(cut -d= -f2 proj_dir.txt)
+          cd "$PROJ"
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install coverage
+
+      # ★ 唯一的质量门禁入口 —— 与本地 `python ci/quality_gate.py` 完全一致
+      #   （检查逻辑只写一遍，平台配置不重复实现）
+      - name: 质量门禁
+        run: |
+          PROJ=$(cut -d= -f2 proj_dir.txt)
+          cd "$PROJ"
+          python ci/quality_gate.py --json _out/ci_result.json
+
+      # 以下是「产出报告」，不重复任何检查逻辑
+      - name: 生成覆盖率 HTML
+        if: ${{ always() }}
+        run: |
+          if [ -f proj_dir.txt ]; then
+            PROJ=$(cut -d= -f2 proj_dir.txt)
+            cd "$PROJ"
+            python -m coverage html || true
+          fi
+
+      - name: 结果摘要
+        if: ${{ always() }}
+        run: |
+          PROJ=$(cut -d= -f2 proj_dir.txt)
+          cd "$PROJ"
+          echo "## 质量门禁结果" >> $ATOMGIT_STEP_SUMMARY
+          echo "" >> $ATOMGIT_STEP_SUMMARY
+          if [ -f _out/ci_result.json ]; then
+            python - <<'PY' >> $ATOMGIT_STEP_SUMMARY
+          import json
+          d = json.load(open('_out/ci_result.json', encoding='utf-8'))
+          print(f"- 总体：{'通过' if d['ok'] else '不通过'}")
+          print(f"- 覆盖率：{d.get('coverage_percent')}%（门禁 ≥{d.get('coverage_floor')}%）")
+          print(f"- 耗时：{d.get('total_seconds')}s")
+          print("")
+          print("| 关卡 | 结果 | 耗时 |")
+          print("|---|---|---|")
+          for s in d.get('stages', []):
+              mark = '通过' if s.get('rc') == 0 else f"失败(rc={s.get('rc')})"
+              print(f"| {s.get('title')} | {mark} | {s.get('seconds')}s |")
+          PY
+          else
+            echo "（未生成 ci_result.json）" >> $ATOMGIT_STEP_SUMMARY
+          fi
+
+      - name: 归档产物
+        if: ${{ always() }}
+        uses: upload-artifact
+        with:
+          name: ci-artifacts
+          path: |
+            **/_out/ci_result.json
+            **/_out/coverage_html/
+          retention-days: 14

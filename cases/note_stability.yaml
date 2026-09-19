@@ -1,0 +1,61 @@
+name: 备忘录连续执行稳定性
+bundle: com.ohos.note
+ability: MainAbility
+description: |
+  C2 验收用例：连续执行 50 步，量执行引擎的健壮性。
+
+  设计意图 —— 只断言「在点击搜索框前后都存在」的控件，让用例真正幂等：
+
+    id=searchInput    搜索框，两种状态下都在
+    text=数学公式      列表首条笔记，两种状态下都在
+
+  刻意避开的坑：标题「全部笔记」在点击搜索框后会被搜索栏取代而消失。
+  第一版用例断言了它，结果第 9 步失败 —— 那是**用例写错**而非引擎问题。
+  做长跑压测时，用例的幂等性比覆盖面更重要：一个不幂等的断言会在第 N 个
+  循环里突然失败，然后被误判成「引擎不稳定」。
+
+  另外，所有定位目标都选在屏幕顶部，不会被弹出的软键盘遮挡。
+
+  刻意包含的操作原语：waitFor / assert / tap / waitIdle / screenshot，
+  覆盖了定位、断言、坐标注入、稳定性等待与留痕五条路径。
+
+  ⚠️ 运行前须知：
+    设备息屏后会回到锁屏，而**锁屏界面不进无障碍树**（dumpLayout 只会
+    返回 1 个 bounds 全 0 的节点）。连续执行要跑几分钟，务必先钉住屏幕。
+    `examples/run_suite.py` 会自动做这件事（power-shell wakeup +
+    timeout -o 1800000 + 必要时上滑解锁），无需手工处理。
+
+  运行方式：
+    python examples/run_suite.py cases/note_stability.yaml --repeat 5
+
+steps:
+  - waitFor:
+      id: "searchInput"
+      timeout: 8000
+
+  - assert:
+      exists:
+        id: "searchInput"
+
+  - assert:
+      exists:
+        text: "数学公式"
+
+  - screenshot: "01_list.png"
+
+  - waitIdle: true
+
+  - tap:
+      id: "searchInput"
+
+  - waitIdle: true
+
+  - assert:
+      exists:
+        id: "searchInput"
+
+  - assert:
+      exists:
+        text: "数学公式"
+
+  - screenshot: "02_search.png"

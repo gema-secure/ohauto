@@ -1,0 +1,27 @@
+{
+  "name": "sample_music",
+  "bundle": "ohos.samples.distributedmusicplayer",
+  "ability": "ohos.samples.distributedmusicplayer.MainAbility",
+  "captured_at": "2026-09-19T14:54:28",
+  "warnings": [],
+  "launched": true,
+  "node_count": 93,
+  "interactive": 5,
+  "with_id": 4,
+  "with_text": 8,
+  "types": {
+    "Row": 44,
+    "Column": 9,
+    "Image": 9,
+    "Text": 8,
+    "Flex": 6,
+    "Stack": 5,
+    "root": 4,
+    "GridItem": 3,
+    "Blank": 2,
+    "(空)": 1,
+    "Slider": 1,
+    "Grid": 1
+  },
+  "clean": true
+}

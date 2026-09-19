@@ -1,0 +1,34 @@
+# 统一行尾 —— 避免跨平台差异
+#
+# ★ 为什么必须有这个文件：
+# 本机 `core.autocrlf = true`（系统级设置），会让 git 在检出时把 LF 转成 CRLF。
+# 对 Python 代码无害，但会改变**需要字节精确的文件** —— 而本项目
+# `tests/fixtures/signals/cppcrash_real.log`（真机崩溃日志夹具）
+# 在 `test_signals.py` 里是**逐字节断言**比对的。
+#
+# `.gitattributes` 的优先级**高于** `core.autocrlf`，所以这里显式声明即可，
+# 不需要去改用户的系统级 git 配置。
+
+# 默认：所有文本文件统一 LF（跨平台一致，CI 在 Linux 上跑不会出差异）
+* text=auto eol=lf
+
+# ---------------------------------------------------------------
+# 以下类型**绝不做行尾转换** —— 需要字节保真
+
+# 真机夹具：崩溃日志原文，测试逐字节断言
+*.log -text
+
+# 图片 / 压缩包 / 二进制
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.gz binary
+*.exe binary
+
+# ---------------------------------------------------------------
+# 锁定 diff 展示方式（便于 review）
+*.md text diff=markdown
+*.py text diff=python

@@ -1,0 +1,21 @@
+
+-------------------------------[ability]-------------------------------
+
+
+----------------------------------RenderService----------------------------------
+-- ScreenInfo
+screen[0]: id=0, powerStatus=POWER_STATUS_ON, backlight=4, screenType=EXTERNAL_TYPE, render resolution=2416x2210, physical resolution=2416x2210, isVirtual=false, skipFrameInterval=1, expectedRefreshRate=-1, skipFrameStrategy=0
+supportedMode[0]: 2416x2210, refreshRate=60
+activeMode: 2416x2210, refreshRate=60
+name=express_display, phyWidth=158, phyHeight=141, supportLayers=10, virtualDispCount=1, propertyCount=0, type=DISP_INTF_UNKNOW, supportWriteBack=false
+isSamplingOn=0, samplingScale=1.00, samplingTranslateX=0.00, samplingTranslateY=0.00
+enableVisibleRect=0, mainScreenVisibleRect=[0,0,0,0]
+-- ScreenInfo
+screen[1]: id=5, powerStatus=POWER_STATUS_OFF, backlight=4, screenType=EXTERNAL_TYPE, render resolution=1080x2444, physical resolution=1080x2444, isVirtual=false, skipFrameInterval=1, expectedRefreshRate=-1, skipFrameStrategy=0
+supportedMode[0]: 1080x2444, refreshRate=60
+activeMode: 1080x2444, refreshRate=60
+name=express_display, phyWidth=1080, phyHeight=2444, supportLayers=10, virtualDispCount=1, propertyCount=0, type=DISP_INTF_UNKNOW, supportWriteBack=false
+isSamplingOn=0, samplingScale=1.00, samplingTranslateX=0.00, samplingTranslateY=0.00
+enableVisibleRect=0, mainScreenVisibleRect=[0,0,0,0]
+===================
+foldScreenIds_ size is 0

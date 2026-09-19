@@ -1,0 +1,50 @@
+name: 登录流程
+bundle: com.example.app
+ability: EntryAbility
+description: |
+  示例用例。请按被测应用实际情况替换 bundle / ability 与各控件的
+  定位条件（id / text / type / descr）。
+
+steps:
+  - start: true
+
+  - waitFor:
+      text: "登录"
+      timeout: 8000
+
+  - input:
+      id: "username"
+      value: "test_user"
+
+  - input:
+      id: "password"
+      value: "test_password"
+
+  - tap:
+      id: "btn_login"
+
+  - assert:
+      exists:
+        text: "首页"
+        timeout: 10000
+
+  - screenshot: "after_login.png"
+
+  - tap:
+      text: "订单"
+
+  - assert:
+      exists:
+        text: "我的订单"
+
+  - swipe:
+      direction: up
+      scale: 0.6
+
+  - screenshot: "order_list.png"
+
+  - back: true
+
+  - assert:
+      exists:
+        text: "首页"

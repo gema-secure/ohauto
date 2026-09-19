@@ -1,0 +1,11 @@
+# ohauto 依赖
+#
+# 核心能力（hdc 通路、控件树解析、匹配器、Driver、报告）零第三方依赖，
+# 只用标准库。唯一可选项是 pyyaml：
+#   有 pyyaml -> Action DSL 用 YAML 格式（推荐，可读性好）
+#   无 pyyaml -> DSL 自动退化为 JSON 格式，功能不受影响
+#
+# 安装：
+#   pip install -r requirements.txt
+
+pyyaml>=6.0

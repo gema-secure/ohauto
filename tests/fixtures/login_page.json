@@ -1,0 +1,123 @@
+{
+  "attributes": {
+    "type": "Root",
+    "id": "",
+    "bounds": "{\"left\":0,\"top\":0,\"right\":1080,\"bottom\":2340}",
+    "visible": "true"
+  },
+  "children": [
+    {
+      "attributes": {
+        "type": "Column",
+        "id": "loginPage",
+        "bounds": "{\"left\":0,\"top\":0,\"right\":1080,\"bottom\":2340}",
+        "visible": "true"
+      },
+      "children": [
+        {
+          "attributes": {
+            "type": "Text",
+            "id": "",
+            "text": "欢迎登录",
+            "bounds": "{\"left\":240,\"top\":200,\"right\":840,\"bottom\":280}",
+            "clickable": "false",
+            "visible": "true",
+            "enabled": "true"
+          }
+        },
+        {
+          "attributes": {
+            "type": "TextInput",
+            "id": "username",
+            "text": "",
+            "hint": "请输入用户名",
+            "bounds": "{\"left\":120,\"top\":400,\"right\":960,\"bottom\":500}",
+            "clickable": "true",
+            "visible": "true",
+            "enabled": "true",
+            "focused": "false"
+          }
+        },
+        {
+          "attributes": {
+            "type": "TextInput",
+            "id": "password",
+            "text": "",
+            "hint": "请输入密码",
+            "bounds": "{\"left\":120,\"top\":540,\"right\":960,\"bottom\":640}",
+            "clickable": "true",
+            "visible": "true",
+            "enabled": "true"
+          }
+        },
+        {
+          "attributes": {
+            "type": "Button",
+            "id": "btn_login",
+            "text": "登录",
+            "bounds": "{\"left\":120,\"top\":720,\"right\":960,\"bottom\":820}",
+            "clickable": "true",
+            "visible": "true",
+            "enabled": "true"
+          }
+        },
+        {
+          "attributes": {
+            "type": "Button",
+            "id": "btn_forget",
+            "text": "忘记密码",
+            "bounds": "{\"left\":120,\"top\":860,\"right\":960,\"bottom\":940}",
+            "clickable": "true",
+            "visible": "true",
+            "enabled": "true"
+          }
+        },
+        {
+          "attributes": {
+            "type": "Button",
+            "id": "btn_delete_account",
+            "text": "注销账号",
+            "bounds": "{\"left\":120,\"top\":980,\"right\":960,\"bottom\":1060}",
+            "clickable": "true",
+            "visible": "true",
+            "enabled": "true"
+          }
+        },
+        {
+          "attributes": {
+            "type": "Image",
+            "id": "icon_wechat",
+            "text": "",
+            "descr": "微信快捷登录",
+            "bounds": "{\"left\":440,\"top\":1200,\"right\":520,\"bottom\":1280}",
+            "clickable": "true",
+            "visible": "true",
+            "enabled": "true"
+          }
+        },
+        {
+          "attributes": {
+            "type": "Button",
+            "id": "btn_hidden",
+            "text": "隐藏按钮",
+            "bounds": "{\"left\":0,\"top\":0,\"right\":0,\"bottom\":0}",
+            "clickable": "true",
+            "visible": "false",
+            "enabled": "true"
+          }
+        },
+        {
+          "attributes": {
+            "type": "Button",
+            "id": "btn_disabled",
+            "text": "未启用按钮",
+            "bounds": "{\"left\":120,\"top\":1400,\"right\":960,\"bottom\":1480}",
+            "clickable": "true",
+            "visible": "true",
+            "enabled": "false"
+          }
+        }
+      ]
+    }
+  ]
+}

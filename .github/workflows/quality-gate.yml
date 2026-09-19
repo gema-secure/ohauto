@@ -1,0 +1,92 @@
+# CI 流水线 —— 质量门禁（GitHub Actions 版）
+#
+# ⚠️ AtomGit 用户请看 `.gitcode/workflows/quality-gate.yml` —— 那份才是 AtomGit 用的。
+#    AtomGit 只扫 `.gitcode/workflows/`，本文件在 AtomGit 上**不会被识别**。
+#    两者语法差异：AtomGit 写 `uses: checkout`，GitHub 写 `actions/checkout@v4`。
+#
+# ★ 设计原则：**检查逻辑只写一遍**
+# 早期版本把「静态检查 / 测试 / 覆盖率 / 端到端」在 workflow 里又抄了一遍，
+# 而 `ci/quality_gate.py` 里还有一套 —— 两套必然漂移。现在只调 `ci/quality_gate.py`，
+# workflow 自己只负责「跑」和「归档产物」。
+#
+# ★ 仓库根假设已被消除
+# 本配置**不假设**仓库根在哪，第一步会自动探测 `ci/quality_gate.py` 的位置
+# （`./` 或 `ohauto/`），所以上传整个 guochuang-2026/ 或只上传 ohauto/ 都能跑。
+
+name: 质量门禁
+
+on:
+  push:
+    branches: [main, master, 'feat/**', 'fix/**']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  quality-gate:
+    name: 质量门禁
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      matrix:
+        python-version: ['3.13']      # 3.12 未实测，确认后再加
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # ★ 自动探测项目目录 —— 消除「仓库根在哪」这个假设
+      - name: 探测项目目录
+        run: |
+          if [ -f ci/quality_gate.py ]; then
+            echo "PROJ=." > proj_dir.txt
+            echo "✓ 仓库根就是项目根"
+          elif [ -f ohauto/ci/quality_gate.py ]; then
+            echo "PROJ=ohauto" > proj_dir.txt
+            echo "✓ 项目在 ohauto/ 子目录下"
+          else
+            echo "✗ 找不到 ci/quality_gate.py（期望 ./ 或 ./ohauto/）"
+            exit 1
+          fi
+
+      - name: 安装依赖
+        run: |
+          PROJ=$(cut -d= -f2 proj_dir.txt)
+          cd "$PROJ"
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install coverage
+
+      # ★ 唯一的质量门禁入口 —— 与本地执行完全一致
+      - name: 质量门禁
+        run: |
+          PROJ=$(cut -d= -f2 proj_dir.txt)
+          cd "$PROJ"
+          python ci/quality_gate.py --json _out/ci_result.json
+
+      # 以下只是「产出报告」，不重复任何检查逻辑
+      - name: 生成覆盖率 HTML（供人查阅）
+        if: always()
+        run: |
+          if [ -f proj_dir.txt ]; then
+            PROJ=$(cut -d= -f2 proj_dir.txt)
+            cd "$PROJ"
+            python -m coverage html || true
+          fi
+
+      - name: 归档 CI 结果与覆盖率报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-artifacts-py${{ matrix.python-version }}
+          path: |
+            **/_out/ci_result.json
+            **/_out/coverage_html/
+          retention-days: 14
+          if-no-files-found: warn

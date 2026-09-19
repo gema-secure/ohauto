@@ -1,0 +1,51 @@
+### hidumper -s DisplayManagerService -a "-s -a"
+
+-------------------------------[ability]-------------------------------
+
+
+----------------------------------DisplayManagerService----------------------------------
+--------------------------------------Free Screen--------------------------------------
+ScreenName           Type     IsGroup DmsId RsId                 ActiveIdx VPR Rotation Orientation RequestOrientation NodeId               IsMirrored MirrorNodeId
+ScreenGroup_1        UNDEFINEDtrue    1     18446744073709551615 0         1   0        0           0                  18446744073709551615 false      0            
+total screen num: 2
+-------------------------------------ScreenGroup 1-------------------------------------
+ScreenName           Type     IsGroup DmsId RsId                 ActiveIdx VPR Rotation Orientation RequestOrientation NodeId               IsMirrored MirrorNodeId
+MIPI                 REAL     false   0     0                    0         1.5 0        0           0                  2345052143618        false      0            
+
+
+
+### hidumper -s DisplayManagerService -a "-d -a"
+
+-------------------------------[ability]-------------------------------
+
+
+----------------------------------DisplayManagerService----------------------------------
+--------------------------------------Display Info--------------------------------------
+DisplayId ScreenId RefreshRate VPR Rotation Orientation DisplayOrientation FreezeFlag [ x   y   w   h   ]
+0         0        69          1.5 0        0           0                 1          [ 0    0    720  1280 ]
+
+
+
+### hidumper -s WindowManagerService -a -a
+
+-------------------------------[ability]-------------------------------
+
+
+----------------------------------WindowManagerService----------------------------------
+-------------------------------------ScreenGroup 1-------------------------------------
+WindowName           DisplayId Pid     WinId Type Mode Flag ZOrd Orientation [ x    y    w    h    ]
+ScreenLockWindow     0         1072    1     2110 1    0    4    0           [ 0    0    720  1280 ]
+SystemUi_NavigationB 0         1072    8     2112 102  1    3    0           [ 0    1208 720  72   ]
+SystemUi_PrivacyIndi 0         1072    9     2111 102  1    2    0           [ 0    0    720  32   ]
+SystemUi_StatusBar   0         1072    7     2108 102  1    1    0           [ 0    0    720  72   ]
+EntryView            0         1146    3     2001 1    0    0    8           [ 0    0    720  1280 ]
+---------------------------------------------------------------------------------------
+SystemUi_VolumePanel 0         1072    2     2111 1    1    -1   0           [ 0    0    0    0    ]
+RecentView           0         1146    4     2115 1    0    -1   0           [ 0    0    0    0    ]
+softKeyboard1        0         1610    6     2105 1    0    -1   0           [ 0    0    0    0    ]
+SystemUi_DropdownPan 0         1072    10    2109 1    1    -1   0           [ 0    0    0    0    ]
+SystemUi_BannerNotic 0         1072    11    2111 1    1    -1   0           [ 0    0    0    0    ]
+Focus window: 1
+total window num: 10
+
+
