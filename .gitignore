@@ -51,3 +51,9 @@ desktop.ini
 #   .github/workflows/      GitHub Actions 备用
 #   ci/                     CI 脚本（门禁本体）
 # ---------------------------------------------------------------
+
+# 本地合并备份（合并前的快照，历史以 git 为准）
+_bak_*/
+
+# hypium 导出运行产物
+hypium_out/
