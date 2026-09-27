@@ -97,6 +97,11 @@ def main():
             print(f'[失败] 用例装载失败 {f}: {e}')
             return 1
 
+    # 仅用于**展示**（头部打印「应用: xxx」）。每个用例实际用哪个 bundle
+    # 在下面组装 items 时逐条取 —— 之前这里只取 loaded[0]，而 Driver 又
+    # 全部用它构造：批量跑不同应用的用例时，后面的 bundle 被**静默忽略**，
+    # DeviceGuard 会去 force-stop/拉起错误的应用，CaseResult.bundle 也是假账
+    # （2026-09-26 全项目评审发现）。
     bundle = args.bundle or loaded[0][1].get('bundle') or 'com.unknown'
     ability = args.ability or loaded[0][1].get('ability') or 'EntryAbility'
     verbose = not args.quiet
@@ -156,7 +161,11 @@ def main():
             c = dict(case)
             if args.repeat > 1:
                 c['name'] = f'{case.get("name") or os.path.basename(f)} #{rep}'
-            d = Driver(bundle=bundle, ability=ability, hdc=hdc,
+            # ★ 每个用例用自己的 bundle/ability（--bundle/--ability 显式
+            #   指定时仍全局覆盖）。别再用上面的展示变量——那是第一个用例的。
+            ub = args.bundle or case.get('bundle') or 'com.unknown'
+            ua = args.ability or case.get('ability') or 'EntryAbility'
+            d = Driver(bundle=ub, ability=ua, hdc=hdc,
                        artifact_dir=None if args.sim else args.out,
                        default_timeout=args.timeout, poll_interval=args.poll,
                        verbose=False)
@@ -253,8 +262,13 @@ def _print_summary(suite: SuiteResult, guard, args):
     print(f'  独立失败          : {suite.independent_failed}')
     print()
     print(f'  原始成功率        : {suite.success_rate:.2%}')
-    print(f'  独立成功率        : {suite.independent_success_rate:.2%}'
-          f'   ← 验收口径（阈值 {args.kpi:.0%}）')
+    print(f'  非级联失败率      : {suite.non_cascade_failure_rate:.2%}'
+          f'   ← 只衡量引擎健壮性，**不是成功率**')
+    print(f'  整体健康          : {"是" if suite.health_ok else "否"}'
+          f'（有失败步骤即「否」）')
+    # 这三个数各回答一个问题，**谁也代替不了谁**（2026-09-23 口径更正）。
+    # 原来的报告只打「独立成功率 ← 验收口径」，会在用例整体失败时
+    # 仍显示一个很漂亮的比例（50 步挂 45 步 → 0.98），严重误导。
     print()
 
     # 重试收益
@@ -300,11 +314,17 @@ def _print_summary(suite: SuiteResult, guard, args):
     ok = suite.kpi_ok(args.kpi)
     print('=' * W)
     if ok:
-        print(f'  结论：达标 —— 独立成功率 {suite.independent_success_rate:.2%} '
-              f'≥ {args.kpi:.0%}')
+        print(f'  结论：达标 —— 整体健康，且非级联失败率 '
+              f'{suite.non_cascade_failure_rate:.2%} ≥ {args.kpi:.0%}')
     else:
-        print(f'  结论：未达标 —— 独立成功率 {suite.independent_success_rate:.2%} '
-              f'< {args.kpi:.0%}')
+        if not suite.health_ok:
+            print(f'  结论：未达标 —— **有失败步骤**'
+                  f'（{suite.failed}/{suite.total}），'
+                  f'非级联失败率 {suite.non_cascade_failure_rate:.2%} '
+                  f'不能当作成功率')
+        else:
+            print(f'  结论：未达标 —— 非级联失败率 '
+                  f'{suite.non_cascade_failure_rate:.2%} < {args.kpi:.0%}')
         failed = [s for c in suite.cases for s in c.steps if not s.ok]
         if failed:
             print()

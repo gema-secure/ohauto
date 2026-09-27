@@ -17,9 +17,18 @@
 **控件树**（结构化布局信息，精确但受限于应用是否设置 id）+
 **截图**（视觉语义，能覆盖 Canvas 绘制、无标识图标等控件树盲区）。
 
-实测真机数据（7 个应用 / 877 个节点）：**只有 45 个节点带 id（5.13%）**，
-带 text 的也只有 63 个（7.18%）；其中 **3 个应用 id 数为 0** ——
-纯控件树方案在这些应用上完全失效，这正是必须引入视觉通道的原因。
+实测真机数据（7 份控件树 / 6 个应用 / 800 个节点）：**只有 45 个节点带 id（5.62%）**，
+带 text 的也只有 59 个（7.4%）；其中 **2 个应用整棵树 id 数为 0**（系统设置、
+纯 Canvas 的 etsclock）—— 纯控件树方案在这些应用上完全失效，
+这正是必须引入视觉通道的原因。
+（复现：`python tools/profile_locators.py datasets/real_samples_20260919`，
+数字口径见 [`docs/指标汇总-2026-09-24.md`](docs/指标汇总-2026-09-24.md) §六之一）
+
+> **视觉通道已实测**（2026-09-22，`deepseek-flash`，7 组真机截图）：
+> 离线评测 **18/19 = 94.7%** 命中（剔除 1 条已证明无效的标注），
+> 平均 IoU 0.842，关思考模式 p50 约 1.1s。
+> 完整方法与局限见 `docs/验证报告-多模态视觉通道-2026-09-22.md`；
+> 复跑用 `python tools/eval_vision_offline.py --provider openai --no-thinking`。
 
 ## 文档索引
 
@@ -98,7 +107,7 @@ hdc shell uitest uiInput keyEvent Back
 | 声明式用例 | YAML/JSON 的 Action DSL，可生成、可审阅、可重放 |
 | 自动探索 | 广度优先探索页面跳转，产出页面状态图（Mermaid）+ 回归用例 |
 | 报告 | JSON / Markdown / HTML 三格式，HTML 带截图 |
-| 多模态定位 | 控件树 + 视觉双通道融合，Provider 可插拔 |
+| 多模态定位 | 控件树 + 视觉双通道融合，Provider 可插拔；**视觉通道已实测 94.7%**（见验证报告） |
 | 模拟设备 | 无真机跑通全链路，可进 CI |
 
 ---
@@ -107,24 +116,28 @@ hdc shell uitest uiInput keyEvent Back
 
 ### 1. 准备环境
 
-```bash
-# 方式 A：装 DevEco Studio（自带 SDK 与 hdc）
-# 方式 B：只要 hdc —— 下载 OpenHarmony 公开 SDK（无需登录）
-python ../tools/fetch_sdk.py
+只需要一个 `hdc`（HarmonyOS Device Connector）—— **装 DevEco Studio 自带的即可**：
 
-# 让 ohauto 找到 hdc（只写项目内一个 JSON）
-python ../tools/configure_hdc.py
+```bash
+# 1) 找到 hdc：DevEco Studio 自带，常见位置
+#    Windows: C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe
+#    也可从 OpenHarmony 公开 SDK 单独取（无需登录）
+
+# 2) 让 ohauto 找到它 —— 二选一
+#    a. 直接告诉 ohauto（只写项目内一个 JSON，不动系统）
+echo {"hdc_path": "D:/DevEco/toolchains/hdc.exe"} > hdc.config.json
+#    b. 或者放进 PATH，什么都不用配
 ```
 
 > **本项目不修改系统任何设置。** 不写注册表、不改 PATH、不动环境变量。
-> 定位 hdc 的优先级：
+> 定位 hdc 的优先级（`ohauto/hdc.py` 的 `CONFIG_NAMES`）：
 > 1. 代码显式传参 `Hdc(hdc_path=...)`
 > 2. 环境变量 `HDC_PATH`（仅当前进程有效）
-> 3. 项目内 `hdc.config.json` ← `configure_hdc.py` 写的就是它
+> 3. 项目内 `hdc.config.json` 或 `.ohauto.json`（向上逐级查找，也查 `~/.ohauto/`）
 > 4. 系统 PATH（若 hdc 本来就在 PATH 中，什么都不用配）
 > 5. 常见安装位置（DevEco Studio / OpenHarmony SDK 默认目录）
 >
-> 撤销只需删掉那个 JSON，或 `python ../tools/configure_hdc.py --clear`。
+> 撤销只需删掉那个 JSON。
 
 ### 2. 自检
 
@@ -148,8 +161,12 @@ python examples/offline_demo.py
 ```bash
 python examples/dump_tree.py --bundle <包名>      # 第一步：核对真实控件树结构
 python examples/smoke_test.py --bundle <包名>     # 第二步：最小闭环
-python examples/run_case.py examples/cases/login.yaml --bundle <包名>
+python examples/run_case.py examples/cases/calculator.yaml   # 第三步：真机跑通用例
 ```
+
+> ⚠️ `examples/cases/login.yaml` 是 **DSL 语法示例模板**（bundle 写的是不存在的
+> `com.example.app`），**不要拿去跑真机** —— 它自己开头就写明了这一点。
+> 真要跑用例请用 `calculator.yaml`（指向设备自带计算器，能真跑通）。
 
 ---
 
@@ -264,7 +281,7 @@ steps:
 from ohauto import action, report
 from ohauto.driver import Driver
 
-case = action.load_case('examples/cases/login.yaml')
+case = action.load_case('examples/cases/calculator.yaml')
 with Driver(bundle='com.example.app') as d:
     rep = action.run_case(d, case)
     print(rep.ok, rep.passed, rep.total)
@@ -288,7 +305,7 @@ steps = action.trace_to_steps(d)     # 从执行轨迹还原成 DSL 步骤
 from ohauto.explorer import Explorer
 
 ex = Explorer(driver, artifact_dir='./explore')
-graph = ex.explore(max_pages=8, max_actions_per_page=6, return_back=False)
+graph = ex.explore(8, Budget(max_pages=8, max_actions_per_page=6), return_back=False)
 
 print(ex.to_mermaid())          # 页面状态图
 ex.save_graph('graph.json')     # 状态图 + 被跳过的控件
@@ -377,7 +394,7 @@ pol = SafetyPolicy(allow_dangerous=True)
 ## 测试
 
 ```bash
-# 全部测试（无需真机）—— 589 项
+# 全部测试（无需真机）—— 905 项
 python -m unittest discover -s tests -t tests -q
 
 # 只跑核心逻辑单测
@@ -387,7 +404,7 @@ python -m unittest tests.test_core -v
 python -m unittest tests.test_integration_sim -v
 ```
 
-覆盖范围（**589 项，全部不需要真机**）：
+覆盖范围（**905 项，全部不需要真机**）：
 
 | 文件 | 覆盖 | 项数 |
 |---|---|---:|
@@ -416,12 +433,12 @@ python tools/quality_gate.py --fast     # 跳过覆盖率，本地快速自测
 | # | 关卡 | 阻断条件 |
 |---|---|---|
 | 1 | 静态检查（`tools/static_check.py`，**零依赖**） | 有 error |
-| 2 | 单元测试（589 项） | 任一失败 |
+| 2 | 单元测试（905 项） | 任一失败 |
 | 3 | 覆盖率（`.coveragerc` 的 `fail_under`） | < **70%** |
 | 4 | 离线端到端（`examples/offline_demo.py`） | 非零退出 |
 
-**实测覆盖率 85%**（核心包 `ohauto/`，4038 语句 / 611 未覆盖），
-规划要求 ≥70%，留了 15 个百分点余量。
+**实测覆盖率 87%**（`coverage report` 的 TOTAL：6395 语句 / 811 未覆盖，
+2026-09-22 实测；核心包 `ohauto/`），门禁线 70%，留了 17 个百分点余量。
 
 > 静态检查**不引 flake8/mypy** —— 项目红线是「只用标准库，不引入新依赖」，
 > 所以用 `ast` 实现了类型注解、命名规范、危险模式等检查。

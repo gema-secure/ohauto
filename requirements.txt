@@ -1,9 +1,17 @@
 # ohauto 依赖
 #
 # 核心能力（hdc 通路、控件树解析、匹配器、Driver、报告）零第三方依赖，
-# 只用标准库。唯一可选项是 pyyaml：
-#   有 pyyaml -> Action DSL 用 YAML 格式（推荐，可读性好）
-#   无 pyyaml -> DSL 自动退化为 JSON 格式，功能不受影响
+# 只用标准库。唯一可选项是 pyyaml —— 但它在「读」「写」两侧**不等价**：
+#
+#   写 dump_case(): 有 pyyaml -> YAML；无 -> 自动退化为 JSON（两侧都行）
+#   读 load_case(): 读 YAML **必须**有 pyyaml，否则抛 DslError；
+#                   读 JSON 不需要。
+#
+# 也就是说：**全 JSON 链路可以零依赖跑通，但仓库里手写的 cases/*.yaml
+# 读不回来。** CI 会 `pip install -r requirements.txt`，本地也建议装上。
+#
+# 别把这条当成「引入了核心依赖」—— 核心能力一个第三方包都不用；
+# pyyaml 只是 Action DSL 的序列化后端。
 #
 # 安装：
 #   pip install -r requirements.txt

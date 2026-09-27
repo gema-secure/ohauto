@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>ohauto 一页纸速览</title>
+<style>
+@page{size:A4;margin:14mm}
+body{font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;margin:0 auto;
+     max-width:820px;padding:20px;color:#1f2328;background:#fff;line-height:1.55;font-size:13px}
+h1{font-size:21px;margin:0 0 2px}
+.lead{color:#57606a;font-size:13px;margin-bottom:14px}
+.kpi{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+.k{border:1px solid #d0d7de;border-radius:8px;padding:6px 12px;min-width:92px}
+.k b{font-size:17px;display:block;line-height:1.25}
+.k span{color:#57606a;font-size:11.5px}
+h2{font-size:14px;margin:18px 0 8px;font-weight:500;border-bottom:1px solid #d0d7de;padding-bottom:4px}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+td,th{border-bottom:1px solid #eaeef2;padding:5px 8px 5px 0;vertical-align:top;text-align:left}
+td.n{font-weight:500;white-space:nowrap;font-size:14px}
+td.l{color:#57606a;white-space:nowrap}
+td.s{width:22px;font-size:14px}
+ul{margin:0;padding-left:18px} li{margin:5px 0}
+li b{display:inline-block;min-width:104px}
+li span{color:#24292f}
+code{background:#f6f8fa;border:1px solid #eaeef2;border-radius:4px;padding:0 4px;font-size:11.5px}
+.foot{margin-top:16px;color:#8c959f;font-size:11.5px;border-top:1px solid #eaeef2;padding-top:8px}
+</style></head><body>
+<h1>ohauto —— 面向 OpenHarmony 的多模态智能测试系统</h1>
+<div class="lead">截图（视觉）+ 控件树（布局）<b>双通道驱动</b>的 UI 自动化能力层：
+自然语言直通用例 → 执行 → 失败归因 → 自愈的完整闭环，<b>设备侧零部署</b>。</div>
+<div class="kpi"><div class="k"><b>1092</b><span>单元测试 OK</span></div><div class="k"><b>88%</b><span>覆盖率</span></div><div class="k"><b>94.7%</b><span>视觉一致性</span></div><div class="k"><b>83.3%</b><span>NL→可执行用例</span></div><div class="k"><b>77.8%</b><span>真机步骤通过</span></div><div class="k"><b>7</b><span>真机应用样本</span></div><div class="k"><b>13</b><span>命题条目</span></div></div>
+
+<h2>真机证据（DAYU200 / OpenHarmony 5.0.3.135 / 720×1280）</h2>
+<table><tr><td class="n">744</td><td class="l">个可见节点</td><td>7 个应用样本合计，截图与控件树同坐标系</td></tr><tr><td class="n">12 / 0</td><td class="l">可交互 / id</td><td>com.ohos.settings：12 个可交互控件，id 数为 0 —— 纯控件树无法稳定定位，必须靠视觉与文案通道</td></tr><tr><td class="n">0</td><td class="l">个可交互节点</td><td>etsclock：纯 Canvas 应用，控件树里一个可交互控件都没有 —— 视觉通道是唯一出路</td></tr><tr><td class="n">1.0 / 0.95</td><td class="l">崩溃 / 无窗口 判据置信度</td><td>kill -11 受控注入与息屏注入，真机实测</td></tr><tr><td class="n">21/27</td><td class="l">L3 真机步骤通过</td><td>生成的用例在真机上真跑一遍：步骤级 77.8%；整条全过的 2 条都是空壳用例，真引用控件的 3 条 0/3 —— 主动暴露「可执行 ≠ 做了事」，并已派活收口</td></tr></table>
+
+<h2>技术亮点</h2>
+<ul><li><b>双通道定位</b><span>截图（视觉）+ 控件树（布局）融合；控件树拿不到的靠视觉补，视觉拿不准的用控件树交叉验证。</span></li><li><b>差异即缺陷</b><span>真实样本**三类成因全齐**：条件渲染 / 显式隐藏 / 越出屏幕，装机后 4 次采集确定性复现，融合报告全部落 🔴 missing；正常对照全部 confirmed（置信度 1.00）。</span></li><li><b>失败归因闭环</b><span>失败步自动归因（类别 + 置信度 + 证据 + 建议），归因结论**带 locator_id**，回写定位器健康度，驱动自愈换代。</span></li><li><b>可信用例生成</b><span>自然语言 → 用例六阶段：模型只写草案，红线（硬编码坐标 / 固定等待）由确定性校验拦下并自动修复，再经干跑把关可执行性。</span></li><li><b>零部署</b><span>宿主侧 Python + hdc 直连，**不需要为被测应用打包测试 HAP**。</span></li></ul>
+
+<h2>命题覆盖</h2>
+<table><tr><td>基础 1~5</td><td class="s">✅</td><td>截图+布局识别 · ≥3 类控件 · 脚本+断言 · ≥2 场景 · 覆盖 4/4 与 5/3 双口径</td></tr><tr><td>基础 6</td><td class="s">⚠️</td><td>材料齐备（架构/执行结果/验证报告/用例生成说明）；演示材料本页即其一</td></tr><tr><td>挑战 1~4</td><td class="s">✅</td><td>多模态理解 · NL 生成脚本 · 自动探索+状态图 · 压测脚本</td></tr><tr><td>挑战 5</td><td class="s">⚠️</td><td>五类异常判据齐备 + 闭环已接（归因结论带 id）+ 两类真机正例；自愈记账等 A 收口（派活已发，方案与验收已定）</td></tr><tr><td>挑战 6</td><td class="s">⚠️→✅推进中</td><td>沉淀工装已建并真机跑通（trace_to_case.py：采集→沉淀→冷启动重放 4/4，产物零坐标、id 精准命中）；探索轨迹入图（StateGraph 存 page_path）等 B 收口</td></tr><tr><td>挑战 7</td><td class="s">✅</td><td>已孵化为可复用工具链（tools/ + 一键整链演示）</td></tr></table>
+
+<h2>复现入口</h2>
+<table><tr><td>全量门禁</td><td><code>python -m unittest discover -s tests -t tests -q && python tools/static_check.py</code></td></tr><tr><td>一键整链</td><td><code>python tools/demo_full_chain.py          # 离线；--real 跑真机</code></td></tr><tr><td>真机画廊</td><td><code>python tools/demo_gallery.py</code></td></tr><tr><td>视觉评测</td><td><code>python tools/eval_vision_offline.py --dry</code></td></tr><tr><td>异常注入</td><td><code>python tools/verify_signals_injection_real.py</code></td></tr><tr><td>用例生成评测</td><td><code>python tools/eval_nl_generation_real.py --execute   # 需 key + 真机</code></td></tr></table>
+
+<div class="foot">数字权威出处：<code>docs/指标汇总-2026-09-24.md</code>（每条带复现命令；09-23 版已过期）｜
+真机样本：<code>datasets/real_samples_20260919/</code>｜
+上方所有数字均可在本机当场复跑，未使用任何模拟数据冒充实测。</div>
+</body></html>

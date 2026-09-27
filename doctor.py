@@ -213,10 +213,18 @@ def main() -> int:
                                 f'aa start -b {args.bundle} -a {args.ability}'],
                                capture_output=True, text=True, timeout=30)
             out = ((r.stdout or '') + (r.stderr or '')).strip()
-            if 'start ability successfully' in out.lower() or r.returncode == 0:
+            # ⚠️ 判据只能看**输出**，不能看 rc —— hdc shell 的 rc 表示
+            # 「shell 通道本身成功」，aa start 拉起失败时 rc 照样是 0。
+            # 原来写的是 `or r.returncode == 0`，等于恒通过（评审 #11）：
+            # 应用根本没拉起来，doctor 也报 OK，误导后面所有真机步骤。
+            # 真机实测失败输出含 "Error"/"Failed to start"；成功才含
+            # "start ability successfully"（大小写不定，统一 lower）。
+            low = out.lower()
+            if 'start ability successfully' in low:
                 check(f'拉起应用 {args.bundle}', OK, out[:160])
             else:
-                check(f'拉起应用 {args.bundle}', WARN, out[:200])
+                check(f'拉起应用 {args.bundle}', WARN,
+                      (out[:200] or '（无输出，拉起很可能失败）'))
         except Exception as e:
             check(f'拉起应用 {args.bundle}', WARN, f'{type(e).__name__}: {e}')
 

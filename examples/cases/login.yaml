@@ -1,3 +1,16 @@
+# ⚠️ 这是 DSL 的**示例模板**，不是能跑的真机用例。
+#
+# bundle 写的是不存在的 `com.example.app` —— 它的用途是让人一眼看清
+# 「一条 DSL 用例长什么样、有哪些 action 可用」，**不要直接导出到测试工程执行**。
+# （曾经导出过，结果是每次真机测试报告里都挂着一条
+#   `Error in case_0, startAbility failed`，把真正的问题盖住了。）
+#
+#   · 要看语法：读本文件
+#   · 要跑真机：用同目录的 calculator.yaml（指向设备自带计算器，能真跑通）
+#   · 要写自己的：复制本文件，把 bundle / ability / 定位条件换成真实值
+#
+# 各 action 的完整清单见 `ohauto/action.py` 或 README 的「Action DSL」一节。
+
 name: 登录流程
 bundle: com.example.app
 ability: EntryAbility

@@ -23,7 +23,7 @@ from ohauto.driver import Driver
 from ohauto.matcher import ON
 from ohauto.sim import FakeHdc
 from ohauto import action, report
-from ohauto.explorer import Explorer, SafetyPolicy
+from ohauto.explorer import Explorer, SafetyPolicy, Budget
 
 OUT = os.path.join(HERE, '_out')
 
@@ -120,7 +120,7 @@ def main():
                 artifact_dir=os.path.join(OUT, 'artifacts_explore'), verbose=False)
     ex = Explorer(d3, artifact_dir=os.path.join(OUT, 'artifacts_explore'),
                   verbose=True)
-    graph = ex.explore(max_pages=4, max_actions_per_page=5, return_back=False)
+    graph = ex.explore(4, Budget(max_pages=4, max_actions_per_page=5), return_back=False)
     line('\n  生成的 Mermaid 状态图:')
     for l in ex.to_mermaid().splitlines():
         line('    ' + l)

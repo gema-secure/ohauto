@@ -1,0 +1,45 @@
+name: 计算器加法
+bundle: ohos.samples.distributedcalc
+ability: MainAbility
+description: |
+  真机验证用例：在 OpenHarmony 自带计算器上做一次 7 + 8 = 15。
+
+  选它作为 C5 的端到端样本，是因为实测它的数字/运算符按钮**全部带 id**
+  （7 8 9 + - C = . 等），定位稳定性远高于靠 text 匹配的应用；
+  而设备上常见的 settings / note 等应用按钮多无 id，不适合做首个冒烟用例。
+
+  定位方式只用 id，不硬编码坐标，也不硬编码等待时长（遵守项目红线第 5 条）。
+
+steps:
+  - start: true
+
+  - waitFor:
+      id: "7"
+      timeout: 8000
+
+  - tap:
+      id: "7"
+
+  - tap:
+      id: "+"
+
+  - tap:
+      id: "8"
+
+  - tap:
+      id: "="
+
+  - assert:
+      exists:
+        id: "result"
+        timeout: 5000
+
+  - screenshot: "calc_result.png"
+
+  - tap:
+      id: "C"
+
+  - assert:
+      exists:
+        id: "0"
+        timeout: 5000
