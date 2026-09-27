@@ -89,8 +89,8 @@ class Hdc:
         r'C:\Users\{user}\AppData\Local\OpenHarmony\Sdk\*\toolchains\hdc.exe',
         # OpenHarmony 官方 release SDK 解压后的布局：
         #   <盘>\ohos-sdk\<apiVersion>\toolchains\hdc.exe
-        # 2026-09-21 起本机在 D:\ohos-sdk\<ver> 部署了 5.0.3.135（API 15）那一套，
-        # 与 DEVICE 同版本号，所以也纳进来做兜底。
+        # 本机也可能把 SDK 解压到任意盘的这个布局下，所以按盘符通配兜底
+        # （具体在哪台机器的哪个盘，属于隐私项，走配置而不是写死）。
         r'D:\ohos-sdk\*\toolchains\hdc.exe',
         r'C:\ohos-sdk\*\toolchains\hdc.exe',
     ]

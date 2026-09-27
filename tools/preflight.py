@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 
@@ -25,6 +26,24 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from ohauto.hdc import Hdc                                    # noqa: E402
+
+
+def default_target() -> str:
+    """本机默认设备串号 —— **隐私项，绝不写进源码**。
+
+    优先级：环境变量 `OHAUTO_TARGET_SERIAL` → `hdc.config.json` 的
+    `target_serial` 键 → `''`。给空串时 `require_device` 会自动钉住
+    第一台在线设备，单设备场景零配置可用。
+    """
+    v = os.environ.get('OHAUTO_TARGET_SERIAL', '')
+    if v:
+        return v
+    cfg = os.path.join(ROOT, 'hdc.config.json')
+    try:
+        with open(cfg, encoding='utf-8') as f:
+            return (json.load(f) or {}).get('target_serial') or ''
+    except Exception:
+        return ''
 
 
 def require_device(target: str = None, hdc_path: str = None) -> Hdc:
@@ -54,4 +73,6 @@ def require_device(target: str = None, hdc_path: str = None) -> Hdc:
               % (target, shown))
         print('  串号了。用 --target 改成上面列表里的一个，或先跑: python doctor.py')
         sys.exit(2)
+    if not target:
+        hdc.target = targets[0]      # 未指定串号时钉住第一台，后续 -t 保持一致
     return hdc

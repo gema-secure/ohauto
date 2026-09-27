@@ -51,9 +51,10 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
-#: SDK 自带的签名材料目录（按优先级找）
+#: SDK 自带的签名材料目录（按优先级找）。本机自定路径走 env `OHAUTO_SDK_LIB`
+#: 或项目内 hdc.config.json 的 `sdk_lib` —— 机器特定路径是隐私项，不入源码。
 DEFAULT_SDK_LIBS = [
-    r'D:\ohos-sdk\<ver>\toolchains\lib',
+    os.environ.get('OHAUTO_SDK_LIB', ''),
     r'C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\lib',
 ]
 
@@ -243,11 +244,10 @@ def device_udid(hdc: str = '', target: str = '') -> str:
     ⚠️ hdc 通道会间歇报 `E000004 The communication channel is being
     established`，必须重试。
     """
-    hdc = hdc or shutil.which('hdc') or ''
+    hdc = hdc or shutil.which('hdc') or os.environ.get('HDC_PATH') or ''
     if not hdc:
-        for c in (r'D:\ohos-sdk\<ver>\toolchains\hdc.exe',
-                  r'C:\Program Files\Huawei\DevEco Studio\sdk\default'
-                  r'\openharmony\toolchains\hdc.exe'):
+        for c in (r'C:\Program Files\Huawei\DevEco Studio\sdk\default'
+                  r'\openharmony\toolchains\hdc.exe',):
             if os.path.isfile(c):
                 hdc = c
                 break
@@ -289,7 +289,8 @@ def main(argv=None) -> int:
 
     java = find_java()
     lib = pick_sdk_lib(args.sdk_lib)
-    sign_dir = args.sign_dir or r'D:\ohos-sdk\sign'
+    sign_dir = (args.sign_dir or os.environ.get('OHAUTO_SIGN_DIR')
+                or os.path.join(ROOT, '_out', 'sign'))
     os.makedirs(sign_dir, exist_ok=True)
 
     print('=' * 66)

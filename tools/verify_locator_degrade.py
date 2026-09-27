@@ -37,7 +37,7 @@ from ohauto import Driver, Hdc, LocatorManager              # noqa: E402
 from ohauto.layout import parse_layout                      # noqa: E402
 from preflight import require_device                  # noqa: E402
 
-DEVICE_HDC = r'D:\ohos-sdk\<ver>\toolchains\hdc.exe'
+DEVICE_HDC = None    # None = 走 Hdc 自动定位；本机路径写 hdc.config.json（隐私项不入源码）
 BUNDLE = 'ohos.samples.distributedcalc'
 ABILITY = 'MainAbility'
 

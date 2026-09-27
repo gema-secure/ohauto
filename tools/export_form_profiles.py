@@ -108,8 +108,11 @@ def _by_kind(profiles):
 
 
 def write_json(profiles, path):
+    _src = find_product_config()
     payload = {
-        'generated_from': find_product_config() or 'productConfig.json (fixture)',
+        # 只记文件名，不记绝对路径 —— 本机目录结构属于隐私项，不入库。
+        'generated_from': (os.path.basename(_src) if _src
+                           else 'productConfig.json (fixture)'),
         'total': len(profiles),
         'counts': {k: len(v) for k, v in sorted(_by_kind(profiles).items())},
         'profiles': [p.to_dict() for p in profiles],

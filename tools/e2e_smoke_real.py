@@ -43,7 +43,7 @@ from preflight import require_device                  # noqa: E402
 
 DEFAULT_BUNDLE = 'ohos.samples.distributedcalc'
 DEFAULT_ABILITY = 'MainAbility'
-DEVICE_HDC = r'D:\ohos-sdk\<ver>\toolchains\hdc.exe'
+DEVICE_HDC = None    # None = 走 Hdc 自动定位；本机路径写 hdc.config.json（隐私项不入源码）
 
 RESULTS: list = []
 

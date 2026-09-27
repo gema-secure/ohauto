@@ -60,7 +60,9 @@ from preflight import require_device                  # noqa: E402
 
 DEFAULT_BUNDLE = 'com.ohos.settings'
 DEFAULT_ABILITY = 'com.ohos.settings.MainAbility'
-DEFAULT_HDC = r'D:\ohos-sdk\<ver>\toolchains\hdc.exe'
+# None = 走 Hdc 自动定位（env HDC_PATH → hdc.config.json → PATH → 常见位置）。
+# 本机自定 hdc 路径是隐私项，写进本地的 hdc.config.json，不写进源码。
+DEFAULT_HDC = None
 
 #: 页面上「能点的东西」的类型（与 explorer 的口径保持一致，便于交叉核对）
 CLICKABLE_TYPES = {

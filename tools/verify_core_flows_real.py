@@ -54,7 +54,9 @@ from preflight import require_device                          # noqa: E402
 
 DEFAULT_BUNDLE = 'ohos.samples.distributedmusicplayer'
 DEFAULT_ABILITY = 'ohos.samples.distributedmusicplayer.MainAbility'
-DEFAULT_HDC = r'D:\ohos-sdk\<ver>\toolchains\hdc.exe'
+# None = 走 Hdc 自动定位（env HDC_PATH → hdc.config.json → PATH → 常见位置）。
+# 本机自定 hdc 路径是隐私项，写进本地的 hdc.config.json，不写进源码。
+DEFAULT_HDC = None
 
 
 # ---------------------------------------------------------------- 数据结构

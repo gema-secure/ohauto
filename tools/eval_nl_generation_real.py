@@ -66,9 +66,9 @@ from ohauto.treesum import flatten, is_interactive_for_summary  # noqa: E402
 from ohauto.runner import Runner, DeviceGuard                 # noqa: E402
 from ohauto.generator import (Generator, RejectReason,        # noqa: E402
                              default_provider, ProviderNotConfigured)
-from preflight import require_device                  # noqa: E402
+from preflight import require_device, default_target                  # noqa: E402
 
-DEFAULT_TARGET = '<device-serial>'
+DEFAULT_TARGET = default_target()   # 串号是隐私项：env OHAUTO_TARGET_SERIAL → hdc.config.json → 空时自动钉第一台
 # 默认靶标选**我们自己的 hypium 多页面样本**，不选系统示例应用：
 # 实测 `ohos.samples.distributedmusicplayer` 的可点控件**自身文案与 id 几乎全空**
 # （真机已知现象），派生出来的描述只有 1 条且是无意义的「点击 nan」

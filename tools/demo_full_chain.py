@@ -33,9 +33,9 @@ sys.path.insert(0, os.path.dirname(HERE))
 
 OUT = os.path.join(HERE, '_out', 'demo_full_chain')
 sys.path.insert(0, HERE)
-from preflight import require_device                       # noqa: E402
+from preflight import require_device, default_target                       # noqa: E402
 
-DEFAULT_TARGET = '<device-serial>'
+DEFAULT_TARGET = default_target()   # 串号是隐私项：env OHAUTO_TARGET_SERIAL → hdc.config.json → 空时自动钉第一台
 DEFAULT_BUNDLE = 'ohos.samples.distributedmusicplayer'
 DEFAULT_ABILITY = 'ohos.samples.distributedmusicplayer.MainAbility'
 

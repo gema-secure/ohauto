@@ -40,10 +40,10 @@ from ohauto.hdc import Hdc                            # noqa: E402
 from ohauto.layout import flatten                     # noqa: E402
 from ohauto.matcher import ON                         # noqa: E402
 from ohauto.runner import DeviceGuard, Runner         # noqa: E402
-from preflight import require_device                  # noqa: E402
+from preflight import require_device, default_target                  # noqa: E402
 
 #: 默认靶标：我们自己的 hypium 多页面样本（控件带 id 与中文文案）
-DEFAULT_TARGET = '<device-serial>'
+DEFAULT_TARGET = default_target()   # 串号是隐私项：env OHAUTO_TARGET_SERIAL → hdc.config.json → 空时自动钉第一台
 DEFAULT_BUNDLE = 'com.example.myapplication'
 DEFAULT_ABILITY = 'EntryAbility'
 OUT = os.path.join(HERE, '_out', 'trace_case')

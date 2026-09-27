@@ -39,9 +39,9 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(HERE, 'static_arkts'))
 
 from ohauto.runner import DeviceGuard                   # noqa: E402
-from preflight import require_device                    # noqa: E402
+from preflight import require_device, default_target                    # noqa: E402
 
-DEFAULT_TARGET = '<device-serial>'
+DEFAULT_TARGET = default_target()   # 串号是隐私项：env OHAUTO_TARGET_SERIAL → hdc.config.json → 空时自动钉第一台
 DEFAULT_PROJECT = r'D:\project\ohauto-hypium-test'
 DEFAULT_BUNDLE = 'com.example.myapplication'
 
