@@ -468,14 +468,57 @@ class TestWhiteScreen(unittest.TestCase):
 
         纯色图**必须显式**要（`screen_style='solid'`），不能再依赖默认值 ——
         默认值已改为 `'content'`（正常内容页），见下面的回归测试。
+
+        source 是 `screenshot+layout`（2026-09-23 起）—— 判据现在会交叉验证
+        控件树节点数，且把结论落在 evidence 里。本用例显式关掉了
+        `collect_layout`，所以 evidence 会注明「未能取到控件树（无法交叉验证）」。
         """
         sim = FakeHdc(screen=(720, 1280), screen_style='solid')
         sig = collect_signals(sim, BUNDLE, out_dir=out_dir(),
                               collect_layout=False)
         self.assertTrue(sig.has('WHITE_SCREEN'), sig.anomalies)
         a = sig.of_kind('WHITE_SCREEN')[0]
-        self.assertEqual(a.source, 'screenshot')
+        self.assertIn('screenshot', a.source)
         self.assertGreater(a.confidence, 0.0)
+
+    def test_white_screen_is_downgraded_when_layout_contradicts(self):
+        """★ 白屏判据必须被控件树**交叉验证**（2026-09-23 新增）。
+
+        单一颜色占比高 + 控件树有 20 个节点 = 矛盾信号。原实现只看前者，
+        以 0.95 置信度一票否决；现在降级为「疑似」，并**把节点数写进 evidence**。
+
+        单测直接打 `_judge_white_screen`（不走设备）—— 这条判据的输入只有
+        「原始判据 + 节点数」两个东西，不必绕一圈 FakeHdc。
+        """
+        import ohauto.signals as S
+
+        def _run(nodes):
+            sig = S.Signals(bundle=BUNDLE)
+            sig.layout_nodes = nodes
+            setattr(sig, '_white_screen_raw',
+                    (True, 0.98, '截图像素 99.0% 为同一颜色'))
+            S._judge_white_screen(sig)
+            return sig.of_kind('WHITE_SCREEN')[0]
+
+        # ① 节点多 → 与「空白页」矛盾 → 降级
+        a = _run(20)
+        ev = ' '.join(a.evidence) if isinstance(a.evidence, list) else str(a.evidence)
+        self.assertIn('20', ev, f'节点数必须写进 evidence：{ev}')
+        self.assertIn('矛盾', ev)
+        self.assertLess(a.confidence, 0.95, '与控件树矛盾时不许一票否决')
+        self.assertIn('layout', a.source)
+
+        # ② 节点少 → 与空白页一致 → 维持原判
+        b = _run(1)
+        self.assertGreaterEqual(b.confidence, 0.9)
+        ev_b = ' '.join(b.evidence) if isinstance(b.evidence, list) else str(b.evidence)
+        self.assertIn('一致', ev_b)
+
+        # ③ 没采到控件树 → 不谎报，如实写「无法交叉验证」
+        c = _run(None)
+        ev_c = ' '.join(c.evidence) if isinstance(c.evidence, list) else str(c.evidence)
+        self.assertIn('无法交叉验证', ev_c)
+        self.assertGreaterEqual(c.confidence, 0.9)
 
     def test_normal_screenshot_produces_no_white_screen_signal(self):
         sim = FakeHdc(screen=(720, 1280), screen_style='content')
@@ -1041,12 +1084,23 @@ class TestMoreDegradation(unittest.TestCase):
         self.assertEqual(sig.crashes, [])
         self.assertTrue(any('bundle 过滤' in w for w in sig.warnings), sig.warnings)
 
-    def test_screenshot_pull_failure_falls_back_to_cat(self):
-        """`file recv` 挂了还有 `cat` 兜底 —— 截图不该因此丢掉。"""
+    def test_screenshot_pull_failure_does_not_cat_fallback(self):
+        """截图（二进制）拉取失败时**不许**用 cat 兜底 —— 宁可如实报失败。
+
+        ★ 语义变更（2026-09-26 评审）：本测试原名
+        `test_screenshot_pull_failure_falls_back_to_cat`，锁定的恰恰是缺陷行为 ——
+        `hdc shell cat` 对二进制做 CRLF 转换（PNG 头被写成 \\x89PNG\\r\\r\\n），
+        产出**损坏但不报错**的文件：白屏判据读到坏 PNG，看起来像「应用白屏」，
+        实为工具损坏（hdc.py「坑 3」实测约束）。
+
+        新语义：`_read_device_file(binary=True)` 禁用 cat 兜底，截图丢失 +
+        warning 留痕 —— 丢了能看见，坏了看不出来，前者诚实得多。
+        """
         sim = FakeHdc(faults=FaultPlan().fail_always('pull', kind='hdc'))
         sig = collect_signals(sim, BUNDLE, out_dir=out_dir(), collect_layout=False)
-        self.assertEqual(len(sig.screenshots), 1)
-        self.assertTrue(os.path.exists(sig.screenshots[0]))
+        self.assertEqual(len(sig.screenshots), 0, '二进制禁用 cat 兜底后截图应如实丢失')
+        self.assertTrue(any('禁用 cat 兜底' in w for w in sig.warnings),
+                        sig.warnings)
 
     def test_unrecoverable_screenshot_is_skipped(self):
         """两条取回路径都断了才跳过 —— 而且只记 warning，不影响其它采集。"""

@@ -279,9 +279,9 @@ class TestRetryBehavior(unittest.TestCase):
         with_retry = run(R.RetryPolicy())
         without = run(R.RetryPolicy.no_retry())
         self.assertGreaterEqual(
-            with_retry.independent_success_rate, without.independent_success_rate,
-            f'开重试({with_retry.independent_success_rate}) 反而不如关重试'
-            f'({without.independent_success_rate})')
+            with_retry.non_cascade_failure_rate, without.non_cascade_failure_rate,
+            f'开重试({with_retry.non_cascade_failure_rate}) 反而不如关重试'
+            f'({without.non_cascade_failure_rate})')
         self.assertGreater(with_retry.passed, without.passed,
                            '重试没有救回任何步骤，说明机制没生效')
 
@@ -359,7 +359,7 @@ class TestCascadeDetection(unittest.TestCase):
             ]})
         # 原始成功率 0，但独立成功率应为 3/4
         self.assertEqual(res.success_rate, 0.0)
-        self.assertEqual(res.independent_success_rate, 0.75)
+        self.assertEqual(res.non_cascade_failure_rate, 0.75)
 
 
 # ================================================================ 设备看护
@@ -615,12 +615,12 @@ class TestResultModel(unittest.TestCase):
         self.assertEqual(r.cascade_failed, 1)
         self.assertEqual(r.independent_failed, 1)
         self.assertEqual(r.success_rate, 0.5)
-        self.assertEqual(r.independent_success_rate, 0.75)
+        self.assertEqual(r.non_cascade_failure_rate, 0.75)
 
     def test_empty_case_is_perfect(self):
         r = R.CaseResult(name='t', bundle='b')
         self.assertEqual(r.success_rate, 1.0)
-        self.assertEqual(r.independent_success_rate, 1.0)
+        self.assertEqual(r.non_cascade_failure_rate, 1.0)
         self.assertTrue(r.ok)
 
     def test_rescue_rate_zero_attempts_is_one(self):
@@ -651,7 +651,7 @@ class TestResultModel(unittest.TestCase):
             s.cases.append(c)
         self.assertEqual(s.total, 4)
         self.assertEqual(s.passed, 2)
-        self.assertEqual(s.independent_success_rate, 0.5)
+        self.assertEqual(s.non_cascade_failure_rate, 0.5)
         self.assertFalse(s.kpi_ok(0.95))
         self.assertIn('ASSERT', s.failures_by_kind())
 
@@ -659,30 +659,89 @@ class TestResultModel(unittest.TestCase):
 # ================================================================ 执行引擎 验收
 
 class TestFiftyStepKpi(unittest.TestCase):
-    """执行引擎 验收标准：50 步连续执行成功率 ≥ 95%。"""
+    """执行引擎 验收标准：50 步连续执行**成功**率 ≥ 95%。
+
+    ⚠️ 2026-09-23 口径更正（来源：外部评审 + C 复核）。
+
+    本类原来用 `independent_success_rate`（非级联失败率）当「成功率」断言，
+    **名字与语义不符**：50 步里挂 45 步、其中 44 步判 cascade 时，
+    那个值是 0.98 —— 读起来像「成功率 98%」，实际上用例整体是失败的。
+
+    现在拆成三个各回答一个问题的量，**谁也不许单独当通过依据**：
+
+    | 属性 | 回答的问题 |
+    |---|---|
+    | `health_ok` | 这次跑通了没有 |
+    | `non_cascade_failure_rate` | 失败会不会连累后面（引擎健壮性） |
+    | `kpi_ok()` | 上面两条**同时**满足 |
+    """
 
     def test_fifty_steps_clean_run(self):
         _, d = make_driver()
         res = make_runner().run_case(d, fifty_step_case())
         self.assertEqual(res.total, 50)
         self.assertEqual(res.passed, 50)
-        self.assertEqual(res.independent_success_rate, 1.0)
+        self.assertEqual(res.non_cascade_failure_rate, 1.0)
         self.assertTrue(res.ok)
+        self.assertTrue(res.health_ok)
+        self.assertFalse(res.all_failed)
+        self.assertTrue(res.kpi_ok(0.95))
 
     def test_fifty_steps_with_periodic_faults_still_meets_kpi(self):
-        """周期性故障下仍应达到 95% —— 这正是重试机制存在的意义。"""
+        """周期性故障下仍应达到 95% —— 这正是重试机制存在的意义。
+
+        ⚠️ 这条断言的是**非级联失败率**（引擎健壮性），**不是成功率**。
+        本用例有 1 步 `assert` 会因 `dump_layout` 超时而失败（这是用例固有设计，
+        不是重试没救回来），所以**不能**断言 `health_ok` ——
+        那样测的就不是「周期故障可恢复」，而是「一步都不许失败」了。
+        真正要钉住的是：**周期故障没有造成大面积级联**。
+        """
         fp = FaultPlan().fail_every('dump_layout', 11, kind='timeout')
         _, d = make_driver(fp)
         res = make_runner().run_case(d, fifty_step_case())
         self.assertEqual(res.total, 50)
         self.assertGreater(res.retry_attempts, 0, '故障没被触发，用例无效')
         self.assertGreaterEqual(
-            res.independent_success_rate, 0.95,
-            f'独立成功率 {res.independent_success_rate} 未达 95%'
-            f'（原始 {res.success_rate}，重试 {res.retry_attempts} 次，'
+            res.non_cascade_failure_rate, 0.95,
+            f'非级联失败率 {res.non_cascade_failure_rate} 未达 95%'
+            f'（原始成功率 {res.success_rate}，重试 {res.retry_attempts} 次，'
             f'失败分类 {res.failures_by_kind()}）')
+        # 独立失败（非级联）应当很少 —— 周期故障的重试是有效的。
+        # 这个数远比那个「率」有信息量：率是它的补集，看它更直观。
+        self.assertLessEqual(
+            res.independent_failed, 2,
+            f'独立失败 {res.independent_failed} 步偏多：{res.failures_by_kind()}')
 
-    def test_fifty_step_suite_kpi(self):
+    def test_fifty_step_suite_clean_run_meets_kpi(self):
+        """两个批次**都全绿**时，KPI 达标。
+
+        （原 `test_fifty_step_suite_kpi` 用的是 `page='home'` 的 driver，
+        那批 50 步里有 5 步在本页根本找不到控件、必然失败 ——
+        旧断言却因为「非级联失败率 0.98」而判通过。这里改成真正的全绿跑。）
+        """
+        _, d1 = make_driver()
+        _, d2 = make_driver()
+        suite = make_runner().run_suite([
+            (d1, fifty_step_case('批次A')),
+            (d2, fifty_step_case('批次B')),
+        ])
+        self.assertEqual(suite.total, 100)
+        self.assertEqual(suite.failed, 0)
+        self.assertTrue(suite.health_ok)
+        self.assertTrue(suite.kpi_ok(0.95))
+        self.assertEqual(len(suite.cases), 2)
+
+    def test_kpi_rejects_a_suite_with_failures_despite_a_pretty_rate(self):
+        """★ 把评审算的那个反例**固化下来**，防止改回去。
+
+        批次B 在 `page='home'` 上跑：第 1 步定位失败、后续 4 步级联 →
+        `non_cascade_failure_rate = 0.98`（很漂亮），但 `failed == 5`。
+
+        断言三件事：
+          ① 那个率**确实**很漂亮（证明反例成立，不是为了好过而构造）；
+          ② `health_ok` 为假、`ok` 为假；
+          ③ `kpi_ok(0.95)` **必须为假** —— 有失败的用例集不许判达标。
+        """
         _, d1 = make_driver()
         _, d2 = make_driver(page='home')
         suite = make_runner().run_suite([
@@ -690,8 +749,48 @@ class TestFiftyStepKpi(unittest.TestCase):
             (d2, fifty_step_case('批次B')),
         ])
         self.assertEqual(suite.total, 100)
-        self.assertTrue(suite.kpi_ok(0.95))
-        self.assertEqual(len(suite.cases), 2)
+        self.assertEqual(suite.failed, 5)
+        # ① 率很漂亮 —— 这正是它危险的地方
+        self.assertGreaterEqual(
+            suite.non_cascade_failure_rate, 0.95,
+            f'反例不成立：{suite.non_cascade_failure_rate}')
+        # ② 但整体是失败的
+        self.assertFalse(suite.health_ok)
+        self.assertFalse(suite.ok)
+        # ③ 所以不许判达标
+        self.assertFalse(suite.kpi_ok(0.95),
+                         '有失败步骤的用例集不许因「非级联失败率高」而判达标')
+
+    def test_health_ok_blocks_mostly_failed_but_not_all_failed(self):
+        """★ `all_failed` 挡不住「大部分失败」—— 这是 `health_ok` 存在的理由。
+
+        构造 5 步挂 4 步（剩 1 步通过）：`all_failed` 为假（不是全挂），
+        但 `health_ok` 必须为假。只靠 `all_failed` 的话这里会漏。
+        """
+        from ohauto.runner import CaseResult, StepResult, FailureKind
+
+        def _s(i, ok):
+            return StepResult(index=i, action='tap', ok=ok,
+                              kind=None if ok else FailureKind.LOCATE,
+                              cascade=(i in (3, 4, 5)))
+        res = CaseResult(name='大部分失败', bundle='b', steps=[
+            _s(1, False), _s(2, True), _s(3, False), _s(4, False), _s(5, False)])
+        self.assertEqual(res.failed, 4)
+        self.assertFalse(res.all_failed, '不是全挂 —— 所以要靠 health_ok 兜')
+        self.assertFalse(res.health_ok)
+        self.assertFalse(res.kpi_ok(0.95))
+
+    def test_deprecated_name_still_works_with_a_warning(self):
+        """旧名保留到 W4 —— 但必须**发 DeprecationWarning**，不能静默。"""
+        import warnings
+        _, d = make_driver()
+        res = make_runner().run_case(d, fifty_step_case())
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            value = res.independent_success_rate
+        self.assertEqual(value, res.non_cascade_failure_rate)
+        self.assertTrue(any(issubclass(w.category, DeprecationWarning)
+                            for w in caught), '旧名必须发弃用警告')
 
     def test_step_index_is_one_based_and_contiguous(self):
         _, d = make_driver()
@@ -809,6 +908,93 @@ class TestContractEntry(unittest.TestCase):
                       for c in rep.suite.cases for s in c.steps)
         self.assertTrue(touched or g.pings + g.recoveries > 0,
                         '契约入口把设备看护绕过了')
+
+
+class TestFailureSnapshots(unittest.TestCase):
+    """失败步必须留下控件树快照（B 交付包的 C-2）。
+
+    为什么值得单测守住：归因引擎判「定位失败」靠的是「目标控件在**所有**快照里
+    都不存在」这条硬证据。没有快照时它不只是置信度从 0.85 掉到 0.6 ——
+    实测（`tools/verify_failure_snapshot.py`）还会把 LOCATOR **误判成**
+    CASE_DEFECT：因为 `_page_expectation` 在无快照时返回 unknown，
+    「落点与 expected_page 不符」这条判据被当成了用例缺陷。
+
+    这是**静默降级**：快照哪天悄悄没了，测试不红、KPI 数字也还看着行。
+    """
+
+    def _run_missing_locator(self, tmp):
+        _hdc, d = make_driver(artifact_dir=tmp)
+        return make_runner().run_case(
+            d, {'name': 't', 'steps': [{'tap': {'id': '根本不存在'}}]})
+
+    def test_failed_step_carries_two_snapshots(self):
+        tmp = tempfile.mkdtemp(prefix='ohauto_snap_test_')
+        try:
+            res = self._run_missing_locator(tmp)
+            step = [s for s in res.steps if not s.ok][0]
+            self.assertEqual(len(step.trees), 2,
+                             '失败步应留两张快照（失败瞬间 + 稳定后）')
+            for p in step.trees:
+                self.assertTrue(os.path.isfile(p), f'快照没落盘: {p}')
+                with open(p, encoding='utf-8') as fh:
+                    self.assertTrue(fh.read().strip(), f'快照是空的: {p}')
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_successful_step_records_no_snapshot(self):
+        """成功步不抓 —— 否则 50 步用例会凭空多出上百次 dumpLayout。"""
+        tmp = tempfile.mkdtemp(prefix='ohauto_snap_test_')
+        try:
+            _hdc, d = make_driver(artifact_dir=tmp)
+            res = make_runner().run_case(
+                d, {'name': 't', 'steps': [{'tap': {'id': 'username'}}]})
+            self.assertTrue(res.steps[0].ok)
+            self.assertEqual(res.steps[0].trees, [])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_snapshot_failure_does_not_change_verdict(self):
+        """抓快照是旁路：它失败绝不能改写原判定。"""
+        _hdc, d = make_driver(artifact_dir=None)     # 无产物目录 → 走内存分支
+        res = make_runner().run_case(
+            d, {'name': 't', 'steps': [{'tap': {'id': '根本不存在'}}]})
+        step = [s for s in res.steps if not s.ok][0]
+        self.assertIs(step.kind, R.FailureKind.LOCATE)
+
+    def test_execution_record_inherits_trees(self):
+        """归因侧要自动继承快照，不必调用方手工传 trees=。"""
+        from ohauto.diagnose import ExecutionRecord
+        tmp = tempfile.mkdtemp(prefix='ohauto_snap_test_')
+        try:
+            res = self._run_missing_locator(tmp)
+            self.assertEqual(len(ExecutionRecord.from_case_result(res).trees), 2)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_with_snapshot_diagnoses_as_locator(self):
+        """有快照 → 归因给 LOCATOR（而不是误判成用例缺陷）。"""
+        from ohauto import diagnose
+        from ohauto.diagnose import ExecutionRecord
+        tmp = tempfile.mkdtemp(prefix='ohauto_snap_test_')
+        try:
+            res = self._run_missing_locator(tmp)
+            v = diagnose(ExecutionRecord.from_case_result(
+                res, expected_target={'id': '根本不存在'}))
+            self.assertEqual(v.category.value, 'LOCATOR')
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_still_diagnosable_without_snapshot(self):
+        """对照组：没有快照时归因仍能出结论（B 说的兼容），不抛异常。"""
+        from ohauto import diagnose
+        from ohauto.diagnose import ExecutionRecord
+        _hdc, d = make_driver(artifact_dir=None)
+        res = make_runner().run_case(
+            d, {'name': 't', 'steps': [{'tap': {'id': '根本不存在'}}]})
+        v = diagnose(ExecutionRecord.from_case_result(
+            res, expected_target={'id': '根本不存在'}, trees=[]))
+        self.assertTrue(v.category)
+        self.assertGreater(v.confidence, 0)
 
 
 if __name__ == '__main__':

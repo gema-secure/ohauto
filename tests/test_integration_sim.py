@@ -17,7 +17,7 @@ from ohauto.driver import Driver, DriverError        # noqa: E402
 from ohauto.matcher import ON                        # noqa: E402
 from ohauto.sim import FakeHdc, PAGES                # noqa: E402
 from ohauto import action, report                    # noqa: E402
-from ohauto.explorer import Explorer, SafetyPolicy   # noqa: E402
+from ohauto.explorer import Explorer, SafetyPolicy, Budget   # noqa: E402
 
 
 class SimTestCase(unittest.TestCase):
@@ -160,9 +160,17 @@ class TestDriverOnSim(SimTestCase):
         leaked = {f for f in (set(os.listdir(os.getcwd())) - before)
                   if f.startswith('_sim_')}
         self.assertEqual(leaked, set(), f'模拟设备把文件写进了当前目录: {leaked}')
-        # 顺带确认它确实写去了临时目录
-        sim_png = os.path.join(tempfile.gettempdir(), 'ohauto_sim_login.png')
-        self.assertTrue(os.path.exists(sim_png))
+        # 顺带确认它确实写去了临时目录。
+        # ⚠️ 别写死文件名：sim.py 的命名规律是
+        #       ohauto_sim_<页面名>_<screen_style>.png
+        # 早期没有 style 后缀，于是这里写死 'ohauto_sim_login.png' 时，
+        # 断言会靠**上一次运行残留的旧文件**假通过 —— 干净环境（CI）下必红。
+        # 实测：2026-09-21 手工删掉那个残留文件后，这条立刻 FAILED。
+        # 所以只按前缀匹配，下次再加 style 也不会红。
+        prefix = f'ohauto_sim_{self.sim.current}_'
+        in_tmp = [f for f in os.listdir(tempfile.gettempdir())
+                  if f.startswith(prefix) and f.endswith('.png')]
+        self.assertTrue(in_tmp, f'模拟设备截图没落到临时目录（找 {prefix}*.png）')
 
     def test_steps_recorded_with_coords(self):
         self.d.tap(ON.text('登录'))
@@ -344,7 +352,7 @@ class TestExplorerOnSim(unittest.TestCase):
 
     def test_discovers_all_pages(self):
         ex = Explorer(self.d, artifact_dir=self.tmp, verbose=False)
-        g = ex.explore(max_pages=5, max_actions_per_page=6, return_back=False)
+        g = ex.explore(5, Budget(max_pages=5, max_actions_per_page=6), return_back=False)
         titles = {s.title for s in g.states.values()}
         self.assertIn('欢迎登录', titles)
         self.assertIn('首页', titles)
@@ -354,7 +362,7 @@ class TestExplorerOnSim(unittest.TestCase):
     def test_dangerous_control_never_clicked(self):
         """核心安全保证：探索过程绝不能点到危险控件。"""
         ex = Explorer(self.d, artifact_dir=self.tmp, verbose=False)
-        ex.explore(max_pages=5, max_actions_per_page=10, return_back=False)
+        ex.explore(5, Budget(max_pages=5, max_actions_per_page=10), return_back=False)
         clicked_ids = {a.get('node') for a in self.sim.actions
                        if a['action'] == 'click'}
         self.assertNotIn('btn_danger_delete', clicked_ids)
@@ -362,13 +370,13 @@ class TestExplorerOnSim(unittest.TestCase):
 
     def test_transitions_recorded(self):
         ex = Explorer(self.d, artifact_dir=self.tmp, verbose=False)
-        g = ex.explore(max_pages=5, max_actions_per_page=6, return_back=False)
+        g = ex.explore(5, Budget(max_pages=5, max_actions_per_page=6), return_back=False)
         pairs = {(t.src, t.dst) for t in g.transitions if t.src != t.dst}
         self.assertTrue(pairs)          # 至少发现一条跨页跳转
 
     def test_mermaid_is_valid_shape(self):
         ex = Explorer(self.d, artifact_dir=self.tmp, verbose=False)
-        ex.explore(max_pages=3, max_actions_per_page=3, return_back=False)
+        ex.explore(3, Budget(max_pages=3, max_actions_per_page=3), return_back=False)
         m = ex.to_mermaid()
         self.assertTrue(m.startswith('stateDiagram-v2'))
         self.assertIn('[*] -->', m)
@@ -376,7 +384,7 @@ class TestExplorerOnSim(unittest.TestCase):
 
     def test_save_graph_and_generate_case(self):
         ex = Explorer(self.d, artifact_dir=self.tmp, verbose=False)
-        ex.explore(max_pages=4, max_actions_per_page=6, return_back=False)
+        ex.explore(4, Budget(max_pages=4, max_actions_per_page=6), return_back=False)
         gpath = ex.save_graph(os.path.join(self.tmp, 'g.json'))
         cpath = ex.generate_case(os.path.join(self.tmp, 'c.yaml'))
         self.assertTrue(os.path.exists(gpath))
@@ -390,7 +398,7 @@ class TestExplorerOnSim(unittest.TestCase):
     def test_generated_case_is_replayable(self):
         """生成出来的用例应能被重新执行 —— 这是「用例沉淀」的闭环。"""
         ex = Explorer(self.d, artifact_dir=self.tmp, verbose=False)
-        ex.explore(max_pages=4, max_actions_per_page=6, return_back=False)
+        ex.explore(4, Budget(max_pages=4, max_actions_per_page=6), return_back=False)
         cpath = ex.generate_case(os.path.join(self.tmp, 'c.yaml'))
 
         sim2 = FakeHdc(start_page='login')

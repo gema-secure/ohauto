@@ -501,14 +501,42 @@ class TestCompareReport(unittest.TestCase):
         b = parse(tree(500, 500, [node('Button', 'b0', 'B0', (0, 0, 10, 10))]))
         rep = compare_forms((a, profile(500, 500, 'A'), 'A'),
                             (b, profile(500, 500, 'B'), 'B'))
-        self.assertTrue(rep.warnings)
-        self.assertIn('元素数', rep.warnings[0])
+        ratio_warnings = [w for w in rep.warnings if '元素数' in w]
+        self.assertTrue(ratio_warnings)
+        self.assertIn('元素数', ratio_warnings[0])
 
     def test_no_warning_on_comparable_forms(self):
         a = parse(tree(500, 500, [node('Button', 'x', 'X', (0, 0, 10, 10))]))
         b = parse(tree(500, 500, [node('Button', 'x', 'X', (0, 0, 10, 10))]))
         rep = compare_forms((a, profile(500, 500, 'A'), 'A'),
                             (b, profile(500, 500, 'B'), 'B'))
+        # 2026-09-27 细化：本测试的意图是「元素数比例阈值不乱报警」；
+        # 安全区未实测的能力缺口告警（2026-09-27 新增）是另一回事，
+        # 由 test_capability_gap_warning_* 单独钉。
+        ratio_warnings = [w for w in rep.warnings if '元素数' in w]
+        self.assertEqual(ratio_warnings, [])
+
+    def test_capability_gap_warning_when_safe_area_unmeasured(self):
+        """★ 安全区未实测 → 不可达（挖孔）判据整个没生效，必须留痕。
+
+        2026-09-27 修（评审中危）：原来这里只有注释「必须留痕」+ pass，
+        报告会给人「该形态没有不可达问题」的错误印象 —— 红线⑤。
+        """
+        a = parse(tree(500, 500, [node('Button', 'x', 'X', (0, 0, 10, 10))]))
+        b = parse(tree(500, 500, [node('Button', 'x', 'X', (0, 0, 10, 10))]))
+        rep = compare_forms((a, profile(500, 500, 'A'), 'A'),
+                            (b, profile(500, 500, 'B'), 'B'))
+        self.assertTrue(any('判据本次未生效' in w for w in rep.warnings),
+                        f'能力缺口必须写在报告告警里: {rep.warnings}')
+
+    def test_no_capability_gap_warning_when_measured(self):
+        """实测过安全区（status_bar_h>0）且确实无挖孔 → UNREACHABLE=0
+        是「查过了且为 0」，不许告警（否则正常报告被噪音淹没）。"""
+        a = parse(tree(500, 500, [node('Button', 'x', 'X', (0, 0, 10, 10))]))
+        b = parse(tree(500, 500, [node('Button', 'x', 'X', (0, 0, 10, 10))]))
+        rep = compare_forms(
+            (a, profile(500, 500, 'A', status_bar_h=24), 'A'),
+            (b, profile(500, 500, 'B', status_bar_h=24), 'B'))
         self.assertEqual(rep.warnings, [])
 
 
@@ -791,12 +819,16 @@ class TestRunnerTool(unittest.TestCase):
 
     def test_main_offline_exit_code_nonzero_on_high_severity(self):
         # ★ 有缺失/不可达时返回非 0 —— 这样能直接接进 CI 当门禁
+        #
+        # 2026-09-27 反转：原来钉 rc == 2，锁的恰是缺陷行为 ——
+        # 2 是「设备不在场」专用（docs/约定-退出码.md），CI 拿到 2 会按
+        # 「跳过」处理而不是门禁红，真失败被静默放过。改钉 1（未达标）。
         import tempfile
         with tempfile.TemporaryDirectory() as d:
             rc = self.mod.main(['--offline', '--offline-page', 'static_fixed',
                                 '--baseline', 'close', '--target', 'open',
                                 '--out', d, '--stem', 't2'])
-        self.assertEqual(rc, 2)
+        self.assertEqual(rc, 1)
 
 
 # ============================================================ 12. 真机夹具
@@ -967,9 +999,14 @@ class TestRealFixture(unittest.TestCase):
             '缺失 11 / 越界 0 / 不可达 0 / 溢出 1')
 
     def test_no_spurious_warning_on_real_data(self):
-        """真机这份数据不该触发告警 —— 有告警说明阈值定得不合理。"""
+        """真机这份数据不该触发**阈值类**告警 —— 有告警说明阈值定得不合理。
+
+        2026-09-27 注：夹具的 profile 没实测过安全区（status_bar/nav_bar
+        全 0），会带一条**能力缺口**告警（挖孔判据未生效）—— 那不是
+        误报，是事实陈述，由 test_capability_gap_warning_* 单独钉。
+        """
         rep = self._report()
-        self.assertEqual(rep.warnings, [])
+        self.assertEqual([w for w in rep.warnings if '元素数' in w], [])
 
     # ------------------------------------------------- 差异内容的成因核对
 
