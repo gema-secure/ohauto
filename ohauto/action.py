@@ -30,6 +30,7 @@ L3 语义层 —— Action DSL
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 from dataclasses import dataclass, field
@@ -332,11 +333,138 @@ def run_case(driver: Driver, case: Dict[str, Any],
 
 # ---------------------------------------------------------------- 从留痕反推脚本
 
-def trace_to_steps(driver: Driver, include_waits: bool = True) -> List[Dict[str, Any]]:
+#: 还原不出来的步骤用的占位动作名。**故意不是一个合法 DSL 动作** ——
+#: 它被执行时会明确报「未知动作」，而不是静默点一个硬编码坐标。
+#: 宁可响亮地失败，也不要让一条「看起来能跑」的坐标脚本混进回归集。
+UNRESOLVED_ACTION = 'unresolved'
+
+
+def _unresolved_step(original: str, node_path: Optional[str], why: str,
+                     **extra: Any) -> Dict[str, Any]:
+    """产出一个**显式不可执行**的占位步骤，保留原始线索供人工/模型补。
+
+    ★ 不携带坐标（红线第 5 条）：坐标是「怎么点」的实现细节，
+    不是「要点谁」的意图；把它塞进用例就是把探索期的偶然当成了回归期的契约。
+    """
+    body: Dict[str, Any] = {'original': original,
+                            'node_path': node_path or '',
+                            'reason': why}
+    body.update(extra)
+    return {UNRESOLVED_ACTION: body}
+
+
+def _unquote(text: str) -> Any:
+    """还原 `!r` 出来的字面量（`'abc'` / `['a', 'b']`），失败就原样返回。"""
+    s = text.strip()
+    if not s:
+        return ''
+    try:
+        return ast.literal_eval(s)
+    except (ValueError, SyntaxError):
+        return s.strip("'\"")
+
+
+def _matcher_text_to_spec(text: str) -> Optional[Dict[str, Any]]:
+    """把匹配器的描述文本反解回规格字典；**不可逆就返回 None**。
+
+    `Matcher.__str__` 是 `' & '.join(desc)`，而 `desc` 是构造时就写好的
+    `id=xx` / `text='xx'` 这类**可逆**描述 —— 所以这条路走得通。
+
+    但有几类描述天然不可逆（`text/正则/`、`text in [...]`、`center in {...}`）。
+    遇到它们**不猜**：猜错的断言比没有断言更坏（它会让用例「通过」于错误的判据）。
+    """
+    if not text:
+        return None
+    spec: Dict[str, Any] = {}
+    for part in str(text).split(' & '):
+        part = part.strip()
+        if not part:
+            continue
+        if part.startswith('type~'):
+            spec['type_contains'] = part[5:]
+        elif part.startswith('type='):
+            spec['type'] = part[5:]
+        elif part.startswith('id~'):
+            spec['id_contains'] = part[3:]
+        elif part.startswith('id='):
+            spec['id'] = part[3:]
+        elif part.startswith('text~'):
+            spec['text_contains'] = _unquote(part[5:])
+        elif part.startswith('text='):
+            spec['text'] = _unquote(part[5:])
+        elif part.startswith('descr~'):
+            spec['descr'] = _unquote(part[6:])
+        elif part.startswith('label~'):
+            spec['label'] = _unquote(part[6:])
+        elif part in ('clickable=True', 'clickable=False'):
+            spec['clickable'] = part.endswith('True')
+        elif part in ('visible=True', 'visible=False'):
+            spec['visible'] = part.endswith('True')
+        elif part in ('enabled=True', 'enabled=False'):
+            spec['enabled'] = part.endswith('True')
+        elif part in ('scrollable=True', 'scrollable=False'):
+            spec['scrollable'] = part.endswith('True')
+        elif part == 'interactive':
+            spec['interactive'] = True
+        elif part.startswith('size>='):
+            wh = part[6:].split('x')
+            if len(wh) == 2 and all(x.strip().isdigit() for x in wh):
+                spec['size_at_least'] = [int(wh[0]), int(wh[1])]
+            else:
+                return None
+        else:
+            return None          # 含不可逆描述（正则 / center in / …）→ 不猜
+    return spec or None
+
+
+#: 断言 kind → DSL 里的断言字段名
+_ASSERT_FIELDS = {'assert.exists': 'exists', 'assert_exists': 'exists',
+                  'assert.gone': 'gone', 'assert_gone': 'gone',
+                  'assert.text': 'text', 'assert_text': 'text'}
+
+
+def _assert_step(kind: str, s: Any) -> Dict[str, Any]:
+    """把一次断言留痕还原成 DSL 的 `assert` 步骤，还原不了就给占位。"""
+    field = _ASSERT_FIELDS.get(kind)
+    if field is None:
+        return _unresolved_step(kind, s.node_path, f'未知的断言类型 {kind}')
+    spec = _matcher_text_to_spec(s.target or '')
+    if not spec:
+        return _unresolved_step(kind, s.node_path,
+                                '断言条件无法从留痕反解（含正则或位置条件）',
+                                matcher_text=s.target or '')
+    if field == 'text':
+        if s.value is None:
+            return _unresolved_step(kind, s.node_path, '文本断言缺少期望值')
+        spec = dict(spec)
+        spec['equals'] = s.value
+    return {'assert': {field: spec}}
+
+
+def trace_to_steps(driver: Driver, include_waits: bool = True,
+                   include_asserts: bool = False) -> List[Dict[str, Any]]:
     """把 Driver 的执行留痕转回 DSL 步骤 —— 脚本生成的雏形。
 
     这是「一次操作即一条用例」的关键：人工或模型驱动一次探索，
     留下的轨迹可直接沉淀成可重放的回归脚本。
+
+    ★ 两条口径（C 复核缺陷，2026-09-23 修）：
+
+    1. **不再吐 `tap_xy`** —— 红线第 5 条明令禁止用例里硬编码坐标。
+       路径解析不出规格时，产出 `unresolved` 占位并保留 `node_path` 原文，
+       由上层决定人工/模型补定位规格，而不是静默塞进一组坐标。
+       后果：**「一次探索 → 可维护的回归脚本」这条路此前产出的脚本
+       既违规（硬编码坐标）又证明不了任何事（没断言）**，现在两头都补上。
+
+    2. **断言能带出来了**（`include_asserts=True`）。原来无条件 `continue`，
+       产物里永远没有断言。现在从留痕反解匹配器规格；反解不出来同样给占位，
+       **不猜** —— 猜错的断言比没有断言更坏。
+
+    Parameters
+    ----------
+    include_waits:   是否保留 `waitFor`（默认 True，保持原行为）
+    include_asserts: 是否把断言步骤带进产物（默认 False，保持原行为；
+                     开 True 才能得到「带断言的回归脚本」）
     """
     out: List[Dict[str, Any]] = []
     for s in driver.steps:
@@ -345,21 +473,34 @@ def trace_to_steps(driver: Driver, include_waits: bool = True) -> List[Dict[str,
         k = s.kind
         if k == 'start':
             out.append({'start': True})
-        elif k == 'tap' and s.coords:
+        elif k == 'tap':
             spec = _path_to_spec(s.node_path)
-            out.append({'tap': spec} if spec else {'tap_xy': list(s.coords)})
+            if spec:
+                out.append({'tap': spec})
+            else:
+                out.append(_unresolved_step('tap', s.node_path,
+                                            '留痕里没有可解析的控件路径'))
         elif k == 'input' and s.value is not None:
-            spec = _path_to_spec(s.node_path) or {}
+            spec = _path_to_spec(s.node_path)
+            if not spec:
+                out.append(_unresolved_step('input', s.node_path,
+                                            '留痕里没有可解析的控件路径',
+                                            value=s.value))
+                continue
             spec['value'] = s.value
             out.append({'input': spec})
         elif k == 'swipe':
-            out.append({'swipe': {'direction': s.target or 'up', 'scale': s.value or 0.6}})
+            out.append({'swipe': {'direction': s.target or 'up',
+                                  'scale': s.value or 0.6}})
         elif k == 'back':
             out.append({'back': True})
         elif k == 'waitFor' and include_waits:
-            out.append({'waitFor': _path_to_spec(s.node_path) or s.target})
+            spec = _path_to_spec(s.node_path)
+            out.append({'waitFor': spec or s.target})
         elif k.startswith('assert'):
-            continue          # 断言由人工或模型补，留痕里不自动带
+            if not include_asserts:
+                continue          # 旧行为：断言由人工或模型补
+            out.append(_assert_step(k, s))
     return out
 
 
