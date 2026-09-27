@@ -51,10 +51,27 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
-#: SDK 自带的签名材料目录（按优先级找）。本机自定路径走 env `OHAUTO_SDK_LIB`
-#: 或项目内 hdc.config.json 的 `sdk_lib` —— 机器特定路径是隐私项，不入源码。
+
+def _local_cfg(key: str, default: str = '') -> str:
+    """从项目内 hdc.config.json（gitignored）读本机配置；env 变量优先。
+
+    签名材料/签名目录这类本机路径属于隐私项，不入源码 —— 写在本地配置里。
+    """
+    env = os.environ.get('OHAUTO_' + key.upper(), '')
+    if env:
+        return env
+    cfg = os.path.join(ROOT, 'hdc.config.json')
+    try:
+        with open(cfg, encoding='utf-8') as f:
+            return (json.load(f) or {}).get(key) or default
+    except Exception:
+        return default
+
+
+#: SDK 自带的签名材料目录（按优先级找）。本机自定路径走 env
+#: `OHAUTO_SDK_LIB` 或 hdc.config.json 的 `sdk_lib` —— 隐私项不入源码。
 DEFAULT_SDK_LIBS = [
-    os.environ.get('OHAUTO_SDK_LIB', ''),
+    _local_cfg('sdk_lib'),
     r'C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\lib',
 ]
 
@@ -84,7 +101,8 @@ def pick_sdk_lib(explicit: str = '') -> str:
     for p in ([explicit] if explicit else []) + DEFAULT_SDK_LIBS:
         if p and os.path.isfile(os.path.join(p, 'hap-sign-tool.jar')):
             return p
-    raise SystemExit('[err] 找不到 hap-sign-tool.jar；用 --sdk-lib 指定 toolchains/lib')
+    raise SystemExit('[err] 找不到 hap-sign-tool.jar；用 --sdk-lib 指定 toolchains/lib'
+                     '，或把 sdk_lib 写进 hdc.config.json')
 
 
 def find_keytool(java: str, explicit: str = '') -> str:
@@ -289,7 +307,7 @@ def main(argv=None) -> int:
 
     java = find_java()
     lib = pick_sdk_lib(args.sdk_lib)
-    sign_dir = (args.sign_dir or os.environ.get('OHAUTO_SIGN_DIR')
+    sign_dir = (args.sign_dir or _local_cfg('sign_dir')
                 or os.path.join(ROOT, '_out', 'sign'))
     os.makedirs(sign_dir, exist_ok=True)
 
