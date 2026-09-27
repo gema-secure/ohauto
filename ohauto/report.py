@@ -81,6 +81,32 @@ def to_markdown(data: Dict[str, Any], path: str,
         L.append(f"- 结论：**{'通过' if case.get('ok') else '未通过'}**")
         L.append('')
 
+    # ---- 失败步归因（挑战 #5 闭环，2026-09-23）
+    # 数据来自 case.steps[].verdict（runner 在失败分支上挂的 diagnose 结论）。
+    # 为什么单列一节而不是塞进步骤表：归因的价值在**证据**与**建议**，
+    # 表格里一行放不下；而且「没做归因」与「归因为空」必须看得出区别 ——
+    # 这里没 verdict 就不输出这一节，不制造空白标题。
+    _diag_steps = [st for st in (case.get('steps') or [])
+                   if isinstance(st, dict) and st.get('verdict')]
+    if _diag_steps:
+        L.append('## 失败步归因')
+        L.append('')
+        for st in _diag_steps:
+            v = st.get('verdict') or {}
+            L.append(f"### 步骤 {st.get('index')} — "
+                     f"{v.get('category_cn', v.get('category', '?'))}"
+                     f"（置信度 {v.get('confidence', '-')}）")
+            L.append('')
+            if v.get('suggestion'):
+                L.append(f"- **建议**：{v['suggestion']}")
+            if v.get('locator_id'):
+                L.append(f"- 定位器：`{v['locator_id']}`")
+            if v.get('signals_used'):
+                L.append(f"- 用到的信号：{', '.join(v['signals_used'])}")
+            for e in (v.get('evidence') or []):
+                L.append(f"- 证据：{e}")
+            L.append('')
+
     failed = s.get('failed_steps') or []
     if failed:
         L.append('## 失败明细')
@@ -94,6 +120,18 @@ def to_markdown(data: Dict[str, Any], path: str,
             if f_.get('screenshot'):
                 img = _rel(f_['screenshot'], image_rel_prefix)
                 L.append(f"- 截图：![]({img})")
+            # 失败时留的控件树快照（runner._capture_trees 采集、回填到 driver.Step）。
+            # 排查定位问题时这是**最有用**的一份证据：截图看得出「界面长什么样」，
+            # 控件树才看得出「那个控件到底在不在、id/type/层级是什么」。
+            #
+            # 字段名注意：driver.Step 上是 `layout_json`（失败瞬间）
+            # + `layout_after`（等 200ms 后那张，用来区分「控件自始不存在」与
+            # 「界面还没稳定」）。
+            snaps = [p for p in (f_.get('layout_json'), f_.get('layout_after')) if p]
+            if snaps:
+                L.append(f'- 控件树快照（{len(snaps)} 张，失败瞬间 + 稳定后）：')
+                for p in snaps:
+                    L.append(f'  - `{_rel(str(p), image_rel_prefix)}`')
             L.append('')
 
     L.append('## 步骤明细')
@@ -206,6 +244,24 @@ def to_html(data: Dict[str, Any], path: str) -> str:
         verdict = (f'<h2>用例判定</h2><p><span class="pill {"" if ok else "bad"}">'
                    f'{"通过" if ok else "未通过"}</span> '
                    f'通过 {case.get("passed", 0)} / 共 {case.get("total", 0)} 步</p>')
+        # ---- 失败步归因（挑战 #5 闭环，2026-09-23）—— 证据与建议都要看得见
+        _diag = [st for st in (case.get('steps') or [])
+                 if isinstance(st, dict) and st.get('verdict')]
+        if _diag:
+            blocks = []
+            for st in _diag:
+                v = st.get('verdict') or {}
+                ev = ''.join(f'<li>{html.escape(str(e))}</li>'
+                             for e in (v.get('evidence') or []))
+                blocks.append(
+                    f'<details open><summary>步骤 {st.get("index")} — '
+                    f'{html.escape(str(v.get("category_cn", v.get("category", "?"))))}'
+                    f'（置信度 {html.escape(str(v.get("confidence", "-")))}）'
+                    f'</summary>'
+                    f'<p>建议：{html.escape(str(v.get("suggestion", "")))}</p>'
+                    + (f'<ul class="trees">{ev}</ul>' if ev else '')
+                    + '</details>')
+            verdict += '<h2>失败步归因</h2>' + ''.join(blocks)
 
     rows = []
     for st in data.get('steps', []):
@@ -226,11 +282,23 @@ def to_html(data: Dict[str, Any], path: str) -> str:
         img = ''
         if f_.get('screenshot') and os.path.exists(f_.get('screenshot', '')):
             img = f'<img class="shot" src="{_img_src(f_["screenshot"])}">'
+        # 控件树快照 —— 排查定位失败时比截图更直接（截图看「长什么样」，
+        # 树看「控件在不在、id/type/层级是什么」）
+        trees_html = ''
+        snaps = [p for p in (f_.get('layout_json'), f_.get('layout_after')) if p]
+        if snaps:
+            links = ''.join(
+                f'<li><a href="{_img_src(str(t))}">'
+                f'{html.escape(os.path.basename(str(t)))}</a></li>'
+                for t in snaps)
+            trees_html = (f'<p>控件树快照（{len(snaps)} 张）：</p>'
+                          f'<ul class="trees">{links}</ul>')
         fails.append(
             f'<details open><summary>步骤 {f_.get("index")} — '
             f'{html.escape(str(f_.get("kind", "")))} 失败</summary>'
             f'<p>目标：<code>{html.escape(str(f_.get("target", "")))}</code></p>'
-            f'<p class="err">{html.escape(str(f_.get("error", "")))}</p>{img}</details>')
+            f'<p class="err">{html.escape(str(f_.get("error", "")))}</p>'
+            f'{img}{trees_html}</details>')
     failures = ('<h2>失败明细</h2>' + ''.join(fails)) if fails else ''
 
     case_line = f' · 用例 {html.escape(str(case.get("name") or "(未命名)"))}' if case else ''
