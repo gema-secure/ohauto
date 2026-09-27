@@ -122,11 +122,40 @@ class Matcher:
     # -------------------------------------------------------- 限定与选择
 
     def within(self, other: 'Matcher') -> 'Matcher':
-        """限定在 other 匹配到的节点子树内查找。"""
+        """限定在 other 匹配到的节点子树内查找。
+
+        ⚠️ 三条**约束型**语义（A-1，C 2026-09-26 高危修复后定稿，
+        改动前请先读这里，否则很容易"修好一个洞、挖出两个洞"）：
+
+        1. **只取最外层容器**：父子同 type 在真机上很常见
+           （`Scroll` 套 `Scroll`、`Stack` 套 `List`）。若内外两层都命中
+           `within` 条件，内层子树会被展开两次 —— 命中列表里每个控件出现
+           两遍，`nth(k)` 拿到的就是"重复列表里的第 k 个"，静默取错控件。
+           因此命中容器中凡"自身还在另一个命中容器的子树里"的一律剔除。
+        2. **展开后按对象身份去重且保序**：即使出现第 1 条没覆盖的
+           交叠情形（如同一容器被两个条件各命中一次），也不允许同一个
+           节点在候选池里出现两次。
+        3. **继承调用方的可见性约定**：`within` 用 `container.walk()`
+           重建候选池，而 `walk()` 只做先序遍历、**不过滤 visible**；
+           调用方传来的却通常是 `flatten(page, only_visible=True)`。
+           直接替换就等于把调用方的可见性过滤悄悄作废 —— 不可见节点
+           被"捞回"，`visible` 条件形同虚设。这里按"入参全可见 ⇒ 展开后
+           同样只留可见"自动继承；入参本身就含不可见节点（调用方显式
+           要全量）时不做二次过滤，保持调用方意图。
+
+        第 3 条是**推断**而非显式参数：如果将来需要"容器内无论可见与否
+        都要"的语义，再加形如 `within(other, visible=None)` 的显式开关，
+        不要靠改这里的推断规则来实现。
+        """
         return self._copy(within=other)
 
     def nth(self, index: int) -> 'Matcher':
-        """取第 n 个命中项（0 基）。负数表示从后往前。"""
+        """取第 n 个命中项（0 基）。负数表示从后往前。
+
+        越界**返回空列表**（不是回绕）—— 有 `within` 参与时这条尤其重要：
+        重复命中会让命中数虚高，越界本该"找不到"，回绕却会给出一个
+        真实存在的错控件（A-1b）。
+        """
         return self._copy(index=index)
 
     # -------------------------------------------------------- 匹配
@@ -134,16 +163,45 @@ class Matcher:
     def match(self, node: LayoutNode) -> bool:
         return all(p(node) for p in self._preds)
 
+    def _apply_within(self, pool: List[LayoutNode]) -> List[LayoutNode]:
+        """把 `pool` 收窄到 within 容器的子树（A-1 的三条语义）。"""
+        within = self._within
+        assert within is not None
+        containers = [n for n in pool if within.match(n)]
+
+        # (1) 只保留最外层容器：剔除"自身还挂在别的命中容器子树里"的那些。
+        #     注意是**对象身份**比较（is / id），不是相等 —— LayoutNode 是
+        #     dataclass，`==` 会把内容相同的两个节点判成同一个。
+        #     子树成员表只算一次：这一步在生产循环里每次 filter 都会走，
+        #     写成"每个容器再遍历一遍其他容器的子树"的话，k 个容器就是
+        #     O(k²) 次 walk，大树上会变成每一步定位都额外烧几十万次访问。
+        subtree = {id(c): {id(n) for n in c.walk()} for c in containers}
+        outer_only = [c for c in containers
+                      if not any(o is not c and id(c) in subtree[id(o)]
+                                 for o in containers)]
+
+        # (2) 展开 + 按对象身份去重、保序（先到先留，nth 顺序稳定）
+        seen: set = set()
+        scoped: List[LayoutNode] = []
+        for c in (outer_only or containers):
+            for n in c.walk():
+                if id(n) in seen:
+                    continue
+                seen.add(id(n))
+                scoped.append(n)
+
+        # (3) 继承调用方的可见性约定
+        if pool and all(getattr(n, 'visible', True) for n in pool):
+            scoped = [n for n in scoped if getattr(n, 'visible', True)]
+
+        return scoped
+
     def filter(self, nodes: Sequence[LayoutNode]) -> List[LayoutNode]:
         """在给定节点集合上应用匹配条件（含 within 子树限定）。"""
         pool = list(nodes)
 
         if self._within is not None:
-            containers = [n for n in pool if self._within.match(n)]
-            scoped: List[LayoutNode] = []
-            for c in containers:
-                scoped.extend(c.walk())
-            pool = scoped or []
+            pool = self._apply_within(pool)
 
         hits = [n for n in pool if self.match(n)]
 

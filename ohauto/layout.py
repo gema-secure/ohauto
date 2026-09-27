@@ -38,7 +38,11 @@ ATTR_ALIASES: Dict[str, Tuple[str, ...]] = {
     'type':      ('type', 'Type', 'componentType', 'cls', 'class'),
     'id':        ('id', 'Id', 'ID', 'componentId'),
     'text':      ('text', 'Text', 'content', 'Content', 'label'),
-    'bounds':    ('bounds', 'Bounds', 'bound', 'rect', 'frame'),
+    # A6（任务卡）：不同鸿蒙版本 / 不同导出工具里，「这个控件在屏幕上的矩形」
+    # 可能叫五种名字。越具体的名字放越后面——_pick 按顺序取第一个存在的键，
+    # 'bounds' 是真机实测的标准键，必须保持第一优先。
+    'bounds':    ('bounds', 'Bounds', 'bound', 'rect', 'frame',
+                  'rectInScreen', 'visibleBounds', 'region'),
     'descr':     ('description', 'descr', 'Description', 'accessibilityText'),
     'clickable': ('clickable', 'Clickable'),
     'visible':   ('visible', 'Visible', 'shown'),
@@ -133,12 +137,39 @@ class Rect:
                     return cls(*(int(float(n)) for n in nums))
                 return cls()          # 完全无法解析：退化为空矩形而非抛异常
         if isinstance(raw, dict):
-            return cls(
-                int(raw.get('left', raw.get('x', 0))),
-                int(raw.get('top', raw.get('y', 0))),
-                int(raw.get('right', raw.get('x2', 0))),
-                int(raw.get('bottom', raw.get('y2', 0))),
-            )
+            # A6 加固：字典形态要做「缺角补全」而不是静默取 0。
+            # 旧实现 raw.get('right', raw.get('x2', 0)) 在只给 left+width 时
+            # 会把 right 当成 0，得到一个负宽矩形且无任何告警 —— 这类
+            # 「测试全绿但结论是假的」事故分工卡第一章第（六）节点名过两次。
+            # 规则：
+            #   left  ← left / x / startX
+            #   top   ← top / y / startY
+            #   right ← right / x2 / endX；缺省时用 left+width 推导
+            #   bottom← bottom / y2 / endY；缺省时用 top+height 推导
+            # 四个角仍凑不齐才算解析失败（退化为空矩形）。
+            def _num(*keys: str) -> Optional[float]:
+                for k in keys:
+                    v = raw.get(k)
+                    if v not in (None, ''):
+                        try:
+                            return float(v)
+                        except (TypeError, ValueError):
+                            continue
+                return None
+
+            left = _num('left', 'x', 'startX')
+            top = _num('top', 'y', 'startY')
+            right = _num('right', 'x2', 'endX')
+            bottom = _num('bottom', 'y2', 'endY')
+            width = _num('width', 'w')
+            height = _num('height', 'h')
+            if right is None and left is not None and width is not None:
+                right = left + width
+            if bottom is None and top is not None and height is not None:
+                bottom = top + height
+            if None in (left, top, right, bottom):
+                return cls()          # 仍是宽进：凑不齐就空矩形，不抛异常
+            return cls(int(left), int(top), int(right), int(bottom))
         if isinstance(raw, (list, tuple)) and len(raw) == 4:
             return cls(int(raw[0]), int(raw[1]), int(raw[2]), int(raw[3]))
         return cls()
@@ -181,14 +212,59 @@ class LayoutNode:
         return self.rect.center
 
     @property
+    def text_deep(self) -> str:
+        """控件**自身及其子树**里的文案，拼成一个串。
+
+        ⚠️ 这条是为真机结构加的 —— **可交互性在容器上、文案在子节点上**。
+        实测（2026-09-22，设备自带「设置」页）12 个可交互控件里：
+
+            自身带文案           0 个
+            自身无文案、子节点有  12 个   ← 100%
+
+        真实形态：
+
+            Flex (clickable=true, text='')
+             ├ Text (text='蓝牙')
+             └ Text (text='已关闭')
+
+        所以任何「按文案判断这个控件是干什么的」逻辑 ——
+        安全策略的「删除/支付」拦截、探索器的关键词加权、压测目标挑选 ——
+        **只看 `node.text` 在真机上会全部落空**（模拟夹具里 clickable 和
+        text 常在同一节点，所以自测发现不了）。要文案请用这个属性。
+
+        自身有文案时直接返回自身（更精确）；否则按子树顺序收集、去重。
+        """
+        own = (self.text or '').strip()
+        if own:
+            return own
+        parts: List[str] = []
+        for k in self.walk():
+            t = (k.text or '').strip()
+            if t and t not in parts:
+                parts.append(t)
+        return ' '.join(parts)
+
+    @property
     def label(self) -> str:
         """最贴近「人能看懂」的名称，用于日志与视觉提示。
 
-        优先级：text > descr > hint > id > type。
-        把 descr / hint 排在 id 之前，是因为它们是给人看的无障碍文案，
-        而 id 是代码标识（如 'btn_login'），对阅读日志和喂给视觉模型都不友好。
+        优先级：text > descr > hint > **text_deep** > id > type。
+
+        为什么 descr / hint / text_deep 都排在 id 之前：这一组是**给人看的**
+        无障碍文案，id 是代码标识（如 `btn_login`、`item_bluetooth`）——
+        对读日志的人和喂给视觉模型都不友好。
+
+        ⚠️ `text_deep` 必须排在 id 之前（2026-09-22 实测踩到）：
+        真机上可交互容器的形态是 `Flex(id='item_reset', text='')` +
+        子节点 `Text('恢复出厂设置')`。若 id 优先，日志里这个危险按钮就叫
+        `item_reset`，而安全策略按文案匹配「恢复出厂」也照样找不到它。
+        排到 id 前面之后，同一个控件就叫「恢复出厂设置」了。
+
+        反方向也验过：计算器按键这种**既没文案也没子节点文案**的，
+        `text_deep` 为空，自然退到 id（`'7'`）—— 不会退化成 `'Button'`。
         """
-        return self.text or self.descr or self.hint or self.id or self.type
+        return (self.text or self.descr or self.hint
+                or self.text_deep or self.id or self.type)
 
     @property
     def depth(self) -> int:
@@ -214,27 +290,7 @@ class LayoutNode:
         return ' > '.join(reversed(chain))
 
     def is_interactive(self) -> bool:
-        """是否可能可交互 —— 用于自动探索时筛选候选控件。
-
-        ⚠️⚠️ **这是方法，不是 property —— 必须带括号调用！**
-
-        同一个类里 `clickable` / `scrollable` / `visible` / `path` 都是
-        property，**只有这个是普通方法**，风格不一致。因此：
-
-        ```python
-        if n.is_interactive:      # ❌ 拿到方法对象本身
-        if n.is_interactive():    # ✅ 真正调用
-        ```
-
-        漏括号**不会报错** —— 方法对象恒为真值，于是所有节点都被当成可交互。
-        实测踩坑（2026-09-19）：采集统计报「169 个节点全部可交互」，
-        而原始 JSON 里只有 11 个 `clickable=true`。
-        这类错误是**静默**的，只有交叉核对原始数据才能发现。
-
-        > 若将来要把它改成 property 以统一风格，**必须同步修改全部调用点**
-        > （`crossform.py` / `explorer.py` / `matcher.py` / 内部调用），
-        > 属于对外接口变更，要先通知 A、B。
-        """
+        """是否可能可交互 —— 用于自动探索时筛选候选控件。"""
         return self.clickable or self.scrollable or self.type in (
             'Button', 'TextInput', 'Checkbox', 'Radio', 'Switch', 'Slider',
             'Toggle', 'Search', 'MenuItem', 'TabContent', 'ListItem')
