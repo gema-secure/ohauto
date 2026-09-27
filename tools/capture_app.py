@@ -267,14 +267,14 @@ def main(argv=None) -> int:
         targets = hdc.list_targets()
     except Exception as e:                                     # noqa: BLE001
         print(f'[失败] 无法连接设备: {e}')
-        return 1
+        return 2                       # 设备不在场（约定见 docs/约定-退出码.md）
     print(f'  设备      : {targets[0] if targets else "?"}')
 
     bundle = None if args.no_launch else args.bundle
     ability = None if args.no_launch else args.ability
     if bundle and not ability:
         print('[失败] 指定了 --bundle 就必须同时给 --ability')
-        return 2
+        return 1                       # 用法错误，不是设备问题
     if bundle:
         print(f'  目标应用  : {bundle} / {ability}')
 
@@ -300,7 +300,7 @@ def main(argv=None) -> int:
     print('=' * 64)
     print('结论：' + ('采集干净，可直接使用' if meta['clean']
                       else '采集有问题，见上方告警 —— 不要直接拿去用'))
-    return 0 if meta['clean'] else 2
+    return 0 if meta['clean'] else 1   # 采集有问题=未达标，不是设备不在场
 
 
 if __name__ == '__main__':

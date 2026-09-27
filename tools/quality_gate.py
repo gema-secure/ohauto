@@ -5,7 +5,7 @@
 | 规划要求 | 本脚本的关卡 |
 |---|---|
 | 静态检查 | [1/3] `tools/static_check.py`（零依赖，见该文件说明） |
-| 单元测试 | [2/3] `unittest discover`（589 项） |
+| 单元测试 | [2/3] `unittest discover`（905 项） |
 | 覆盖率 ≥70% | [2/3] `coverage report`（`.coveragerc` 里 `fail_under`） |
 | 模拟端到端 | [3/3] `examples/offline_demo.py`（不需要真机） |
 | 门禁：失败即阻断 | 任一步失败 → 退出码非 0 |
@@ -140,6 +140,18 @@ def build_stages(include_coverage: bool = True) -> List[Stage]:
         # 属于纯误导的死代码。**判定一律用返回码**（static_check 有 error 时返回 1）。
     ))
 
+    # 导出产物（.ets）的 ArkTS/hypium 规则检查。
+    # 为什么要单独一关：CI 里**没法编译 ArkTS**（要拉 4 GB SDK，太重），
+    # 而 export_hypium.py 的历史 bug 清一色是「Python 侧测试全绿、真机才炸」——
+    # 2026-09-21/22 两天里就出了 5 个（ON 大小写 / function 表达式 /
+    # 漏 await / screenCap 路径）。这一关用纯文本规则把已知的 4 类钉死，
+    # 零依赖、秒级。挡不住未知新坑，但能挡住已踩过的每一个。
+    stages.append(Stage(
+        'ets_lint', '导出产物检查（.ets 的 ArkTS 规则）',
+        [PY, os.path.join('tools', 'lint_hypium_out.py')],
+        timeout=120,
+    ))
+
     if include_coverage:
         stages.append(Stage(
             'coverage', '单元测试 + 覆盖率',
@@ -246,6 +258,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     print('  汇总')
     print(f'    静态检查 : {"通过" if ok_style else "不通过"}')
+    ets_stage = next((s for s in stages if s.key == 'ets_lint'), None)
+    if ets_stage:
+        print(f'    .ets 产物 : {"通过" if ets_stage.ok else "失败"}'
+              f'（ArkTS/hypium 规则）')
     tests_stage = next((s for s in stages
                         if s.key in ('coverage', 'tests')), None)
     if tests_stage:

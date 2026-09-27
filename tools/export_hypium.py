@@ -8,7 +8,7 @@
 - 设备：OpenHarmony 5.0.3.135 → **API 15**
 - 类型定义：DevEco 自带 SDK 的 `@ohos.UiTest.d.ts`（4311 行）+ `@ohos/hypium`
 - 老 API（`UiDriver`/`By`/`UiComponent`）标注 `@deprecated since 9` →
-  **全部生成新 API**（`Driver`/`On`/`Component`，`@kit.TestKit`）
+  **全部生成新 API**（`Driver`/`ON`/`Component`，`@kit.TestKit`）
 - `static create(): Driver`（@since 9）—— **不是 async，无 await**
 - 设备上的 `uitest` CLI **没有** 任务卡所说的 `--mode DUMP` 参数（实测
   `uitest help` 逐条核对）；但新 API 的 `Driver` 有 `dumpLayout(savePath)`
@@ -19,14 +19,14 @@
 | DSL action | 生成的 .ets 代码 |
 |---|---|
 | `start` | `delegator.startAbility(want)` + `delayMs` |
-| `waitFor` / `wait` | `driver.waitForComponent(On.xxx, ms)` + **判 undefined** |
+| `waitFor` / `wait` | `driver.waitForComponent(ON.xxx, ms)` + **判 undefined** |
 | `waitGone` | 轮询 `assertComponentExist` 至抛 17000003 |
 | `tap` / `doubleTap` / `longPress` | `findComponent(...)` 的对应 click 方法 |
 | `tap_xy` | `driver.click(x, y)` |
 | `input` | `findComponent(...).inputText(v)` |
 | `back` | `driver.pressBack()` |
 | `screenshot` | `driver.screenCap(path)` |
-| `assert.exists` | `driver.assertComponentExist(On.xxx)` |
+| `assert.exists` | `driver.assertComponentExist(ON.xxx)` |
 | `assert.gone` | 轮询至 17000003 |
 | `assert.text` | `getText()` + `expect().assertEqual()` |
 
@@ -67,7 +67,7 @@ def _bool(v: Any) -> str:
     return 'true' if v else 'false'
 
 
-#: DSL 定位字段 -> On 链式方法（与 matcher.py 的字段名一一对应）
+#: DSL 定位字段 -> ON 链式方法（与 matcher.py 的字段名一一对应）
 _ON_FIELDS: Dict[str, str] = {
     'text': 'text',
     'text_contains': 'text',        # 特殊：带 MatchPattern.CONTAINS
@@ -83,7 +83,7 @@ _ON_FIELDS: Dict[str, str] = {
 
 
 def _on_chain(m: Dict[str, Any]) -> str:
-    """定位条件 dict -> `On.text('x').id('y')` 链式表达式。
+    """定位条件 dict -> `ON.text('x').id('y')` 链式表达式。
 
     多字段按固定顺序拼接（与 matcher.py 的链式语义一致：条件 AND）。
     dict 里出现未知字段时直接抛错 —— 静默丢弃会让导出件与原用例语义不一致。
@@ -96,18 +96,36 @@ def _on_chain(m: Dict[str, Any]) -> str:
                          f'支持: {sorted(_ON_FIELDS)}（另支持 timeout/index）')
 
     parts: List[str] = []
-    # 顺序固定：text/id/type/descr 在前，状态布尔在后（可读性）
-    for key in ('text', 'id', 'type', 'descr'):
+    # 顺序固定：text/text_contains/id/type/descr 在前，状态布尔在后（可读性）
+    #
+    # ⚠️ `text_contains` **必须**在这个元组里 —— 它只出现在循环里才是可达的。
+    # 早前的元组里漏了它，于是：`_ON_FIELDS` 认这个字段（第 93 行的未知字段检查
+    # 放行），但循环永远走不到 → **静默丢弃一个文本条件**，导出件与实际用例语义不一致。
+    # 这正好撞上本函数 docstring 自己写的那句「静默丢弃会让导出件与原用例语义不一致」。
+    # 生成头部的 `import { MatchPattern } from '@kit.TestKit'` 一直是有的，
+    # 所以漏的不是 import，纯粹是这行元组。
+    for key in ('text', 'text_contains', 'id', 'type', 'descr'):
         if key in m:
-            method = _ON_FIELDS[key]
             if key == 'text_contains':
                 parts.append(f"text({_q(m[key])}, MatchPattern.CONTAINS)")
             else:
-                parts.append(f"{method}({_q(m[key])})")
+                parts.append(f"{_ON_FIELDS[key]}({_q(m[key])})")
     for key in ('clickable', 'scrollable', 'enabled', 'focused', 'selected'):
         if key in m:
             parts.append(f"{_ON_FIELDS[key]}({_bool(m[key])})")
-    return 'On.' + '.'.join(parts)
+    # 注意：这里必须用大写 ON。
+    # d.ts 中 `declare class On` 只有实例方法 text/id/type/...（无 static），
+    # 而 `declare const ON: On`（@ohos.UiTest.d.ts:4475）才是可链式调用的预置
+    # 实例，官方注释的用法即 ON.text('txt').enabled(true)。
+    # 写成 On.text(...) 会触发 ArkTS 编译错误：
+    #   Property 'text' does not exist on type 'typeof On'.
+    if not parts:
+        # 拼出来会是 `ON.` —— 那是一份**能生成却编译不过**的 .ets。
+        # 宁可在这一步炸掉，也不能让「生成成功」掩盖「语义是空的」。
+        raise ValueError(f'定位条件里没有任何可用字段（只剩 {sorted(m)}）：{m!r}'
+                         f' —— 拼出来会是 "ON."，属非法 .ets；'
+                         f'可用字段: {sorted(_ON_FIELDS)}')
+    return 'ON.' + '.'.join(parts)
 
 
 # --------------------------------------------------------------- 步骤映射
@@ -201,8 +219,12 @@ def _step_to_ts(step: Dict[str, Any], idx: int,
         cond = _matcher_of(arg)
         method = {'tap': 'click', 'doubleTap': 'doubleClick',
                   'long_press': 'longClick', 'longPress': 'longClick'}[a]
+        # 外层 await 不能省。uitest 的 API 禁止并发调用：click() 返回 Promise，
+        # 不 await 的话下一条 findComponent 会和它撞车，真机报
+        #   uitest-api dose not allow calling concurrently,
+        #   current processing:Component.click, incoming: On.id
         return (f'{desc}\n'
-                f'(await driver.findComponent({_on_chain(cond)})).{method}();')
+                f'await (await driver.findComponent({_on_chain(cond)})).{method}();')
 
     if a == 'tap_xy':
         if not (isinstance(arg, dict) and 'x' in arg and 'y' in arg):
@@ -217,8 +239,9 @@ def _step_to_ts(step: Dict[str, Any], idx: int,
         # value 与定位条件同层（DSL 形如 {id: ..., value: ...}），
         # 抠掉 value 后剩下的才是定位条件。
         cond = {k: v for k, v in arg.items() if k not in ('value', 'timeout')}
+        # 同上，inputText() 也必须 await，否则与后续操作并发。
         return (f'{desc}\n'
-                f'(await driver.findComponent({_on_chain(cond)}))'
+                f'await (await driver.findComponent({_on_chain(cond)}))'
                 f'.inputText({_q(value)});')
 
     if a in ('back', 'key_back'):
@@ -226,8 +249,16 @@ def _step_to_ts(step: Dict[str, Any], idx: int,
 
     if a in ('screenshot', 'screencap'):
         path = arg.get('path') if isinstance(arg, dict) else None
-        save = _q(path) if path else _q(f'/data/local/tmp/ohauto_{idx}.png')
-        return f'{desc}\nawait driver.screenCap({save});'
+        name = os.path.basename(path) if path else f'ohauto_{idx}.png'
+        # screenCap 只能写**应用自己的沙箱目录**。测试进程没有权限往
+        # /data/local/tmp 写，原样透传宿主侧路径真机会报
+        #   Invalid file path:/data/local/tmp/ohauto_8.png
+        # 所以只取文件名，落到 delegator 的 filesDir 下；宿主侧要取图再用
+        # hdc file recv 从沙箱目录拉。
+        return (f'{desc}\n'
+                f'const shot{idx} = delegator.getAppContext().filesDir '
+                f'+ {_q("/" + name)};\n'
+                f'await driver.screenCap(shot{idx});')
 
     # ---- 断言 ---------------------------------------------------------
     if a == 'assert':
@@ -260,10 +291,28 @@ def _step_to_ts(step: Dict[str, Any], idx: int,
         raise UnsupportedActionError(
             f'assert.{kind} 不支持。支持: exists / gone / text')
 
+    # 已知但**导出器未实现**的 action（DSL 里有、hypium 侧没有一一对应）。
+    # 2026-09-22 修：原报错信息把 `waitIdle` 列进了「已支持」，
+    # 与它**正在报错**的事实自相矛盾 —— 用例作者照那句话去找 waitIdle
+    # 的写法会白费时间。模块头 docstring 本来是对的（明确列了不支持的 6 个），
+    # 是这行消息抄成了 DSL 的全量 action 列表。
+    known_unsupported = {
+        'stop': 'hypium 无停止 ability 的等价 API',
+        'home': 'hypium 无返回桌面 API（可改用 back，或 start 目标应用）',
+        'swipe': '需要屏幕尺寸等运行时信息',
+        'fling': '需要屏幕尺寸等运行时信息',
+        'waitIdle': 'hypium 无「连续两次控件树一致」的等价判据，'
+                    '可改用固定 waitFor，或去掉该步',
+        'scroll': '需要屏幕尺寸等运行时信息',
+    }
+    if a in known_unsupported:
+        raise UnsupportedActionError(
+            f'DSL action {a!r} 导出器未实现：{known_unsupported[a]}。'
+            f'已实现的 action: start/wait/waitFor/waitGone/tap/doubleTap/'
+            f'longPress/tap_xy/input/back/screenshot/assert')
     raise UnsupportedActionError(
-        f'未知 DSL action: {a!r}。已支持: start/stop/waitFor/waitGone/'
-        f'waitIdle/tap/doubleTap/longPress/tap_xy/input/back/home/'
-        f'screenshot/assert —— 其中标「不支持」的见各类报错信息。')
+        f'未知 DSL action: {a!r}。已实现的 action: start/wait/waitFor/'
+        f'waitGone/tap/doubleTap/longPress/tap_xy/input/back/screenshot/assert')
 
 
 # --------------------------------------------------------------- 用例导出
@@ -311,18 +360,42 @@ def export_case(case: Dict[str, Any]) -> tuple:
         '// 本文件由 tools/export_hypium.py 自动生成 —— 不要手改，改源用例后重新导出。',
         f'// 来源用例: {name}',
         '// 目标: hypium / arkxtest（API 9+，@kit.TestKit；设备 API 15 实测）',
+    ]
+    # ★ 不完整横幅（2026-09-22 补）
+    # 起因：评审发现 hypium_out/note_stability.test.ets 里有 2 个 waitIdle 未导出，
+    # 而「稳定性压测通过」的结论建立在这条脚本上 —— 但**文件自己不说**，
+    # 报告里只看到 Pass，于是「跑通」被读成了「整条用例验证通过」。
+    # 这和 login.yaml 踩过的坑是同一类：一次挂在无关原因上的失败，
+    # 会把真正的问题盖住；反过来，一次「跑通」也会把没覆盖到的步骤盖住。
+    # 所以让文件**自己声明不完整**，而不是靠人去比对 warnings。
+    if warnings:
+        lines += [
+            '//',
+            f'// ⚠️⚠️ 本文件**不完整**：{len(warnings)} 个步骤未能自动导出。',
+            '//   跑到那些步骤会抛 "步骤 N 未导出" —— 此时用例失败的原因是',
+            '//   **工具没导出该步骤，不是被测应用有缺陷**。',
+            '//   ⚠️ 反过来：本文件「跑通」只代表**已导出的步骤**通过，',
+            '//   **不能**读成「整条用例验证通过」。',
+            '//',
+        ]
+        for w in warnings:
+            lines.append(f'//   · {w}')
+        lines.append('//')
+    lines += [
         "import { describe, it, expect } from '@ohos/hypium';",
         "import { abilityDelegatorRegistry } from '@kit.TestKit';",
-        "import { Driver, On, MatchPattern } from '@kit.TestKit';",
+        "import { Driver, ON, MatchPattern } from '@kit.TestKit';",
         '',
         'const delegator = abilityDelegatorRegistry.getAbilityDelegator();',
         "const bundleName = abilityDelegatorRegistry.getArguments().bundleName;",
         '',
         'export default function abilityTest() {',
-        f"  describe('{ident}', function () {{",
+        # describe/it 的回调必须是箭头函数：ArkTS 禁止 function expression
+        # （arkts-no-func-expressions）。
+        f"  describe('{ident}', () => {{",
         f"    // 用例名: {name}",
         f"    // 被测应用: {bundle} / {ability}",
-        f"    it('{ident}_0', 0, async function () {{",
+        f"    it('{ident}_0', 0, async () => {{",
         '      const driver = Driver.create();',
     ]
     lines.extend('      ' + blk.replace('\n', '\n      ') for blk in body)

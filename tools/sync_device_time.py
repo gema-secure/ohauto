@@ -226,18 +226,18 @@ def main(argv=None) -> int:
         hdc.list_targets()
     except (HdcError, Exception) as e:                     # noqa: BLE001
         print(f'[失败] 无法连接设备: {e}')
-        return 1
+        return 2                       # 设备不在场（约定见 docs/约定-退出码.md）
 
     if args.check:
         ok = check(hdc)
         print('=' * 60)
         print('结论：' + ('时间正常' if ok else '需要校时'))
-        return 0 if ok else 2
+        return 0 if ok else 1          # 时间不正常=未达标，设备明明在场
 
     if not sync(hdc):
         print('=' * 60)
         print('结论：校时未完全成功（见上方提示）')
-        return 2
+        return 1
 
     if args.reboot:
         print('\n  [追加] 重启验证开机路径（DAYU200 约 25s 回来）')
@@ -252,7 +252,7 @@ def main(argv=None) -> int:
         print('=' * 60)
         print('结论：' + ('开机后时间正确（RTC 已被正确恢复）' if ok
                           else '开机后时间不正确 —— 检查是否漏 -u 或 RTC 电池'))
-        return 0 if ok else 2
+        return 0 if ok else 1          # 校验未达标，不是设备不在场
 
     print('=' * 60)
     print('结论：校时成功。建议加 --reboot 验证开机路径。')

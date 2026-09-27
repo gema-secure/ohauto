@@ -15,7 +15,10 @@
 
 两种运行模式
 ------------
-1. **真机/模拟器模式**（默认）：`--device MateX7` 通过 hdc + Emulator CLI 切形态
+1. **在线模式**（默认）：`--device "Mate X7"` 通过 hdc 采集 + `Emulator CLI` 切折叠态。
+   ⚠️ 这里的 device **是模拟器实例名**（`tools/emulator_cli.py` 管理的实例），
+   不是物理真机 —— 切形态走的是 `Emulator.exe -foldedState`。
+   物理真机（DAYU200）没有折叠态可切，用它跑本模式的 `--baseline/--target` 没有意义。
 2. **离线模式**（`--offline`）：用 `ohauto.sim.FakeHdc` 模拟，**不需要设备**
 
 离线模式的用途：CI 里跑回归、以及开发比对逻辑时快速迭代。
@@ -62,6 +65,7 @@ from ohauto.crossform import (          # noqa: E402
 from ohauto.crossform_report import write_all      # noqa: E402
 from ohauto.devices import FormProfile             # noqa: E402
 from ohauto.layout import parse_layout             # noqa: E402
+from preflight import require_device                  # noqa: E402
 
 # 复用上一步做好的纯函数与模拟器
 from tools.emulator_cli import parse_screen_info   # noqa: E402
@@ -185,7 +189,7 @@ def capture_online(device: str, form_state: Optional[str],
         print(f'  [fold] {device} -> {folded_state} :: '
               f'{str(r.get("stdout", "")).strip()[:80]}')
 
-    hdc = Hdc()
+    hdc = require_device()
     last_err = ''
     for attempt in range(1, retries + 1):
         # 折叠态切换后系统要重新完成布局，等不够会拿到旧树或空树。
@@ -426,7 +430,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     # 踩过：早期这里写的是 `MISSING or UNREACHABLE`，
     # 而「完全不可见的元素」被引擎判为 HIGH 的 OUT_OF_SCREEN，
     # 于是报告标红、退出码却是 0 —— 门禁直接失效。修好后以引擎为准。
-    return 2 if rec['has_high'] else 0
+    #
+    # 退出码用 **1**（未达标），不是 2 —— 2 是「设备不在场」专用
+    # （见 docs/约定-退出码.md），CI 拿到 2 会按「跳过」处理而不是门禁红。
+    return 1 if rec['has_high'] else 0
 
 
 if __name__ == '__main__':
