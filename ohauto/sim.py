@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import struct
 import tempfile
 import time
@@ -879,7 +880,10 @@ class FakeHdc:
         self._log(f'dumpLayout -> {p} (页面 {self.current})')
         return p
 
-    def pull(self, device_path: str, local_path: str) -> str:
+    def pull(self, device_path: str, local_path: str,
+             binary: bool = False) -> str:
+        # binary 参数与 `Hdc.pull` 对齐（后者用它禁用二进制的 cat 兜底）。
+        # 模拟环境收下但行为不变 —— 分词/内容语义与二进制无关。
         self._fault('pull', f'file recv {device_path}')
         data = self._files.get(device_path)
         if data is None:
@@ -922,9 +926,17 @@ class FakeHdc:
         # 完全等价，这里也必须等价路由，否则「直接下发的那条路径」在模拟环境里
         # 会静默变成空操作 —— 又一类只有真机才暴露的假通过。
         if cmd.startswith('uitest uiInput'):
-            parts = cmd.split()[2:]
-            if parts:
-                self._ui_input(*parts)
+            # ★ 必须按 **POSIX shell 的规矩**分词（shlex），不能用 str.split()。
+            # `hdc.Hdc.input_text()` 会用单引号把输入文本包成一个参数；
+            # 这里若用朴素 split，引号会被当成文本的一部分写进 TYPED，
+            # 两侧行为就此分叉 —— 「模拟环境绿、真机挂」的经典假通过。
+            # shlex.split 对不带引号的命令与 str.split 等价，不影响其它动作。
+            try:
+                _parts = shlex.split(cmd)
+            except ValueError:                      # 引号没配对等畸形命令
+                _parts = cmd.split()
+            if _parts:
+                self._ui_input(*_parts[2:])
             return self._R('No Error')
         if 'uitest --version' in cmd:
             return self._R('uitest 1.0.0')

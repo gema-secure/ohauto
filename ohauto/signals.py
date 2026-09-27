@@ -49,7 +49,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-from .layout import parse_layout
+from .layout import LayoutNode, parse_layout
 
 
 # ================================================================ 设备侧路径
@@ -112,6 +112,12 @@ HILOG_FILTER = (
 _PNG_BPP_SOLID = 0.006        # ≤ 这个值：强烈怀疑纯色页
 _PNG_BPP_NORMAL = 0.06        # ≥ 这个值：体积完全正常，不报白屏
 _DOMINANT_COLOR_MIN = 0.95    # 单一颜色占比 ≥ 此值：判定为空白页
+# 交叉验证（2026-09-23）：控件树节点数超过此值 → 与「空白页」矛盾，判据降级为疑似。
+# 为什么是 5：真机的真空白页控件树是空的（实测 377 字节 / 0 节点），
+# 而「内容少但有结构」的页面（如纯文本页）通常在 10 个节点以上，5 是安全的分界。
+WHITE_SCREEN_NODE_CONTRADICT = 5
+#: 与控件树矛盾时给的置信度 —— 不判死，只提示「需人工确认」。
+WHITE_SCREEN_CONTRADICTED_CONF = 0.5
 
 
 # ================================================================ 结果模型
@@ -174,6 +180,7 @@ class Anomaly:
     """
 
     kind: str            # 'CRASH' / 'WHITE_SCREEN' / 'NO_RESPONSE' / 'NO_WINDOW'
+                         # / 'LAYOUT_ANOMALY'（2026-09-23 新增，见 _judge_layout_anomaly）
     evidence: str        # 客观描述，如 '进程 com.ohos.note 已不在 pidof 输出中'
     source: str          # 'faultlog' / 'hilog' / 'screenshot' / 'layout' / 'hdc'
     confidence: float = 1.0
@@ -776,18 +783,33 @@ CLOCK_SKEW_WARN_S = 86400.0
 # ================================================================ 设备文件读取
 
 def _read_device_file(hdc, device_path: str, local_path: str,
-                      warnings: List[str]) -> Optional[str]:
+                      warnings: List[str],
+                      binary: bool = False) -> Optional[str]:
     """把设备文件拉到本地，返回本地路径；失败返回 None 并记 warning。
 
-    先走 `hdc.pull()`（内部已经是 `file recv` + `cat` 兜底），
-    再兜一层 `cat`，因为真机上 `file recv` 可能因权限/路径问题失败。
+    先走 `hdc.pull()`（内部是 `file recv`），失败再兜一层 `cat`
+    （真机上 `file recv` 可能因权限/路径问题失败）。
+
+    ⚠️ **二进制文件必须传 `binary=True`** —— 它做两件事：
+    ① 透传给 `hdc.pull`，让 `file recv` 走字节保真通道；
+    ② **禁用 cat 兜底** —— `hdc shell cat` 会对二进制做 CRLF 转换
+    （PNG 头 `\\x89PNG\\r\\n` 被写成 `\\x89PNG\\r\\r\\n`），产出**损坏但不报错**
+    的文件（`hdc.pull` docstring 里的实测约束，hdc.py「坑 3」）。
+
+    2026-09-26 全项目评审发现：截图拉取一直没传这个参数 —— PNG 一旦走了
+    cat 兜底，白屏判据读到的是坏文件，**看起来像「应用白屏」，实为工具损坏**。
     """
     try:
-        hdc.pull(device_path, local_path)
+        hdc.pull(device_path, local_path, binary=binary)
         if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
             return local_path
     except Exception as e:                                   # noqa: BLE001
-        warnings.append(f'拉取 {device_path} 失败，改用 cat: {e}')
+        warnings.append(f'拉取 {device_path} 失败: {e}')
+    if binary:
+        # 宁可如实报失败，也不留一份「看起来正常」的坏 PNG
+        warnings.append(f'{device_path} 为二进制，file recv 失败后禁用 cat 兜底'
+                        f'（cat 会 CRLF 损坏且不报错）')
+        return None
     try:
         res = hdc.shell(f'cat {device_path}', timeout=60)
         text = getattr(res, 'stdout', '') or ''
@@ -861,7 +883,8 @@ def collect_signals(
 
     * `crashes`      —— 窗口内、且 `Module name` 匹配 bundle 的崩溃
     * `anomalies`    —— 每条独立证据一个 `Anomaly`（CRASH / WHITE_SCREEN /
-                        NO_RESPONSE / NO_WINDOW），自带 `source` 与 `confidence`
+                        NO_RESPONSE / NO_WINDOW / LAYOUT_ANOMALY），自带 `source`
+                        与 `confidence`
     * `warnings`     —— 采集过程中的每一处降级说明
 
     本函数**不做归因**。它只回答「发生了什么」，不回答「为什么」。
@@ -905,7 +928,7 @@ def collect_signals(
     # ---- 2. 进程存活（辅证据）
     sig.process_alive = _probe_process_alive(hdc, bundle, sig)
 
-    # ---- 3. 截图 + 白屏判据
+    # ---- 3. 截图 + 白屏判据（先出原始判据，**延迟定案**见步骤 6.5）
     if collect_screenshot:
         _collect_screenshot(hdc, sig, out_dir, deep_screenshot, max_pixels)
 
@@ -919,6 +942,13 @@ def collect_signals(
     # ---- 6. 交叉判据：崩溃 / 无响应
     _judge_crash(sig)
     _judge_no_response(hdc, sig, win_start, device_now=time.time() + offset_s)
+
+    # ---- 6.5 白屏判据**交叉验证**（必须在 3/4 都跑完之后）
+    # 为什么不能放在步骤 3 就地定案：截图（3）跑在控件树（4）**之前**，
+    # 那一刻 `sig.layout_nodes` 必然是 None，想交叉验证也拿不到数 ——
+    # 照抄「判据里查 layout_nodes」在调用顺序上根本走不通。
+    # 所以做成「3 出原始判据 → 6.5 用节点数复核并调整置信度」两段。
+    _judge_white_screen(sig)
 
     return sig
 
@@ -1034,25 +1064,72 @@ def _probe_process_alive(hdc, bundle: str, sig: Signals) -> Optional[bool]:
 
 def _collect_screenshot(hdc, sig: Signals, out_dir: str,
                         deep: bool, max_pixels: int) -> None:
-    """截图并做白屏判据。失败只记 warning，不中断采集（任务卡第五章三·3）。"""
+    """截图并做白屏判据。失败只记 warning，不中断采集（任务卡第五章三·3）。
+
+    ⚠️ **只出原始判据，不当场定案** —— 定案在 `_judge_white_screen()`（步骤 6.5），
+    因为那一刻 `sig.layout_nodes` 还没采到（控件树在步骤 4），无法交叉验证。
+    """
     local = os.path.join(out_dir, 'screen.png')
     try:
         device_path = hdc.screen_cap()
     except Exception as e:                                   # noqa: BLE001
         sig.warnings.append(f'截图失败（已跳过）: {e}')
         return
-    if not _read_device_file(hdc, device_path, local, sig.warnings):
+    if not _read_device_file(hdc, device_path, local, sig.warnings,
+                             binary=True):     # PNG 是二进制：禁 cat 兜底
         sig.warnings.append(f'截图 {device_path} 无法取回本地，白屏判据跳过')
         return
     sig.screenshots.append(local)
 
     info = analyze_screenshot(local, deep=deep, max_pixels=max_pixels)
     suspicious, conf, evidence = is_white_screen(info)
-    if suspicious:
-        sig.anomalies.append(Anomaly(kind='WHITE_SCREEN', evidence=evidence,
-                                     source='screenshot', confidence=conf))
-    elif not info.get('decoded'):
+    # 存原始判据供 6.5 交叉验证（不进 anomalies，避免未经复核就一票否决）
+    setattr(sig, '_white_screen_raw', (bool(suspicious), float(conf), str(evidence)))
+    if not suspicious and not info.get('decoded'):
         sig.warnings.append(f'白屏判据未使用像素级分析：{evidence}')
+
+
+def _judge_white_screen(sig: Signals) -> None:
+    """用控件树节点数**交叉验证**白屏判据，节点多就降级为「疑似」。
+
+    ★ 2026-09-23 新增（来源：外部评审 + B 的复核建议）。
+
+    **缺陷原来的样子**：白屏判据是「单一颜色占比 ≥ 阈值」单一证据，
+    触发后以 ≥0.95 的置信度一票否决。但同一次采集里 `layout_nodes` 就在手边 ——
+    一个「控件树有 20 个节点」的页面，一眼就能否掉「空白页」。
+
+    **为什么是降级而不是推翻**：像素分析本身没错（整屏同色确实是硬证据），
+    错的是**无视矛盾证据**。所以：
+      - 节点数 > `WHITE_SCREEN_NODE_CONTRADICT`(5) → 判据降级为「疑似」，
+        杠杆从 0.95 压到 0.5，并**把节点数写进 evidence**（读报告的人自己判断）；
+      - 节点数 ≤ 5（或没采到） → 维持原判据与置信度。
+
+    真机上的意义：锁屏页、崩溃后白屏这类**真**空白页，控件树本来就是空的
+    （实测 377 字节空树），判据不受影响；而被误判的是「内容少但有结构」的页面。
+    """
+    raw = getattr(sig, '_white_screen_raw', None)
+    if not raw:
+        return
+    suspicious, conf, evidence = raw
+    if not suspicious:
+        return
+
+    nodes = sig.layout_nodes
+    if nodes is not None and nodes > WHITE_SCREEN_NODE_CONTRADICT:
+        sig.anomalies.append(Anomaly(
+            kind='WHITE_SCREEN',
+            evidence=(f'{evidence}；但同一次采集的控件树有 {nodes} 个节点'
+                      f'（> {WHITE_SCREEN_NODE_CONTRADICT}），与「空白页」矛盾 —— '
+                      f'降级为疑似，需人工确认是不是内容稀少的正常页面'),
+            source='screenshot+layout', confidence=WHITE_SCREEN_CONTRADICTED_CONF))
+        return
+
+    node_txt = (f'控件树 {nodes} 个节点' if nodes is not None
+                else '未能取到控件树（无法交叉验证）')
+    sig.anomalies.append(Anomaly(
+        kind='WHITE_SCREEN',
+        evidence=f'{evidence}；{node_txt}，与空白页一致',
+        source='screenshot+layout', confidence=conf))
 
 
 def _layout_signature(tree_text: Optional[str]) -> Optional[str]:
@@ -1092,6 +1169,7 @@ def _collect_layout(hdc, sig: Signals, out_dir: str,
             except OSError:
                 text = _read_device_text(hdc, device_path)
 
+    root = None
     if text is not None:
         try:
             root = parse_layout(text)
@@ -1126,6 +1204,10 @@ def _collect_layout(hdc, sig: Signals, out_dir: str,
             evidence=f'控件树仅 {nodes} 个零尺寸节点',
             source='layout', confidence=0.6))
 
+    # ---- 布局异常：可见控件越出父容器 bounds（挑战 #5 的第 5 类）
+    if root is not None:
+        _judge_layout_anomaly(sig, root)
+
     # ---- 多轮稳定性探测（「无响应」的一条客观证据）
     if probe_rounds and probe_rounds > 1 and device_path:
         sigs = [_layout_signature(text)]
@@ -1148,6 +1230,74 @@ def _collect_layout(hdc, sig: Signals, out_dir: str,
                           f'注意：若两次探测之间没有注入过操作，签名相同属正常现象，'
                           f'该信号仅在「刚发生过应当改变界面的操作」时才有效'),
                 source='layout', confidence=0.3))
+
+
+def _overflow_px(child: Any, parent: Any) -> int:
+    """子控件越出父容器的最大像素数（不越界为 0）。
+
+    取四个方向里最大的那个 —— 报告里说「越出 40px」比说「越出」有用得多，
+    幅度直接决定了它是取整误差还是真的写坏了布局。
+    """
+    return max(0,
+               int(parent.left) - int(child.left),
+               int(parent.top) - int(child.top),
+               int(child.right) - int(parent.right),
+               int(child.bottom) - int(parent.bottom))
+
+
+#: 越界多少像素以内不算异常 —— 渲染取整/1px 边框会让相邻 bounds 差一两个像素。
+LAYOUT_OVERFLOW_MIN_PX = 2
+
+
+def _judge_layout_anomaly(sig: Signals, root: LayoutNode) -> None:
+    """布局异常：**可见控件越出屏幕边界**（挑战 #5 的第 5 类）。
+
+    ⚠️ 判据为什么选「越出屏幕」而不是更直觉的「越出父容器」——
+    这是**真机数据**定的，不是偏好（复现：`tools/verify_layout_anomaly_real.py`
+    之后的对比扫描，7 个真机样本）：
+
+    | 判据 | 7 个样本的命中数 | 能不能用 |
+    |---|---|---|
+    | 越出父容器 | 每个样本都有 **11~13** 个 | ❌ 永远报警 —— 滚动列表的内容坐标与可视区坐标本就不同，而真机 `List` 的 `scrollable` 字段是 `False`，排不掉 |
+    | 子比父大 | 每个样本都有 **8~9** 个 | ❌ 同样永远报警 |
+    | **越出屏幕** | **全部为 0** | ✅ 有区分度、零误报 |
+
+    一条「在所有正常页面上都报警」的判据等于没有判据 —— 它只会把真正的异常
+    淹掉。所以这里用「越出屏幕」：控件跑到屏幕外，意味着用户**看不见也点不到**，
+    这是明确的缺陷形态；而前两条在真机上属于常态。
+
+    顺带：屏幕边界取根节点 bounds（uitest 的根就是 [0,0][w,h]），
+    不额外查设备 —— 少一次设备往返，也避免两处尺寸对不上。
+
+    产出**一条** Anomaly（不是每个越界控件一条）：一个页面布局写坏会产生多个
+    越界节点，逐个报会把 `anomalies` 淹掉。evidence 给总数 + 最严重的 3 个。
+    """
+    screen = root.rect
+    if screen.area <= 0:
+        return                      # 空树/无窗口：这里不做判定（那是 NO_WINDOW 的活）
+
+    offenders: List[Tuple[LayoutNode, int]] = []
+    for n in root.walk():
+        if n is root or not n.visible or n.rect.area <= 0:
+            continue
+        over = _overflow_px(n.rect, screen)
+        if over > LAYOUT_OVERFLOW_MIN_PX:
+            offenders.append((n, over))
+    if not offenders:
+        return
+
+    offenders.sort(key=lambda x: -x[1])
+    top = offenders[:3]
+    detail = '；'.join(
+        f'{n.type or "?"}{" id=" + n.id if n.id else ""} 越出 {over}px'
+        f'（[{n.rect.left},{n.rect.top}][{n.rect.right},{n.rect.bottom}]）'
+        for n, over in top)
+    sig.anomalies.append(Anomaly(
+        kind='LAYOUT_ANOMALY',
+        evidence=(f'{len(offenders)} 个可见控件越出屏幕 '
+                  f'[{screen.left},{screen.top}][{screen.right},{screen.bottom}]'
+                  f'（不可见与零尺寸节点已排除）；最严重的 {len(top)} 个：{detail}'),
+        source='layout', confidence=0.6))
 
 
 def _collect_hilog(hdc, sig: Signals, lines: int, grep: Optional[str]) -> None:
@@ -1217,11 +1367,22 @@ def _judge_no_response(hdc, sig: Signals, win_start: float,
         if (when is not None and device_now is not None
                 and when > device_now + FUTURE_SLACK_S):
             continue
+        # ★ bundle 过滤（模块头硬约束 3）：freeze/ 是**全体应用共用**的目录，
+        # 别的应用 ANR 也在这里落文件。不滤就给 0.9 置信度，等于把
+        # 「别人卡死了」记成「被测应用卡死」—— 违反本模块自己定的规则。
+        # 文件名解析不出 bundle 时（appfreeze 命名本就未实测验证），
+        # 归属未知 → 降置信度并在证据里写明，不许在「不知道是谁的」时还硬给高分。
+        parsed = parse_fault_filename(entry.get('name') or '')
+        fb = parsed.get('bundle', '')
+        if fb and fb != sig.bundle:
+            continue                      # 明确是别人的 ANR，跳过
+        owned = (fb == sig.bundle)
+        note = '' if owned else '（文件名解析不出 bundle，归属未确认，降置信）'
         sig.anomalies.append(Anomaly(
             kind='NO_RESPONSE',
-            evidence=(f'freeze/ 目录出现窗口内文件 {entry.get("name")} —— '
+            evidence=(f'freeze/ 目录出现窗口内文件 {entry.get("name")}{note} —— '
                       f'疑似 ANR（该目录命名格式尚未实测验证）'),
-            source='faultlog', confidence=0.9))
+            source='faultlog', confidence=0.9 if owned else 0.5))
 
     # 信号 2：hilog 里的冻结/超时关键字（启发式，中等置信度）
     hits = [ln for ln in sig.hilog_tail

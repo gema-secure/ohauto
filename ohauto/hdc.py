@@ -63,7 +63,8 @@ class Hdc:
         hdc 可执行文件路径。为 None 时按顺序自动查找：
         1. PATH 中的 hdc / hdc.exe
         2. 常见 DevEco Studio / SDK 安装位置
-        3. 本项目的 .hdc_path 配置文件
+        3. 本项目的 CONFIG_NAMES 配置文件（hdc.config.json / .ohauto.json，
+           从当前目录向上逐级查找，也查 ~/.ohauto/）
     target:
         设备序列号（多设备时必须指定）。为 None 时使用唯一在线设备。
     timeout:
@@ -76,12 +77,22 @@ class Hdc:
     DEVICE_TMP = '/data/local/tmp'
 
     # 常见 hdc 位置（含通配展开）
+    #
+    # 顺序即优先级。前面几条命中就返回，所以**只在末尾追加**新位置 ——
+    # 冒然插到前面会改变既有环境的解析结果（hdc 本身跨版本兼容，
+    # 但换一个 binary 就换一套默认行为，不值得为此改变现状）。
     COMMON_PATHS = [
         r'C:\Users\{user}\ohos-sdk\*\extracted\toolchains\hdc.exe',
         r'C:\Users\{user}\ohos-sdk\extracted\toolchains\hdc.exe',
         r'C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe',
         r'C:\Users\{user}\AppData\Local\Huawei\Sdk\openharmony\*\toolchains\hdc.exe',
         r'C:\Users\{user}\AppData\Local\OpenHarmony\Sdk\*\toolchains\hdc.exe',
+        # OpenHarmony 官方 release SDK 解压后的布局：
+        #   <盘>\ohos-sdk\<apiVersion>\toolchains\hdc.exe
+        # 2026-09-21 起本机在 D:\ohos-sdk\<ver> 部署了 5.0.3.135（API 15）那一套，
+        # 与 DEVICE 同版本号，所以也纳进来做兜底。
+        r'D:\ohos-sdk\*\toolchains\hdc.exe',
+        r'C:\ohos-sdk\*\toolchains\hdc.exe',
     ]
 
     # 配置文件候选位置（相对于当前工作目录向上查找，以及用户目录）
@@ -229,7 +240,13 @@ class Hdc:
                 if self.verbose:
                     print(f'[hdc] {" ".join(cmd)}  -> rc={proc.returncode}')
 
-                if res.ok or not check:
+                if res.ok:
+                    return res
+                if not check and attempt >= retries:
+                    # check=False：失败不抛错，但 **retries 仍要生效** ——
+                    # 原实现在这里无条件 return，retries 参数形同虚设
+                    # （2026-09-26 全项目评审 #10）。重试耗尽后返回最后一次
+                    # 的结果，调用方按 rc 自行判断 —— 这才是 check=False 的本意。
                     return res
                 last_err = HdcError(f'hdc 执行失败 rc={proc.returncode}: {err.strip()[:300]}')
             except subprocess.TimeoutExpired:
@@ -369,6 +386,23 @@ class Hdc:
     def _ui_input(self, *parts) -> None:
         self.shell('uitest uiInput ' + ' '.join(str(p) for p in parts), check=True)
 
+    @staticmethod
+    def _sh_quote(s) -> str:
+        """POSIX shell 单引号包裹 —— 让整段文本被设备侧 shell 当成**一个**参数。
+
+        为什么必须加这一层：`hdc shell` 过来的命令在设备侧会被 shell **重新分词**，
+        含空格的文本会被当场拆成多个参数。
+
+        为什么用单引号而不是双引号：单引号内 `$`、反引号、`"`、`\\`、空格全部退化成
+        字面字符，不需要逐个转义 —— 而 UI 测试里输入 `$100`、路径、JSON 片断这类
+        文本是常态，逐个转义既容易漏、也容易转义错。
+        单引号内**只有单引号本身**需要特殊处理：先结束引号，插一个转义的单引号，再重开。
+
+        ⚠️ 配套：`ohauto/sim.py` 解析命令时必须用 `shlex.split`（而不是 `str.split`），
+        否则模拟环境会把引号当成文本的一部分，两侧行为就此分叉。
+        """
+        return "'" + str(s).replace("'", "'\\''") + "'"
+
     def click(self, x: int, y: int) -> None:
         self._ui_input('click', int(x), int(y))
 
@@ -379,8 +413,9 @@ class Hdc:
         self._ui_input('longClick', int(x), int(y))
 
     def input_text(self, x: int, y: int, text: str) -> None:
-        # 文本含空格时需保证被当作单个参数传入，hdc 侧再拼成一条 shell 命令
-        self._ui_input('inputText', int(x), int(y), text)
+        # 文本必须整体作为**一个**参数下到设备侧 shell —— 见 `_sh_quote` 的说明。
+        # 含空格/引号/$ 的输入文本在 UI 测试里是高频场景，不是边角情况。
+        self._ui_input('inputText', int(x), int(y), self._sh_quote(text))
 
     def swipe(self, fx: int, fy: int, tx: int, ty: int, velocity: int = 600) -> None:
         self._ui_input('swipe', int(fx), int(fy), int(tx), int(ty), velocity)

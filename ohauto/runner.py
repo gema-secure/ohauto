@@ -16,7 +16,7 @@
 核心设计：
 
     FailureKind     失败分类   —— 不同原因必须不同处置（重试 / 恢复 / 直接判负）
-    RetryPolicy     重试策略   —— 分级重试 + 指数退避，断言失败不重试
+    RetryPolicy     重试策略   —— 分级重试 + **线性**退避（`base * n`），断言失败不重试
     DeviceGuard     设备看护   —— 心跳 + 连接级自愈
     StepResult      步骤结果   —— 保留每一次尝试，可回溯「第几次才成功」
     CaseResult      用例结果   —— 区分「原始成功率」与「独立成功率」
@@ -449,6 +449,38 @@ class StepResult:
     recovered: bool = False       # 这步通过设备恢复才救回来
     cascade: bool = False         # 疑似被前面某步的失败带崩
     cascade_of: Optional[int] = None   # 追溯到哪一步
+    # 失败时顺手抓的控件树快照（本地文件路径，JSON 文本）。
+    # 为什么需要：归因引擎判「定位失败」靠的是「目标控件在**所有**快照里都不存在」
+    # 这条硬证据（diagnose._locator）。只有 kind/attempts 时它只能退回运行器分类，
+    # 置信度从 0.85 掉到 0.6。抓不到就留空列表 —— 归因侧本来就兼容这种情况。
+    trees: List[str] = field(default_factory=list)
+    # 定位器 id（A 的 `LocateResult.locator_id` 原样回写）。
+    # 为什么需要：归因定案为「定位失败」后要调 `A.record_locator_failure(locator_id)`
+    # 回写健康度台账 —— 没有 id 就回写不了，那条链路等于断的。
+    # 为什么不在归因侧现拼：id 是定位器**自己**的身份，拼出来的是假账
+    # （会在 A 的台账里塞空 id 记录）。所以由执行器在定位后原样写入。
+    # 2026-09-23 新增，见 docs/给B-回执-2026-09-23.md §6.1。
+    locator_id: Optional[str] = None
+    # 失败归因结论（`diagnose.Verdict`）。**仅当 Runner 开启 `diagnose_failures` 时才有**，
+    # 默认 None 表示「没做归因」而不是「归因结论为空」—— 两者必须能区分。
+    #
+    # 为什么标注成 Any 而不是 `diagnose.Verdict`：runner 不该硬依赖归因引擎
+    # （B 的模块），而且测试里要能注入替身。真实类型由 `Runner.diagnoser` 决定。
+    # 为什么放在 StepResult 上：归因的输入就是「一个失败步」，结论天然属于它 ——
+    # 放在 CaseResult 上就得再维护一份 step_index 映射，多一个能对错的地方。
+    verdict: Optional[Any] = None
+
+    @property
+    def diagnosed(self) -> bool:
+        """这一步是否拿到了归因结论。"""
+        return self.verdict is not None
+
+    @property
+    def verdict_cn(self) -> str:
+        """归因结论的中文一句话（供日志/报告直接打印）。"""
+        if self.verdict is None:
+            return ''
+        return str(self.verdict)
 
     @property
     def attempt_count(self) -> int:
@@ -476,6 +508,13 @@ class StepResult:
         if self.cascade:
             d['cascade'] = True
             d['cascade_of'] = self.cascade_of
+        if self.trees:
+            d['trees'] = list(self.trees)
+        # 归因结论（挑战 #5 的证据链出口）：有才输出，且**不带** None 占位 ——
+        # 报告消费方用「有没有 verdict 键」就能区分「没做归因」与「归因为空」。
+        if self.verdict is not None:
+            d['verdict'] = (self.verdict.to_dict()
+                            if hasattr(self.verdict, 'to_dict') else self.verdict)
         return d
 
 
@@ -518,11 +557,65 @@ class CaseResult:
         return round(self.passed / self.total, 4) if self.total else 1.0
 
     @property
-    def independent_success_rate(self) -> float:
-        """独立成功率 —— 执行引擎 验收指标。"""
+    def non_cascade_failure_rate(self) -> float:
+        """**非级联失败率** —— 只衡量「引擎健壮性」，**不是成功率**。
+
+        与 `success_rate` / `ok` 是三个不同的东西，各回答一个问题：
+
+        | 属性 | 回答的问题 |
+        |---|---|
+        | `non_cascade_failure_rate` | 失败会不会连累后面（引擎健壮性） |
+        | `success_rate` | 这次跑通了没有（含级联影响） |
+        | `ok` / `health_ok` | 用例整体是否通过 |
+
+        ⚠️ **反例（外部评审算过、C 复核成立）**：50 步全部因同一原因失败 →
+        49 步被判 cascade → 本值 = 0.98。但 `ok` 仍然是 False。
+        所以它**必须与 `ok` / `all_failed` / `health_ok` 一起展示**，
+        禁止单独当作通过依据。
+
+        2026-09-23 由 `independent_success_rate` 改名而来 ——
+        旧名鼓励误读（「独立成功率 0.98」在整体失败时是最危险的一句话）。
+        """
         if not self.total:
             return 1.0
         return round((self.total - self.independent_failed) / self.total, 4)
+
+    @property
+    def independent_success_rate(self) -> float:
+        """【已弃用】旧名容易被读成「成功率」。用 `non_cascade_failure_rate`。"""
+        import warnings
+        warnings.warn(
+            'independent_success_rate 已改名为 non_cascade_failure_rate：'
+            '它在用例整体失败时仍会给出高分（50 步全挂 → 0.98），不是成功率。'
+            '判整体成败请用 ok / health_ok / all_failed。',
+            DeprecationWarning, stacklevel=2)
+        return self.non_cascade_failure_rate
+
+    @property
+    def all_failed(self) -> bool:
+        """全部步骤都失败 —— 这种情况下任何「率」都不该被当成通过。"""
+        return self.total > 0 and self.failed == self.total
+
+    @property
+    def health_ok(self) -> bool:
+        """用例整体健康 —— 与 `non_cascade_failure_rate` **并列**，不互相替代。
+
+        为什么不能只用 `all_failed` 挡：它只挡「100% 失败」，挡不住
+        「50 步挂 45 步、其中 44 步判 cascade」—— 那种情况下
+        `non_cascade_failure_rate = 0.98` 且 `all_failed = False`，**照样好看**。
+
+        所以 KPI 判定要**两个条件同时**满足，报告里两个数并排打。
+        """
+        return self.failed == 0
+
+    def kpi_ok(self, target: float = 0.95) -> bool:
+        """引擎健壮性 KPI。**整体不健康时直接判不通过**，不管那个率多漂亮。
+
+        两道闸缺一不可（见 `health_ok` 的说明）：
+        ① `health_ok` —— 有步骤失败就不算通过；
+        ② `non_cascade_failure_rate >= target` —— 失败也没大量连累后面。
+        """
+        return self.health_ok and self.non_cascade_failure_rate >= target
 
     @property
     def retry_attempts(self) -> int:
@@ -561,8 +654,12 @@ class CaseResult:
             'cascade_failed': self.cascade_failed,
             'independent_failed': self.independent_failed,
             'success_rate': self.success_rate,
-            'independent_success_rate': self.independent_success_rate,
+            'non_cascade_failure_rate': self.non_cascade_failure_rate,
+            # 旧 key 保留到 W4（下游报告/示例可能还在读），值同新 key。
+            'independent_success_rate': self.non_cascade_failure_rate,
             'ok': self.ok,
+            'health_ok': self.health_ok,
+            'all_failed': self.all_failed,
             'elapsed_ms': self.elapsed_ms,
             'device_recoveries': self.device_recoveries,
             'retry_attempts': self.retry_attempts,
@@ -607,18 +704,48 @@ class SuiteResult:
         return round(self.passed / self.total, 4) if self.total else 1.0
 
     @property
-    def independent_success_rate(self) -> float:
+    def non_cascade_failure_rate(self) -> float:
+        """**非级联失败率** —— 只衡量「引擎健壮性」，**不是成功率**。
+
+        见 `CaseResult.non_cascade_failure_rate` 的完整说明与反例。
+        汇总级同样必须与 `ok` / `all_failed` / `health_ok` 一起展示。
+        """
         if not self.total:
             return 1.0
         return round((self.total - self.independent_failed) / self.total, 4)
+
+    @property
+    def independent_success_rate(self) -> float:
+        """【已弃用】旧名容易被读成「成功率」。用 `non_cascade_failure_rate`。"""
+        import warnings
+        warnings.warn(
+            'independent_success_rate 已改名为 non_cascade_failure_rate：'
+            '它在用例整体失败时仍会给出高分，不是成功率。'
+            '判整体成败请用 ok / health_ok / all_failed。',
+            DeprecationWarning, stacklevel=2)
+        return self.non_cascade_failure_rate
+
+    @property
+    def all_failed(self) -> bool:
+        """全部步骤都失败 —— 这种情况下任何「率」都不该被当成通过。"""
+        return self.total > 0 and self.failed == self.total
+
+    @property
+    def health_ok(self) -> bool:
+        """所有用例都健康 —— 与 `non_cascade_failure_rate` **并列**。"""
+        return self.failed == 0
 
     @property
     def ok(self) -> bool:
         return all(c.ok for c in self.cases)
 
     def kpi_ok(self, target: float = 0.95) -> bool:
-        """执行引擎 验收：独立成功率是否达到目标（默认 95%）。"""
-        return self.independent_success_rate >= target
+        """执行引擎 验收：**整体健康** 且 非级联失败率达标（默认 95%）。
+
+        两道闸缺一不可 —— 只靠那个率会让「大部分同类失败」的用例集
+        拿到漂亮分数（见 `CaseResult.health_ok` 的说明）。
+        """
+        return self.health_ok and self.non_cascade_failure_rate >= target
 
     def failures_by_kind(self) -> Dict[str, int]:
         out: Dict[str, int] = {}
@@ -634,8 +761,12 @@ class SuiteResult:
             'failed': self.failed, 'cascade_failed': self.cascade_failed,
             'independent_failed': self.independent_failed,
             'success_rate': self.success_rate,
-            'independent_success_rate': self.independent_success_rate,
+            'non_cascade_failure_rate': self.non_cascade_failure_rate,
+            # 旧 key 保留到 W4（下游报告/示例可能还在读），值同新 key。
+            'independent_success_rate': self.non_cascade_failure_rate,
             'ok': self.ok,
+            'health_ok': self.health_ok,
+            'all_failed': self.all_failed,
             'elapsed_ms': self.elapsed_ms,
             'failures_by_kind': self.failures_by_kind(),
             'guard_stats': self.guard_stats,
@@ -656,6 +787,24 @@ class Runner:
     artifact_budget:  每个用例跑完后最多保留多少个产物文件，超出按「失败优先」清理
                       0 或 None 表示不清理。50 步连续执行会产出上百个截图，
                       不限制会直接撑爆磁盘。
+    diagnose_failures: 失败步是否做归因（挑战 #5 闭环）。**默认 False**，不改变既有行为。
+                      开启后每个失败步调一次 `diagnose_failed_step`，结论写进
+                      `StepResult.verdict`，并随报告落盘。
+    diagnoser:        归因函数，签名 `(step_result, driver) -> Verdict`。
+                      None 时用 `diagnose.diagnose_failed_step`（延迟导入，避免硬依赖）。
+                      测试可以注入替身，不必真跑归因引擎。
+    diagnose_signals: 归因时是否**采集设备侧信号**（崩溃/白屏/无响应/无窗口）。
+                      默认 False = 只用产物目录里已有的控件树快照做离线归因（无设备往返）。
+                      置 True 才会调 `collect_signals()` —— 每步失败多一次设备往返，
+                      真机批量时明显变慢，所以单独开关。
+    diagnose_locator_sink: 归因为「定位失败」时回写 A 的自愈台账，签名
+                      `(locator_id, reason)`。⚠️ 与上面的 `locator_sink` **不是同一个东西**
+                      （那个递的是 DSL 原始规格，这个递的是定位器 id）—— 见下面注释。
+                      ⚠️ 更要紧的一条：**不要和 `locator_sink` 同时接** ——
+                      两条路都回写会把同一次失败计两遍，把 A 修好的幂等又破坏掉。
+                      集成层目前选的是执行侧那条（`locator_sink`）。
+    locator_id_resolver: 规格 → locator_id 的反查（集成层注入）。**只给归因结论补 id**，
+                      不回写。不接也能跑，只是归因结论里 locator_id 为空。
     """
 
     def __init__(
@@ -666,6 +815,12 @@ class Runner:
         artifact_budget: Optional[int] = 60,
         verbose: bool = True,
         sleep_fn: Callable[[float], None] = time.sleep,
+        locator_sink: Optional[Callable[[Dict[str, Any], str], None]] = None,
+        diagnose_failures: bool = False,
+        diagnoser: Optional[Callable[..., Any]] = None,
+        diagnose_signals: bool = False,
+        diagnose_locator_sink: Optional[Callable[[str, str], None]] = None,
+        locator_id_resolver: Optional[Callable[[Dict[str, Any]], str]] = None,
     ):
         self.policy = policy or RetryPolicy()
         self.guard = guard
@@ -673,12 +828,87 @@ class Runner:
         self.artifact_budget = artifact_budget or 0
         self.verbose = verbose
         self._sleep = sleep_fn
+        # 定位失败回写钩子（分工卡第五章契约：执行失败要回写，让 A 的自愈有输入）。
+        # 签名为 sink(target_spec, reason)，target_spec 是 DSL 里那个原始规格
+        # （如 {'id': '7'}），reason 是失败原因。
+        #
+        # ⚠️ 为什么传「规格」而不是「locator_id」：locator_id 是 A 的
+        # `LocatorManager` 在自己册子里发的水号（L001_xxx），而执行器的定位
+        # 走的是 matcher/layout，**手里根本没有这个号**。硬要 runner 认识它
+        # 就得把 LocatorManager 塞进执行链路（改动太大）。所以这里定义成
+        # 「把规格原样递出去」，由集成层（tools/wire_locator_sink.py）负责
+        # 反查成 locator_id —— 两边都不必知道对方的内部结构。
+        self.locator_sink = locator_sink
+
+        # ---- 失败归因（挑战 #5 闭环，2026-09-23）
+        # 在此之前 `diagnose_failed_step()` 已经就绪、`StepResult.trees/locator_id`
+        # 也早就备好了，但**生产链路一次都没调用过** —— 归因只能靠 examples 手动跑，
+        # 所以「崩溃 ✅ / 白屏 ✅」没有证据链。这里把它接进失败分支。
+        self.diagnose_failures = bool(diagnose_failures)
+        self.diagnoser = diagnoser
+        self.diagnose_signals = bool(diagnose_signals)
+        # ⚠️ 与 self.locator_sink **不是同一个东西**，签名也不同：
+        #     self.locator_sink(spec, reason)        ← 执行器递「DSL 原始规格」
+        #     diagnose_locator_sink(locator_id, reason) ← 归因递「定位器 id」
+        # 直接复用会把规格当 id 传出去，在 A 的健康度台账里塞假账 —— 所以分成两个参数。
+        self.diagnose_locator_sink = diagnose_locator_sink
+        # ── 自愈喂料（2026-09-25）：给 sink 递「执行尝试序号」──────────
+        # A 的幂等键是 (定位代次, locator_id)，而代次只在 locate() 推进；
+        # 执行器走 matcher，从不调 locate() → 代次恒 0，第 2 次回写起
+        # 全被 A 判成「同一次定位的重复记账」丢弃 → 连续失败停在 1，
+        # 自愈阈值永远够不着（tools/wire_locator_sink.py 自测诊断段有证据）。
+        # 修法：runner 每次回写递增一个单调序号随 sink 传出；A 侧把它
+        # 当幂等键（locator.py 需加可选参数，见 docs/派活-给A-自愈幂等代次）。
+        # sink 侧做签名自适应：旧的两参 sink 照常工作（A 修完前不炸）。
+        self._attempt_seq = 0
+        self._sink_takes_attempt = self._probe_sink_signature(locator_sink)
+        # 规格 → locator_id 的反查（集成层注入）。**只用于给归因结论补 id**，
+        # 不回写 —— 回写只有 `_report_locator_failure` 一条路，见那里。
+        self.locator_id_resolver = locator_id_resolver
+        # 归因自身的失败（不是被测应用的失败）。归因是**旁路**，它挂了不能影响执行，
+        # 但也不能静默 —— 攒起来供报告/调用方检查。
+        self.diagnose_errors: List[str] = []
 
     # ---------------------------------------------------------- 日志
 
     def _log(self, msg: str) -> None:
         if self.verbose:
             print(f'[runner] {msg}')
+
+    # ---------------------------------------------------------- 失败归因（挑战 #5 闭环）
+
+    def _diagnose_step(self, driver: Driver, sr: StepResult) -> Optional[Any]:
+        """对一个失败步做归因，返回 `Verdict`；不做/做不了都返回 None。
+
+        **归因是旁路**：它自己出错绝不能影响执行结果 —— 被测用例跑挂了是事实，
+        不能因为归因引擎抛异常把整轮执行也带崩。所以这里吞掉一切异常、
+        记进 `self.diagnose_errors`。
+
+        「没做归因」和「归因结论为空」是两回事，靠 `StepResult.verdict is None`
+        与 `diagnose_failures` 区分 —— 报告消费方要能看出差别。
+        """
+        if not self.diagnose_failures:
+            return None
+        try:
+            if self.diagnoser is not None:          # 注入的替身（测试/自定义）
+                return self.diagnoser(sr, driver)
+            # 延迟导入：runner 不硬依赖归因引擎（B 的模块），也避免包级导入顺序问题。
+            from .diagnose import diagnose_failed_step
+            adir = getattr(driver, 'artifact_dir', None)
+            # 只有显式开了 diagnose_signals 才把 hdc 传下去 —— 传了它就会去采
+            # 崩溃日志/截图/控件树，那是每步失败一次设备往返。
+            hdc = getattr(driver, 'hdc', None) if self.diagnose_signals else None
+            return diagnose_failed_step(
+                sr,
+                bundle=getattr(driver, 'bundle', '') or '',
+                ability=getattr(driver, 'ability', 'EntryAbility') or 'EntryAbility',
+                artifact_dir=adir, hdc=hdc, out_dir=adir,
+                locator_sink=self.diagnose_locator_sink)
+        except Exception as e:
+            self.diagnose_errors.append(
+                f'步骤 {sr.index} 归因失败（已降级为「不做归因」，不影响执行结果）：'
+                f'{type(e).__name__}: {e}')
+            return None
 
     # ---------------------------------------------------------- 单步
 
@@ -718,6 +948,10 @@ class Runner:
                 if exhausted or too_long:
                     sr.ok = False
                     sr.kind = kind
+                    # 判定失败之前先留现场 —— 归因引擎靠它把置信度从 0.6 提到 0.85
+                    self._capture_trees(driver, sr)
+                    # 定位失败要回写，否则 A 的定位器自愈永远拿不到输入
+                    self._report_locator_failure(sr)
                     break
 
                 # 设备类 / 应用类失败 → 先做恢复，再重试
@@ -735,6 +969,153 @@ class Runner:
         sr.elapsed_ms = int((time.time() - t_step) * 1000)
         return sr
 
+    # ---------------------------------------------------------- 失败现场
+
+    #: 抓两张快照之间的间隔。第二张用来区分「控件自始不存在」与「界面还没稳定」。
+    SNAPSHOT_GAP_MS = 200
+
+    def _capture_trees(self, driver: Driver, sr: StepResult) -> None:
+        """步骤判定失败时留现场：抓控件树快照，供归因引擎判「定位失败」。
+
+        **为什么抓两张**：失败瞬间一张、稍等之后一张 ——
+          * 两张里都没有目标控件 → 定位失败（界面里就是没有）
+          * 只有后一张有         → 时序问题（界面还没稳定）
+        `diagnose._locator` / `_timing` 就是按这个前提写的。
+
+        **为什么整段包 try/except**：抓快照是**尽力而为**的旁路。它失败绝不能
+        改写原判定 —— 本来是「定位失败」，不能因为抓图失败变成「未知异常」。
+        抓不到就留空列表（归因侧本来就兼容：退回运行器分类、置信度下调、
+        并在 evidence 里写明没有快照）。
+
+        **为什么只抓失败步**：成功步抓图会让 50 步的用例多出上百次 dumpLayout，
+        既拖慢执行又会把 artifact_budget 挤爆 —— 产物轮转是按「失败优先」
+        保护文件的（见 `_prune_artifacts`），失败的现场必须留得下。
+        """
+        adir = getattr(driver, 'artifact_dir', None)
+        for delay_ms in (0, self.SNAPSHOT_GAP_MS):
+            try:
+                if delay_ms:
+                    self._sleep(delay_ms / 1000.0)
+                before = (set(os.listdir(adir))
+                          if adir and os.path.isdir(adir) else set())
+                node = driver.refresh(save=True)
+                if adir:
+                    # refresh(save=True) 会把 JSON 落到 <artifact_dir>/NNNN_layout.json，
+                    # 但不回传路径；用目录差集拿到它，避免去动 driver 的既有签名。
+                    after = (set(os.listdir(adir))
+                             if os.path.isdir(adir) else set())
+                    fresh = [os.path.join(adir, f)
+                             for f in sorted(after - before)
+                             if f.endswith('.json')]
+                    if fresh:
+                        sr.trees.append(fresh[0])
+                        continue
+                if node is not None:
+                    # 没配 artifact_dir：退回内存形态（归因侧接受 LayoutNode）
+                    sr.trees.append(node)          # type: ignore[arg-type]
+            except Exception as e:                 # noqa: BLE001 —— 旁路，绝不外抛
+                self._log(f'步骤 {sr.index} 控件树快照抓取失败（不影响原判定）：'
+                          f'{type(e).__name__}: {e}')
+                return
+        # ★ 回填到 driver 的 step 上 —— 这一步不能省。
+        # 报告的数据源是 **driver.Step**（`report.collect()` 取的是
+        # `driver.summary()['failed_steps']`，而那是 `driver.Step.to_dict()`），
+        # 不回填的话快照只活在 `runner.StepResult` 里，报告里一个字都看不到。
+        # 顺带填了 `driver.Step.layout_json` —— 那个字段一直在 `to_dict` 的输出
+        # 清单里，但**从来没有任何地方给它赋过值**，所以报告里的「控件树」一直是空的。
+        self._attach_trees_to_driver_step(driver, sr)
+
+    @staticmethod
+    def _attach_trees_to_driver_step(driver: Driver, sr: StepResult) -> None:
+        """把快照路径挂到 driver 最后一个 step 上（报告靠它渲染）。"""
+        try:
+            steps = getattr(driver, 'steps', None)
+            if not steps or not sr.trees:
+                return
+            paths = [str(t) for t in sr.trees if isinstance(t, str)]
+            if not paths:
+                return
+            step = steps[-1]
+            step.layout_json = paths[0]                      # 失败瞬间
+            if len(paths) > 1:
+                step.extra['layout_after'] = paths[1]        # 稳定后
+        except Exception as e:                              # noqa: BLE001 —— 旁路
+            self._log(f'快照回填 driver 失败（不影响原判定）：{type(e).__name__}: {e}')
+
+    # ---------------------------------------------------------- 失败回写
+
+    def _resolve_locator_id(self, sr: StepResult) -> str:
+        """把「目标规格」翻成 A 的 `locator_id`，填进 `StepResult.locator_id`。
+
+        为什么需要这一步（2026-09-23 闭环接线的最后一环）：
+        归因定案「定位失败」后，结论里要带上 `locator_id` —— 否则归因只能说
+        「没能回写定位器自愈」（`diagnose.py:929` 就是这么写的），
+        读者看不出该去修哪个定位器。
+
+        但执行器的定位走 `matcher`/`layout`，手里只有 DSL 里的原始规格
+        （如 `{'id': '7'}`），**没有** A 册子里发的那个号（`L001_7`）。
+        runner **不认识也不该认识** `LocatorManager`（那是 A 的模块），
+        所以做成钩子：由集成层注入反查函数
+        （`tools/wire_locator_sink.make_locator_id_resolver`）。
+
+        ⚠️ 本方法**只填 id、不回写**。回写仍然是 `_report_locator_failure`
+        的唯一职责 —— 两条路径都回写会把失败**计两次**，把 A 修好的幂等
+        又破坏掉（表现为自愈阈值被提前触发）。
+        """
+        if self.locator_id_resolver is None or sr.kind is not FailureKind.LOCATE:
+            return ''
+        try:
+            spec = sr.arg if isinstance(sr.arg, dict) else {'arg': sr.arg}
+            return str(self.locator_id_resolver(dict(spec)) or '')
+        except Exception as e:                 # noqa: BLE001 —— 旁路，绝不上抛
+            self._log(f'locator_id 反查异常（不影响原判定）：{type(e).__name__}: {e}')
+            return ''
+
+    def _report_locator_failure(self, sr: StepResult) -> None:
+        """定位失败时回写，供 A 的定位器健康度与自愈使用（分工卡第五章契约）。
+
+        **只在 `kind is LOCATE` 时回写。** 设备掉线、应用崩溃同样会让步骤失败，
+        但它们不是「这个定位器找不到了」—— 混进去会污染健康度账本，
+        进而让自愈在错误的时机换代（把好好的定位器换掉）。
+
+        旁路：回写出任何问题都绝不改写原判定，整段包 try/except。
+        """
+        if self.locator_sink is None or sr.kind is not FailureKind.LOCATE:
+            return
+        try:
+            spec = sr.arg if isinstance(sr.arg, dict) else {'arg': sr.arg}
+            reason = ''
+            for a in reversed(sr.attempts):
+                if not a.ok and a.error:
+                    reason = a.error
+                    break
+            self._attempt_seq += 1      # 每次「定案失败的回写」= 一次新的执行尝试
+            if self._sink_takes_attempt:
+                self.locator_sink(dict(spec), reason or f'步骤 {sr.index} 定位失败',
+                                  self._attempt_seq)
+            else:
+                self.locator_sink(dict(spec), reason or f'步骤 {sr.index} 定位失败')
+        except Exception as e:                 # noqa: BLE001 —— 旁路，绝不上抛
+            self._log(f'定位失败回写异常（不影响原判定）：{type(e).__name__}: {e}')
+
+    @staticmethod
+    def _probe_sink_signature(sink) -> bool:
+        """sink 是否接受第三个位置参数 attempt（旧两参 sink 兼容）。"""
+        if sink is None:
+            return False
+        try:
+            import inspect
+            for p in inspect.signature(sink).parameters.values():
+                if p.kind is inspect.Parameter.VAR_POSITIONAL:
+                    return True
+                if p.name == 'attempt' and p.kind in (
+                        inspect.Parameter.POSITIONAL_ONLY,
+                        inspect.Parameter.POSITIONAL_OR_KEYWORD):
+                    return True
+        except (TypeError, ValueError):
+            return False
+        return False
+
     # ---------------------------------------------------------- 用例
 
     def run_case(self, driver: Driver, case: Dict[str, Any]) -> CaseResult:
@@ -747,6 +1128,8 @@ class Runner:
 
         for i, st in enumerate(steps, 1):
             if not isinstance(st, dict) or not st:
+                # 这一支**不做归因**：步骤本身不是合法 DSL，不是被测应用的问题，
+                # 归因引擎对它只能给 UNKNOWN + 低置信度，纯属噪音。
                 sr = StepResult(index=i, action='?', ok=False,
                                 kind=FailureKind.DSL,
                                 attempts=[StepAttempt(attempt=1, ok=False,
@@ -779,6 +1162,20 @@ class Runner:
                 else:
                     first_failure = i
 
+            # ---- 失败归因（挑战 #5 闭环）
+            # 放在级联判定之后：级联步也照样归因 —— 「这步为什么挂」和
+            # 「它是不是被前面带崩的」是两个独立问题，报告的读者两个都要看。
+            # 归因是旁路，抛异常已在 _diagnose_step 内降级，不会影响执行。
+            if not sr.ok:
+                # 先把 locator_id 补上 —— 归因结论要靠它指认「该修哪个定位器」。
+                # 注意这里**不回写**：回写已在 run_step 里由 _report_locator_failure
+                # 做过一次，再来一次就是重复计数。
+                if not sr.locator_id:
+                    lid = self._resolve_locator_id(sr)
+                    if lid:
+                        sr.locator_id = lid
+                sr.verdict = self._diagnose_step(driver, sr)
+
             if self.verbose:
                 flag = 'OK  ' if sr.ok else 'FAIL'
                 extra = ''
@@ -790,6 +1187,10 @@ class Runner:
                     extra += f' [级联<-{sr.cascade_of}]'
                 self._log(f'{flag} {i:>3}/{len(steps)} {action:<12} '
                           f'{sr.target[:38]:<38} ({sr.elapsed_ms}ms){extra}')
+                # 归因结论必须当场可见 —— 藏在产物 JSON 里的结论，
+                # 在没人翻文件的批处理里等于没做（同「只打印警告等于不存在」）。
+                if sr.diagnosed:
+                    self._log(f'     归因: {sr.verdict_cn}')
 
             res.steps.append(sr)
             if not sr.ok and not self.continue_on_fail:

@@ -50,6 +50,10 @@ class Step:
     screenshot: Optional[str] = None
     layout_json: Optional[str] = None
     node_path: Optional[str] = None
+    #: 可定位规格（id/text/text_deep/type）—— 挑战 #6 用例沉淀的原料。
+    #: 只记客观属性、**绝不记坐标**（红线）；留痕只有 node_path(type+id) 时，
+    #: 真机 id 覆盖率仅 5.62%，沉淀出的用例会退化成按 type 歧义匹配。
+    node_spec: Optional[Dict[str, Any]] = None
     coords: Optional[Tuple[int, int]] = None
     error: Optional[str] = None
     extra: Dict[str, Any] = field(default_factory=dict)
@@ -61,6 +65,8 @@ class Step:
             v = getattr(self, k)
             if v:
                 d[k] = v
+        if self.node_spec:
+            d['node_spec'] = dict(self.node_spec)
         if self.coords:
             d['coords'] = list(self.coords)
         if self.extra:
@@ -158,6 +164,24 @@ class Driver:
         self._step_no += 1
         return Step(index=self._step_no, kind=kind, target=target, value=value)
 
+    @staticmethod
+    def _fill_node_spec(step: Step, node: LayoutNode) -> None:
+        """留痕附带可定位规格 —— 挑战 #6 沉淀用例的原料。
+
+        只记「重放时能重新匹配到」的客观属性：
+          id 最稳（但真机覆盖率仅 5.62%）；文案次之 —— 可点容器自身
+          id/text 常全空，文案在子节点上，所以 text 空时取 text_deep 兜底；
+          type 不进 spec（同类型成堆，沉淀侧拿它必然歧义）。
+        """
+        spec: Dict[str, Any] = {}
+        if node.id:
+            spec['id'] = node.id
+        text = (node.text or '').strip() or (getattr(node, 'text_deep', '') or '').strip()
+        if text:
+            spec['text'] = text
+        if spec:
+            step.node_spec = spec
+
     # -------------------------------------------------------- 控件树
 
     def refresh(self, unfiltered: bool = False, with_attrs: bool = False,
@@ -252,6 +276,7 @@ class Driver:
                 if node is not None:
                     if step is not None:
                         step.node_path = node.path
+                        self._fill_node_spec(step, node)
                     return node
                 self._sleep(interval / 1000.0)
             raise DriverError(f'{timeout}ms 内未等到控件: {m}\n'
@@ -354,6 +379,7 @@ class Driver:
             x, y = node.center
             step.target = str(target)
             step.node_path, step.coords = node.path, (x, y)
+            self._fill_node_spec(step, node)
             if self.artifact_dir:
                 step.screenshot = self._art('before_tap.png')
                 self.hdc.pull(self.hdc.screen_cap(), step.screenshot)
@@ -395,6 +421,7 @@ class Driver:
         node = self._resolve_target(target, timeout)
         step = self._new_step('longPress', str(target), ms)
         step.coords = node.center
+        self._fill_node_spec(step, node)
         t0 = time.time()
         try:
             self.hdc.long_click(*node.center)
@@ -410,7 +437,11 @@ class Driver:
         """向输入框输入文本。
 
         注意：uiInput inputText 按坐标输入，所以必须先定位到输入框。
-        clear_first 通过「全选 + 删除」实现清空，避免叠加旧内容。
+
+        `clear_first` 的实际机制是「**先全选，再让新文本覆盖选中区**」
+        （`Ctrl+A` 之后紧接着 `inputText`，全选状态下的输入会替换选中内容）。
+        早期注释写的是「全选 + 删除」，暗示会再发一个 Del —— **实现从未发过**
+        （见下面 `if clear_first` 块里的说明），这里按实际行为订正。
         """
         step = self._new_step('input', str(target), text)
         t0 = time.time()
@@ -418,16 +449,26 @@ class Driver:
             node = self._resolve_target(target, timeout)
             x, y = node.center
             step.node_path, step.coords = node.path, (x, y)
+            self._fill_node_spec(step, node)
 
             self.hdc.click(x, y)              # 先聚焦输入框
             self.wait_idle(timeout=2000)
 
             if clear_first:
-                # Ctrl+A(2072) 全选，Del(2075) 删除
+                # Ctrl+A 全选 —— **这里刻意不再发 Del(2075)**。
+                #
+                # 依据：紧接着的 `uiInput inputText` 在「全选状态下」会用新文本
+                # **替换**选中区，已经等价于「清空并写入」。补发一个 Del 只是
+                # 多一次注入、多一处时序埋雷，在某些输入框上还会触发额外行为。
+                # （旧注释「Ctrl+A 全选，Del 删除」描述的是早期设想，与实现不符，
+                #  被当成 bug 报了 —— 这次按实际行为订正，而不是照注释去补发。）
                 try:
                     self.hdc.key_event(2072, 2038)   # Ctrl+A（部分版本生效）
-                except HdcError:
-                    pass
+                except HdcError as e:
+                    # 不抛出：全选没成功不等于输入失败，后面 input_text 会暴露真问题。
+                    # 但**不许静默** —— 写进 extra 留痕，否则「清空没生效」和
+                    # 「本来就没内容」看起来一模一样。
+                    step.extra['clear_first'] = 'Ctrl+A 未生效: %s' % e
 
             self.hdc.input_text(x, y, text)
             self.wait_idle(timeout=2000)

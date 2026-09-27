@@ -414,6 +414,17 @@ def compare_forms(
             base_bounds=base_bounds, baseline_name=name_a))
 
     # ---- 3) 合理性告警（不判差异，但报告里提示人看一眼）
+    #
+    # ★ 能力缺口留痕（2026-09-27 修）：目标形态没量到挖孔/异形区时，
+    # 「不可达（挖孔）」判据**整个没生效** —— 这不是「没有不可达问题」，
+    # 是「没法判」。必须在报告里说出来，否则读报告的人会把
+    # 「UNREACHABLE=0」当成通过。按 profile 报一次，不逐元素刷。
+    if not prof_b.has_measured_safe_area:
+        warnings.append(
+            f'{name_b} 没有挖孔/异形区的实测数据，'
+            f'「不可达（中心点落入挖孔）」判据本次未生效 —— '
+            f'报告里的 UNREACHABLE=0 不代表该形态没有不可达问题。')
+
     if elems_a and elems_b:
         ratio = len(elems_b) / len(elems_a)
         if ratio < 0.5:
@@ -513,10 +524,12 @@ def _geometric_diffs(el: Element, prof: FormProfile, form_name: str,
                       'is_new_in_target': is_new,
                       'cutouts': [list(c) for c in prof.cutouts]},
         ))
-    elif base_bounds is None and not prof.has_measured_safe_area:
-        # 兜底：挖孔数据缺失时没法判「不可达」，这是**能力缺口不是通过**。
-        # 必须留痕，否则报告会给人「这个形态没有不可达问题」的错误印象。
-        pass
+    # 2026-09-27 修（评审中危：「必须留痕」的函数体是 pass ——
+    # 红线⑤：只写注释不处置等于不存在）。挖孔数据缺失时的能力缺口
+    # 改在**报告级**留痕：compare() 的告警段对 `not prof_b.has_measured_safe_area`
+    # 统一告警一次（逐元素告警会把同一条能力缺口刷成几十遍，没人读）。
+    # 这里不再保留 elif 分支 —— 原来的 `pass` 既没留痕也没跳过任何判定，
+    # 是纯死代码。
 
     # ---- 不可达（第二类）：**可见区过小** —— 露了条边但根本点不中。
     #

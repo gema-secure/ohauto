@@ -31,7 +31,7 @@ ohauto — OpenHarmony 应用 UI 自动化能力层
     g = DeviceGuard(d.hdc)
     Runner(guard=g).run_case(d, case)
 
-★ 系统对外接口契约（所有调用方统一走这个）：
+★ 分工卡接口总表约定的 C 对外接口（A、B、CI 请统一走这个）：
     from ohauto import run
     rep = run(cases, device)          # -> RunReport
     rep.ok                            # 契约字段
@@ -51,6 +51,40 @@ from .runner import (Runner, DeviceGuard, RetryPolicy, FailureKind,
                      run, run_case, run_suite)
 from .signals import (collect_signals, Signals, CrashRecord, Anomaly,
                       parse_crash_log, parse_fault_filename)
+from .diagnose import (diagnose, diagnose_all, summarize, Verdict, Category,
+                       ExecutionRecord, CATEGORY_CN)
+# 2026-09-23 追加（B 闭环接入 API）：失败步 → Verdict 的一站式入口。
+# ⚠️ 这是**追加**，不是覆盖 —— B 交付包里的 __init__.py 基线是 9-22 之前的，
+#    整文件覆盖会丢掉下方 A 模块（locator/treesum/vision）的全部导出。
+#    见 docs/给B-回执-2026-09-23.md §2.1。
+from .diagnose import diagnose_failed_step, load_snapshots
+from .generator import (Generator, Case, TestPoint, GenerationReport,
+                        GenerationOutcome, GenerationError, RejectReason,
+                        ValidationIssue, LLMProvider, ScriptedProvider,
+                        NullProvider, OpenAICompatibleProvider,
+                        generate, generate_many,
+                        StressKind, StressSpec, SwipeSafety, STRESS_KIND_CN,
+                        generate_stress, stress_cases, build_stress_case,
+                        split_stress_cases, check_swipe_safety,
+                        swipe_endpoints, swipe_safe_scale, stress_safety_report,
+                        pick_stress_target, SWIPE_EDGE_MARGIN_PX)
+# A 模块（定位与感知）—— 分工卡接口总表：A -> B/C 的 locate / 自愈
+from .locator import (LocatorManager, LocateResult, LocatorSpec,
+                      LocatorHealth, RepairReport, LocatorMissError)
+# 2026-09-23 追加（A5 正式版）：B3 的 Generator(catalog_fn=...) 控件清单。
+# ⚠️ 同样是**追加**而非覆盖 —— A 交付包按边界声明没带 __init__.py，
+#    避免用旧版基线覆盖这里的合并版导出。
+from .treesum import (summarize_tree, summary_lines, count_nodes,
+                      control_catalog)
+# ⚠️ 集成时发现的重名：vision.py:99 与 generator.py:211 **各有一个
+#    OpenAICompatibleProvider**，基类不同（VisionProvider vs LLMProvider）、
+#    用途不同（看图出 bbox vs 文本生成用例）。两者单独开发时都无感，
+#    只有三方合并后在**包级导出**这里才会互相覆盖。
+#    处理：给 A 的那个起别名，B 的保持原名不动（不破坏已有引用）。
+#    模块内继续用原名即可 —— 全仓测试都是全限定导入（from ohauto.vision import …）。
+from .vision import (MockProvider, OpenAICompatibleProvider as VisionOpenAIProvider,
+                     HybridLocator, TieredVisionLocator, VisualTarget,
+                     VisionError, VisionConfigError, build_provider)
 
 __version__ = '0.3.0'
 
@@ -63,7 +97,31 @@ __all__ = [
     'Runner', 'DeviceGuard', 'RetryPolicy', 'FailureKind',
     'CaseResult', 'SuiteResult', 'StepResult', 'StepAttempt',
     'run', 'run_case', 'run_suite',
-    # 信号采集
+    # C4 信号采集
     'collect_signals', 'Signals', 'CrashRecord', 'Anomaly',
     'parse_crash_log', 'parse_fault_filename',
+    # B4 失败归因（分工卡接口总表：B -> C 的 diagnose）
+    'diagnose', 'diagnose_all', 'summarize',
+    'Verdict', 'Category', 'CATEGORY_CN', 'ExecutionRecord',
+    # B4 闭环接入（2026-09-23 追加）
+    'diagnose_failed_step', 'load_snapshots',
+    # B3 自然语言转用例（分工卡接口总表：B -> C 的 generate）
+    'generate', 'generate_many',
+    'Generator', 'Case', 'TestPoint', 'RejectReason', 'ValidationIssue',
+    'GenerationReport', 'GenerationOutcome', 'GenerationError',
+    'LLMProvider', 'ScriptedProvider', 'NullProvider', 'OpenAICompatibleProvider',
+    # B5 压测用例生成
+    'generate_stress', 'stress_cases', 'build_stress_case', 'split_stress_cases',
+    'StressKind', 'StressSpec', 'STRESS_KIND_CN', 'SwipeSafety',
+    'check_swipe_safety', 'swipe_endpoints', 'swipe_safe_scale',
+    'stress_safety_report', 'pick_stress_target', 'SWIPE_EDGE_MARGIN_PX',
+    # A 定位与感知（分工卡接口总表：A 的 locate / record_locator_failure /
+    # repair_locators；A5 控件树摘要器；视觉 Provider）
+    # 注意 'VisionOpenAIProvider' 是别名 —— 见上方 import 处的重名说明
+    'LocatorManager', 'LocateResult', 'LocatorSpec', 'LocatorHealth',
+    'RepairReport', 'LocatorMissError',
+    'summarize_tree', 'summary_lines', 'count_nodes', 'control_catalog',
+    'MockProvider', 'VisionOpenAIProvider', 'HybridLocator',
+    'TieredVisionLocator', 'VisualTarget', 'VisionError',
+    'VisionConfigError', 'build_provider',
 ]
