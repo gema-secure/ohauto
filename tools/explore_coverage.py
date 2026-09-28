@@ -12,20 +12,21 @@
 
 ⚠️ 两处口径必须说清楚，否则数字会骗人
 --------------------------------------
-1. **分子是「页面状态数」不是「页面数」** —— `explorer.StateGraph.states` 按内容签名去重，
-   同一页面在不同状态下会算多个（比如点过"加一"之后）。所以分子**可能大于**分母，
-   那不是"超额完成"，而是"一页多态"。**覆盖率 > 100% 时不该庆祝，该去看分母对不对。**
+1. **主指标是「页面覆盖率」**（page_path 口径，分子分母同源）：
+   `PageState.page_path` 已落地（explorer 双签名），探索到的状态按
+   设备自报的 `pagePath` 归并到页，与静态声明页面求交集。
+   **页面状态数只是辅助** —— 同一页面在不同状态下会算多个，
+   「状态数/页面数」可能 >100%，那不是超额完成，别拿它当覆盖率。
 2. **分母只含应用内页面** —— 桌面卡片（`form_config.json` 的 src）不算，
    它不在应用路由里，探索器本来就进不去（这个坑 09-24 踩过）。
-
-另外如实说明：`StateGraph.add_state` **只存内容签名的 hash、不保留 `page_path`**，
-所以本工具**没法列出"具体漏了哪一页"**，只能给数量对比。
-要精确到页，需要 `explorer.PageState` 增加 `page_path` 字段（归 B）。
+3. pagePath 归并用**双向后缀匹配**：设备侧可能是 `pages/Index`，
+   源码声明可能是 `entry/src/main/ets/pages/Index`，取能对上的那层。
 
 用法::
 
     python tools/explore_coverage.py --static-project D:/project/ohauto-hypium-test \\
         --bundle com.example.myapplication --ability EntryAbility
+    # tarpit 误伤对照：加 --tarpit-off 关闭防粘滞再跑一遍比页面覆盖
 """
 from __future__ import annotations
 
@@ -59,6 +60,18 @@ def declared_pages(project: str) -> list:
     return list(info.get('pages') or [])
 
 
+def match_page(declared: str, visited: set) -> bool:
+    """声明页 ↔ 设备 pagePath 双向后缀匹配（容器路径前缀可能不同）。"""
+    d = (declared or '').strip().strip('/')
+    for v in visited:
+        vv = (v or '').strip().strip('/')
+        if not vv:
+            continue
+        if d == vv or d.endswith('/' + vv) or vv.endswith('/' + d):
+            return True
+    return False
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--target', default=DEFAULT_TARGET)
@@ -67,6 +80,8 @@ def main() -> int:
     ap.add_argument('--ability', default='EntryAbility')
     ap.add_argument('--max-pages', type=int, default=8)
     ap.add_argument('--actions-per-page', type=int, default=4)
+    ap.add_argument('--tarpit-off', action='store_true',
+                    help='关闭防粘滞（对照 B7 的「tarpit 是否误伤」）')
     args = ap.parse_args()
 
     print('=' * 70)
@@ -80,7 +95,7 @@ def main() -> int:
         return 1
 
     from ohauto.driver import Driver
-    from ohauto.explorer import Budget, Explorer
+    from ohauto.explorer import Budget, Explorer, TarpitPolicy
 
     # 设备预检：不在场时如实报「设备连接：失败」退出，绝不带着空树往下跑
     hdc = require_device(target=args.target)
@@ -95,8 +110,10 @@ def main() -> int:
                verbose=False)
 
     ex = Explorer(d, artifact_dir=os.path.join(HERE, '_out', 'explore_coverage'),
-                  verbose=True)
-    print('\n开始探索（max_pages=%d）…' % args.max_pages)
+                  verbose=True,
+                  tarpit_policy=TarpitPolicy(enabled=not args.tarpit_off))
+    print('\n开始探索（max_pages=%d，tarpit=%s）…'
+          % (args.max_pages, '关' if args.tarpit_off else '开'))
     graph = ex.explore(args.max_pages,
                        Budget(max_pages=args.max_pages,
                               max_actions_per_page=args.actions_per_page),
@@ -104,25 +121,34 @@ def main() -> int:
 
     states = len(getattr(graph, 'states', {}) or {})
     trans = len(getattr(graph, 'transitions', []) or [])
-    rate = states / len(pages) if pages else 0.0
+    # page_path 口径：状态按设备自报 pagePath 归并到页
+    visited_paths = {str(getattr(st, 'page_path', '') or '')
+                     for st in (getattr(graph, 'states', {}) or {}).values()}
+    visited_paths.discard('')
+    covered = [p for p in pages if match_page(p, visited_paths)]
+    missing = [p for p in pages if p not in covered]
+    page_rate = (len(covered) / len(pages)) if pages else 0.0
+
     print()
     print('=' * 70)
-    print('  结果')
+    print('  结果（page_path 口径）')
     print('=' * 70)
     print('  静态声明页面数（分母）: %d  %s' % (len(pages), pages))
-    print('  探索到页面状态数（分子）: %d' % states)
-    print('  跳转数                : %d' % trans)
-    print('  覆盖率                : %.0f%%' % (rate * 100))
-    if rate > 1.0:
-        print('  ⚠️ 覆盖率 >100% —— 分子是「页面状态」不是「页面」，'
-              '同一页面多状态会重复计数，别当成超额完成')
-    elif rate < 1.0:
-        print('  ⚠️ 有缺口：静态声明了 %d 个页面，探索只到 %d 个状态'
-              % (len(pages), states))
-        print('     （注意：缺口可能来自探索预算不够，也可能来自页面确实不可达）')
-    print()
-    print('  ⚠️ 本工具给的是**数量对比**，列不出"具体漏了哪一页" ——')
-    print('     `StateGraph.add_state` 只存签名 hash、不保留 page_path（归 B）。')
+    print('  探索到达的页面        : %d  %s' % (len(covered), covered))
+    print('  页面覆盖率            : %.0f%%' % (page_rate * 100))
+    if missing:
+        print('  ❌ 漏了的页面          : %s（可能是预算不够，也可能不可达）'
+              % missing)
+    print('  探索到页面状态数（辅助）: %d   跳转数: %d' % (states, trans))
+    if states > len(pages):
+        print('  （状态数 > 页面数 = 一页多态，属正常，别把状态数当覆盖率）')
+    print('  tarpit 拦截           : %d 次%s'
+          % (len(getattr(ex, 'tarpit_hits', []) or []),
+             '（--tarpit-off 可对照）' if not args.tarpit_off else '（已关）'))
+    if page_rate < 0.9:
+        print('  ❌ 页面覆盖率 < 90%%（KPI 未达标）')
+        return 1
+    print('  ✅ 页面覆盖率 ≥ 90%（KPI 达标）')
     return 0
 
 

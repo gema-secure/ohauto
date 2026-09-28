@@ -543,6 +543,10 @@ class PageState:
     content_key: str = ''
     structural_key: str = ''
     title: str = ''
+    # 设备自报的页面路由（PageSignature.page_path 原样带出）。
+    # 签名层早就有它（参与双签名哈希），但状态层之前没带出来 ——
+    # 覆盖率工具想做「页级归并」时读不到（B 复核；C 于 09-28 B7 实测补全）。
+    page_path: str = ''
     first_seen: float = field(default_factory=time.time)
     visits: int = 0
     screenshot: Optional[str] = None
@@ -610,11 +614,13 @@ class StateGraph:
             struct_key = signature.structural_key
             content_text = signature.content
             struct_text = signature.structural
+            page_path = signature.page_path
         else:
             key = _digest(str(signature))
             struct_key = ''
             content_text = str(signature)
             struct_text = ''
+            page_path = ''
 
         if key in self.states:
             self.states[key].visits += 1
@@ -625,6 +631,7 @@ class StateGraph:
                        structural=struct_text, content_key=key,
                        structural_key=struct_key,
                        title=title or f'页面{self._auto}', screenshot=screenshot,
+                       page_path=page_path,
                        path=list(path or []))
         st.visits = 1
         self.states[key] = st
