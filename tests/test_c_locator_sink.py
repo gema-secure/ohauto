@@ -72,14 +72,12 @@ class TestRunnerSinkHook(unittest.TestCase):
         # 让每次 hdc 调用都按 device 类失败 → 步骤应被判为 DEVICE 而不是 LOCATE
         plan = FaultPlan().fail_every('any', every=1, kind='device')
         d = _driver(faults=plan)
-        try:
-            res = self.runner.run_case(d, {'name': 't', 'steps': [
-                {'tap': {'id': 'username'}}]})
-            kinds = [getattr(s.kind, 'value', None)
-                     for s in res.steps if not s.ok]
-            self.assertTrue(kinds, '故障没生效，用例竟然通过了 —— 测试本身无效')
-        except Exception:
-            pass
+        # ★ 不允许 try/except 吞自家断言：断言失败必须让测试红（评审 P2）
+        res = self.runner.run_case(d, {'name': 't', 'steps': [
+            {'tap': {'id': 'username'}}]})
+        kinds = [getattr(s.kind, 'value', None)
+                 for s in res.steps if not s.ok]
+        self.assertTrue(kinds, '故障没生效，用例竟然通过了 —— 测试本身无效')
         self.assertEqual(self.calls, [],
                          '设备类失败被当成了定位失败回写')
 

@@ -125,7 +125,7 @@ class FormCapture:
         return paths
 
 
-def profile_from_screens(screens_text: str, fallback: Tuple[int, int],
+def profile_from_screens(screens_text: str, fallback: Optional[Tuple[int, int]],
                          name: str, device: str = '',
                          kind: str = 'phone') -> FormProfile:
     """从 hidumper 原文构造 `FormProfile`。
@@ -133,6 +133,8 @@ def profile_from_screens(screens_text: str, fallback: Tuple[int, int],
     ★ **必须用实测值**，不能拿配置里的静态值 —— 静态配置没有安全区、
     且折叠态的分辨率可能与配置不一致。这里只填实测拿得到的东西，
     拿不到的字段留默认（语义是「没有」而不是「猜一个」）。
+    `fallback` 允许为 None（Driver.screen_size() 实测不到时）——
+    此时分辨率字段留默认，绝不退回猜测值。
     """
     screens = parse_screen_info(screens_text)
     active = None
@@ -143,13 +145,20 @@ def profile_from_screens(screens_text: str, fallback: Tuple[int, int],
     if active is None and screens:
         active = screens[0]
 
+    fb_w = fallback[0] if fallback else None
+    fb_h = fallback[1] if fallback else None
     if active:
-        w = int(active.get('active_width') or active.get('width')
-                or fallback[0])
-        h = int(active.get('active_height') or active.get('height')
-                or fallback[1])
+        raw_w = active.get('active_width') or active.get('width') or fb_w
+        raw_h = active.get('active_height') or active.get('height') or fb_h
     else:
-        w, h = fallback
+        raw_w, raw_h = fb_w, fb_h
+    if not raw_w or not raw_h:
+        # FormProfile.width/height 是必填 int，没有「猜一个」的余地；
+        # 抛错让 capture_online 的重试循环接住，重试耗尽则如实报采集失败。
+        raise ValueError(
+            f'{name}: 屏幕分辨率实测不到（hidumper 与控件树均不可用），'
+            '拒绝构造猜测几何的 FormProfile')
+    w, h = int(raw_w), int(raw_h)
 
     return FormProfile(
         name=name, device=device or name, kind=kind,

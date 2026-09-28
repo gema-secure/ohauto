@@ -204,9 +204,18 @@ def source_static_project(root: str, *, page: str = '',
                             reason='未提供 ArkTS 工程目录（该应用可能没有源码）')
     try:
         import sys
-        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
-            os.path.abspath(__file__))), 'tools', 'static_arkts'))
-        from bridge import analyze_project, control_hints, last_error
+        _tools_dir = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), 'tools', 'static_arkts')
+        sys.path.insert(0, _tools_dir)
+        try:
+            from bridge import analyze_project, control_hints, last_error
+        finally:
+            # bridge 已进 sys.modules，路径使命完成就恢复 ——
+            # 不恢复会把 tools/static_arkts 永久泄漏进调用方的 import 搜索路径（评审 P2）
+            try:
+                sys.path.remove(_tools_dir)
+            except ValueError:
+                pass
     except ImportError as e:
         return SourceResult('static', 'declaration', ok=False,
                             reason='静态分析模块不可用: %s' % e)

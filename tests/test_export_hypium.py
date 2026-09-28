@@ -3,7 +3,9 @@
 不 import tools/（tools 不是包），与 test_emulator_cli.py 同风格：
 真实起进程跑 `python tools/export_hypium.py`，对产物文件做内容断言。
 """
+import atexit
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -19,6 +21,10 @@ EXPORT = os.path.join(ROOT, 'tools', 'export_hypium.py')
 CASE_LOGIN = os.path.join(ROOT, 'examples', 'cases', 'login.yaml')
 PY = sys.executable
 
+#: 模块级临时根目录：_tmp_case 造的所有目录挂它下面，进程退出整体清（评审 P2）
+_TMP_ROOT = tempfile.mkdtemp(prefix='ohauto_hypium_root_')
+atexit.register(shutil.rmtree, _TMP_ROOT, True)
+
 
 def _run(*args):
     env = dict(os.environ, PYTHONIOENCODING='utf-8')
@@ -27,7 +33,7 @@ def _run(*args):
 
 
 def _tmp_case(case):
-    d = tempfile.mkdtemp(prefix='ohauto_hypium_case_')
+    d = tempfile.mkdtemp(prefix='cases_', dir=_TMP_ROOT)
     p = os.path.join(d, 'case.yaml')
     with open(p, 'w', encoding='utf-8') as f:
         yaml.safe_dump(case, f, allow_unicode=True)
@@ -39,8 +45,9 @@ class TestExportLogin(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.out = os.path.join(tempfile.mkdtemp(prefix='ohauto_hypium_'),
-                               'login.test.ets')
+        d = tempfile.mkdtemp(prefix='ohauto_hypium_')
+        cls.addClassCleanup(shutil.rmtree, d, True)
+        cls.out = os.path.join(d, 'login.test.ets')
         r = _run(CASE_LOGIN, '--out', cls.out)
         cls.rc = r.returncode
         cls.stderr = r.stderr.decode('utf-8', 'replace')

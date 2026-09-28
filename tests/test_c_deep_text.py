@@ -134,7 +134,8 @@ class TestRealDeviceSamples(unittest.TestCase):
         p = os.path.join(REAL_SAMPLES, name)
         if not os.path.isfile(p):
             self.skipTest(f'真机样本不在: {p}')
-        return parse_layout(json.load(open(p, encoding='utf-8')))
+        with open(p, encoding='utf-8') as f:
+            return parse_layout(json.load(f))
 
     def test_settings_page_all_interactive_have_meaningful_label(self):
         page = self._sample('app_settings.json')

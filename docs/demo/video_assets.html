@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>ohauto 视频素材包 · 1920×1080</title>
+<style>
+  /* 视频专用素材：每节一块 1920×1080 画布，录屏/截图时按节截取。
+     深色底为视频规格（见分镜脚本 §三.1），非页面主题。 */
+  body { margin:0; background:#05070A; font-family:"Microsoft YaHei","PingFang SC",sans-serif; }
+  .cut { position:relative; width:1920px; height:1080px; background:#10151C;
+         overflow:hidden; margin:0 auto 24px; color:#E8ECF2; }
+  .cut::before { content:attr(data-label); position:absolute; top:8px; left:12px;
+         font-size:14px; color:#3C4A5C; z-index:9; }
+  .kicker { font-size:26px; letter-spacing:8px; color:#6B7A8F; }
+
+  /* 卡1 片头 */
+  #card-title { display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  #card-title h1 { font-size:64px; margin:28px 0 18px; font-weight:700; }
+  #card-title h1 em { font-style:normal; color:#4A90D9; }
+  #card-title .sub { font-size:30px; color:#9AA7B8; }
+  #card-title .team { position:absolute; bottom:70px; font-size:24px; color:#5C6B80; }
+
+  /* 卡2 架构图 */
+  #card-arch { display:flex; align-items:center; justify-content:center; }
+  #card-arch svg { width:1800px; height:auto; }
+
+  /* 卡3 数字总表 */
+  #card-nums { display:flex; flex-direction:column; justify-content:center; padding:0 140px; }
+  #card-nums h2 { font-size:44px; margin:0 0 34px; }
+  #card-nums table { width:100%; border-collapse:collapse; font-size:28px; }
+  #card-nums th { text-align:left; color:#6B7A8F; font-weight:400; padding:14px 18px;
+                  border-bottom:1px solid #2A3646; font-size:24px; }
+  #card-nums td { padding:17px 18px; border-bottom:1px solid #1E2836; }
+  #card-nums td.n { color:#4A90D9; font-weight:700; font-size:32px; white-space:nowrap; }
+  #card-nums td.c { color:#7E8CA0; font-size:22px; }
+
+  /* 卡4 片尾 */
+  #card-end { display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  #card-end .line { font-size:34px; margin:10px 0; color:#C9D3E0; }
+  #card-end .big { font-size:46px; font-weight:700; color:#E8ECF2; margin-bottom:34px; }
+  #card-end .foot { position:absolute; bottom:70px; font-size:22px; color:#5C6B80; }
+</style>
+</head>
+<body>
+
+<!-- ═══ 卡 1 · 片头标题（镜头 1.1） ═══ -->
+<section class="cut" id="card-title" data-label="卡1 · 片头（镜头1.1 用）">
+  <div class="kicker">HARMONYOS 国创赛道 · A24</div>
+  <h1>面向 OpenHarmony 的<em>多模态</em>智能测试系统</h1>
+  <div class="sub">四源融合定位 · 失败归因与自愈 · 可信用例生成</div>
+  <div class="team">&lt;队伍名&gt; ｜ &lt;成员&gt;</div>
+</section>
+
+<!-- ═══ 卡 2 · 四源融合架构图（镜头 3 用） ═══ -->
+<section class="cut" id="card-arch" data-label="卡2 · 四源融合架构（镜头3 用）">
+<svg viewBox="0 0 1800 900" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5C6B80"/>
+    </marker>
+  </defs>
+  <style>
+    .src { fill:#1A222D; stroke-width:2; }
+    .src-t { fill:#E8ECF2; font-size:30px; font-weight:700; }
+    .src-s { fill:#8A99AD; font-size:20px; }
+    .role { font-size:19px; font-weight:700; }
+    .flow { stroke:#5C6B80; stroke-width:2.5; fill:none; marker-end:url(#arr); }
+    .core-t { fill:#E8ECF2; font-size:34px; font-weight:700; }
+    .rule { fill:#C9D3E0; font-size:22px; }
+    .cap-t { fill:#E8ECF2; font-size:26px; font-weight:700; }
+    .cap-s { fill:#8A99AD; font-size:19px; }
+  </style>
+
+  <!-- 四源（左侧，各一色） -->
+  <g>
+    <rect class="src" x="60"  y="120" width="360" height="130" rx="12" stroke="#4A90D9"/>
+    <text class="src-t" x="90" y="175">静态源码</text>
+    <text class="src-s" x="90" y="215">ArkTS 声明 · 结构</text>
+    <text class="role" x="330" y="175" fill="#4A90D9">声明</text>
+
+    <rect class="src" x="60"  y="290" width="360" height="130" rx="12" stroke="#47B39C"/>
+    <text class="src-t" x="90" y="345">运行时控件树</text>
+    <text class="src-s" x="90" y="385">真机 dumpLayout</text>
+    <text class="role" x="330" y="345" fill="#47B39C">观察</text>
+
+    <rect class="src" x="60"  y="460" width="360" height="130" rx="12" stroke="#E8A33D"/>
+    <text class="src-t" x="90" y="515">屏幕截图 · 视觉</text>
+    <text class="src-s" x="90" y="555">模型定位 bbox</text>
+    <text class="role" x="330" y="515" fill="#E8A33D">观察</text>
+
+    <rect class="src" x="60"  y="630" width="360" height="130" rx="12" stroke="#C163A8"/>
+    <text class="src-t" x="90" y="685">OCR</text>
+    <text class="src-s" x="90" y="725">纯 Canvas 唯一通道</text>
+    <text class="role" x="330" y="685" fill="#C163A8">观察</text>
+  </g>
+
+  <!-- 汇流箭头 -->
+  <path class="flow" d="M420,185 C530,185 560,380 660,415"/>
+  <path class="flow" d="M420,355 C520,355 570,410 660,435"/>
+  <path class="flow" d="M420,525 C520,525 570,490 660,465"/>
+  <path class="flow" d="M420,695 C530,695 560,520 660,485"/>
+
+  <!-- 融合内核 -->
+  <g>
+    <rect x="670" y="330" width="440" height="240" rx="16" fill="#223046" stroke="#4A90D9" stroke-width="3"/>
+    <text class="core-t" x="710" y="400">N 源融合内核</text>
+    <text class="rule" x="710" y="455">统一契约：Claim(kind,value,scope)</text>
+    <text class="rule" x="710" y="495">规则只认角色，不认来源名</text>
+    <text class="rule" x="710" y="535" fill="#E8A33D">新增源 = 一个适配器</text>
+  </g>
+
+  <!-- 三规则小字 -->
+  <g>
+    <text class="rule" x="700" y="640">双确认 → confirmed</text>
+    <text class="rule" x="700" y="680" fill="#E8A33D">声明✓ 观察✗ → missing（疑似缺陷）</text>
+    <text class="rule" x="700" y="720">声明✗ 观察✓ → undeclared</text>
+  </g>
+
+  <!-- 三能力（右侧） -->
+  <g>
+    <path class="flow" d="M1110,400 C1200,400 1210,225 1300,205"/>
+    <path class="flow" d="M1110,450 C1200,450 1210,450 1300,450"/>
+    <path class="flow" d="M1110,500 C1200,500 1210,665 1300,685"/>
+
+    <rect class="src" x="1310" y="120" width="420" height="140" rx="12" stroke="#47B39C"/>
+    <text class="cap-t" x="1340" y="170">自动探索与生成</text>
+    <text class="cap-s" x="1340" y="210">状态图 · 用例 · 可失败性校验</text>
+
+    <rect class="src" x="1310" y="380" width="420" height="140" rx="12" stroke="#E8A33D"/>
+    <text class="cap-t" x="1340" y="430">真机执行与归因</text>
+    <text class="cap-s" x="1340" y="470">每步截图 · 置信度 · 证据链</text>
+
+    <rect class="src" x="1310" y="640" width="420" height="140" rx="12" stroke="#4A90D9"/>
+    <text class="cap-t" x="1340" y="690">定位自愈与沉淀</text>
+    <text class="cap-s" x="1340" y="730">连续失败达阈值 → 定位器换代</text>
+  </g>
+
+  <!-- 底部闭环 -->
+  <path class="flow" d="M1520,780 C1520,860 890,860 890,580" stroke-dasharray="8 8"/>
+  <text class="rule" x="1050" y="875" fill="#6B7A8F">自愈产物回写账本 → 沉淀为回归资产（闭环）</text>
+</svg>
+</section>
+
+<!-- ═══ 卡 3 · 数字总表（镜头 7.1 用，与简介 §五 同源） ═══ -->
+<section class="cut" id="card-nums" data-label="卡3 · 验证结果总表（镜头7.1 用）">
+  <h2>验证结果</h2>
+  <table>
+    <tr><th style="width:22%">项目</th><th style="width:36%">结果</th><th>口径说明</th></tr>
+    <tr><td>单元测试</td><td class="n">1168 项全部通过</td><td class="c">覆盖率 88% · 静态检查 0 error</td></tr>
+    <tr><td>视觉定位</td><td class="n">94.7%（复测 95.0%）· IoU 0.842</td><td class="c">与控件树标注的一致率，非绝对准确率</td></tr>
+    <tr><td>页面意图识别</td><td class="n">8.3 秒 · 5 入口 · 5 路径</td><td class="c">语义结论需人工复核</td></tr>
+    <tr><td>自动探索</td><td class="n">8 状态 · 10 跳转 · 157 秒</td><td class="c">含页面状态图产物</td></tr>
+    <tr><td>异常检测</td><td class="n">CRASH 1.0 · 无窗口 0.95 · 误报 0</td><td class="c">真机受控注入，正例为注入产生</td></tr>
+    <tr><td>归因与自愈</td><td class="n">归因 40/40 · 自愈 10/10</td><td class="c">注入式离线评测，可与真机数字分列</td></tr>
+  </table>
+</section>
+
+<!-- ═══ 卡 4 · 片尾（镜头 7.2 用） ═══ -->
+<section class="cut" id="card-end" data-label="卡4 · 片尾（镜头7.2 用）">
+  <div class="big">为 OpenHarmony 应用质量保障，提供可复现、可扩展的工程基础</div>
+  <div class="line">全部代码 · 1168 项测试 · 数字复现命令，随仓库交付</div>
+  <div class="line" style="color:#6B7A8F;">&lt;仓库地址 / 开源链接占位&gt;</div>
+  <div class="foot">&lt;队伍名&gt; ｜ &lt;成员&gt; ｜ 指导教师 &lt;占位&gt;</div>
+</section>
+
+</body>
+</html>

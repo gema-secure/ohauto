@@ -11,8 +11,10 @@
     layout_normal.json       正常页面控件树（151 节点）
     layout_no_window.json    锁屏/无窗口控件树（仅 1 个零尺寸节点）
 """
+import atexit
 import json
 import os
+import shutil
 import sys
 import tempfile
 import time
@@ -40,6 +42,10 @@ LAYOUT_NO_WINDOW = os.path.join(FIX, 'layout_no_window.json')
 CRASH_NAME = 'cppcrash-com.ohos.note-20010019-20260916151446'
 BUNDLE = 'com.ohos.note'
 
+#: 模块级临时根目录：out_dir() 造的所有目录都挂它下面，进程退出整体清（评审 P2）
+_SIGNALS_TMP_ROOT = tempfile.mkdtemp(prefix='ohauto_signals_test_')
+atexit.register(shutil.rmtree, _SIGNALS_TMP_ROOT, True)
+
 #: ★★ 采集窗口的**固定锚点**（样本文件名里的时刻是 2026-09-16 15:14:46）。
 #:
 #: 凡是拿真机样本做端到端测试的，窗口一律用 `since=CRASH_SAMPLE_SINCE`
@@ -63,8 +69,11 @@ def read(path: str) -> str:
 
 
 def out_dir() -> str:
-    """产物目录一律用临时目录 —— 测试绝不往项目目录写文件。"""
-    return tempfile.mkdtemp(prefix='ohauto_signals_test_')
+    """产物目录一律用临时目录 —— 测试绝不往项目目录写文件。
+
+    全部挂在进程根目录下，退出时整体清理（评审 P2：只建不删 ×56 调用点）。
+    """
+    return tempfile.mkdtemp(prefix='cases_', dir=_SIGNALS_TMP_ROOT)
 
 
 # ================================================================ 1. 解析真机崩溃日志
@@ -432,6 +441,7 @@ class TestWhiteScreen(unittest.TestCase):
     def test_solid_screenshot_is_flagged_with_confidence(self):
         """纯色页 → 报白屏，且输出的是**置信度**而不是布尔结论。"""
         path = os.path.join(tempfile.mkdtemp(), 'blank.png')
+        self.addCleanup(shutil.rmtree, os.path.dirname(path), True)
         _write_png(path, 720, 1280)                 # sim 的纯色写入器
         info = analyze_screenshot(path)
         suspicious, conf, why = is_white_screen(info)
@@ -456,6 +466,7 @@ class TestWhiteScreen(unittest.TestCase):
     def test_png_decoder_round_trips_the_sim_writer(self):
         """零依赖解码器是 sim 写入器的逆运算，先自己对自己验证一遍。"""
         path = os.path.join(tempfile.mkdtemp(), 'rt.png')
+        self.addCleanup(shutil.rmtree, os.path.dirname(path), True)
         _write_png(path, 40, 20, rgb=(10, 20, 30))
         self.assertEqual(read_png_meta(path)[:2], (40, 20))
         w, h, ch, px = decode_png(path)
@@ -881,6 +892,7 @@ class TestPngDecoderDegradation(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
 
     def path(self, name):
         return os.path.join(self.tmp, name)
@@ -950,6 +962,7 @@ class TestWhiteScreenSizeTiers(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
 
     def test_very_small_bytes_per_pixel_is_flagged(self):
         p = os.path.join(self.tmp, 'solid_big.png')
@@ -1179,6 +1192,44 @@ class TestSimExtensionDoesNotChangeExistingBehaviour(unittest.TestCase):
         p = sim.screen_cap()
         self.assertEqual(p, '/data/local/tmp/ohauto_shot.png')
         self.assertIn(p, sim._files)
+
+
+class TestParseLsLineShortDate(unittest.TestCase):
+    """评审 P2：toybox 对近期文件只给 `MM-DD HH:MM`，此前代码静默返回
+    size=0 / mtime=None，而 docstring 谎称做了「本设备年同一天」近似。
+    现在代码真的做：size 照解析；年份补本机年；补出的未来时刻回退一年。
+    """
+
+    def test_short_date_line_keeps_size_and_mtime(self):
+        got = parse_ls_line(
+            '-rw-r----- 1 root log 388096 09-16 15:14 cppcrash-x.log')
+        self.assertEqual(got['size'], 388096,
+                         'MM-DD 行的 size 不该被丢成 0')
+        self.assertIsNotNone(got['mtime'], 'MM-DD 行该有近似 mtime')
+        # 近似 mtime 应落在最近一年内
+        self.assertGreater(got['mtime'], 0)
+        self.assertLess(got['mtime'] - time.time(), 370 * 86400)
+
+    def test_full_date_line_unchanged(self):
+        got = parse_ls_line(
+            '-rw-r----- 1 root log 388096 2026-09-16 15:14 cppcrash-x.log')
+        self.assertEqual(got['size'], 388096)
+        self.assertEqual(got['mtime'],
+                         parse_ls_line(
+                             '-rw-r----- 1 root log 1 2026-09-16 15:14 y.log'
+                         )['mtime'])
+
+    def test_future_approximation_rolls_back_one_year(self):
+        now = time.localtime()
+        tomorrow = time.localtime(time.time() + 86400)
+        if tomorrow.tm_year != now.tm_year:
+            self.skipTest('跨年窗口（今天 12-31），跳过未来回退用例')
+        mmdd = f'{tomorrow.tm_mon:02d}-{tomorrow.tm_mday:02d}'
+        got = parse_ls_line(
+            f'-rw-r----- 1 root log 7 {mmdd} 23:59 future.log')
+        self.assertIsNotNone(got['mtime'])
+        self.assertLessEqual(got['mtime'], time.time() + 86400,
+                             '补出的未来时刻没有回退一年')
 
 
 if __name__ == '__main__':

@@ -317,16 +317,20 @@ class DeviceGuard:
             return True
 
         if unlock:
-            w, h = self.screen_size()
-            x = w // 2
-            y1, y2 = int(h * 0.90), int(h * 0.35)
-            self._log(f'检测到无窗口（多为锁屏），执行上滑解锁 ({x},{y1})->({x},{y2})')
-            try:
-                self.hdc.shell(
-                    f'uitest uiInput swipe {x} {y1} {x} {y2} 600', timeout=25)
-                self._sleep(1.2)
-            except Exception as e:
-                self._log(f'解锁手势失败: {e}')
+            size = self.screen_size()
+            if size is None:
+                self._log('屏幕尺寸实测不到，跳过上滑解锁（不用猜测的几何操作设备）')
+            else:
+                w, h = size
+                x = w // 2
+                y1, y2 = int(h * 0.90), int(h * 0.35)
+                self._log(f'检测到无窗口（多为锁屏），执行上滑解锁 ({x},{y1})->({x},{y2})')
+                try:
+                    self.hdc.shell(
+                        f'uitest uiInput swipe {x} {y1} {x} {y2} 600', timeout=25)
+                    self._sleep(1.2)
+                except Exception as e:
+                    self._log(f'解锁手势失败: {e}')
 
         ok = self.has_window()
         self._log('屏幕可用' if ok else '屏幕仍不可用 —— 需人工检查设备是否锁屏/死机')
@@ -1400,12 +1404,15 @@ def run(cases: Sequence[Any], device: Any = None, *,
     if not norm:
         return RunReport(name='(空)', total=0, passed=0, failed=0)
 
-    bundle = norm[0].get('bundle') or ''
-    ability = norm[0].get('ability') or 'EntryAbility'
+    # 底座 bundle/ability：首用例兜底，设备 dict 优先（向后兼容原行为）。
+    # ★ 多用例时每个用例可自带 bundle/ability 覆盖底座 —— 不能只取 norm[0]，
+    #   否则混包用例会被静默发到第一个包（评审 P2）。
+    base_bundle = norm[0].get('bundle') or ''
+    base_ability = norm[0].get('ability') or 'EntryAbility'
     if isinstance(device, dict):
-        bundle = device.get('bundle') or bundle
-        ability = device.get('ability') or ability
-    bundle = bundle or 'com.unknown'
+        base_bundle = device.get('bundle') or base_bundle
+        base_ability = device.get('ability') or base_ability
+    base_bundle = base_bundle or 'com.unknown'
 
     # ---------------------------------------------------------- 解析设备
     dev_obj = None                     # Hdc / FakeHdc
@@ -1413,8 +1420,8 @@ def run(cases: Sequence[Any], device: Any = None, *,
     if isinstance(device, Driver):
         shared_driver = device
         dev_obj = device.hdc
-        bundle = device.bundle
-        ability = device.ability
+        base_bundle = device.bundle
+        base_ability = device.ability
     elif device is not None and hasattr(device, 'dump_layout'):
         dev_obj = device
     else:
@@ -1423,6 +1430,8 @@ def run(cases: Sequence[Any], device: Any = None, *,
             from .sim import FakeHdc
             dev_obj = FakeHdc(
                 start_page=cfg.get('start_page', 'login'),
+                # 此默认值是 **模拟设备夹具**（sim 种子数据按 1080×2340 搭建），
+                # 不是真机几何；真机几何只走 Driver.screen_size() 实测链（评审 P2 澄清）
                 screen=tuple(cfg.get('screen', (1080, 2340))),
                 verbose=False,
                 faults=cfg.get('faults'),
@@ -1448,11 +1457,13 @@ def run(cases: Sequence[Any], device: Any = None, *,
 
     items: List[Tuple[Optional[Driver], Dict[str, Any]]] = []
     for case in norm:
-        d = shared_driver or Driver(bundle=bundle, ability=ability, hdc=dev_obj,
-                                   artifact_dir=out_dir,
-                                   default_timeout=default_timeout,
-                                   poll_interval=poll_interval,
-                                   verbose=False)
+        case_bundle = case.get('bundle') or base_bundle
+        case_ability = case.get('ability') or base_ability
+        d = shared_driver or Driver(bundle=case_bundle, ability=case_ability, hdc=dev_obj,
+                                    artifact_dir=out_dir,
+                                    default_timeout=default_timeout,
+                                    poll_interval=poll_interval,
+                                    verbose=False)
         drv_for_guard = drv_for_guard or d
         items.append((d, case))
 
@@ -1462,7 +1473,7 @@ def run(cases: Sequence[Any], device: Any = None, *,
     rep = RunReport(
         name='、'.join((c.get('name') or '?') for c in norm[:3])
              + ('…' if len(norm) > 3 else ''),
-        bundle=bundle,
+        bundle=base_bundle,
         total=suite.total,
         passed=suite.passed,
         failed=suite.failed,

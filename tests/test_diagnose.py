@@ -562,8 +562,10 @@ class TestContract(unittest.TestCase):
         sim.inject_crash(bundle=BUNDLE)
         rec = ExecutionRecord(bundle=BUNDLE, step=_failed_step(),
                               trees=[_good_page()])
+        tmp_out = tempfile.mkdtemp(prefix='ohauto_diag2_')
+        self.addCleanup(shutil.rmtree, tmp_out, True)
         rec.signals = collect_signals(sim, BUNDLE,
-                                      out_dir=tempfile.mkdtemp(prefix='ohauto_diag2_'))
+                                      out_dir=tmp_out)
         v = diagnose(rec)
         self.assertIn('不要通过加等待或改用例把它绕过去', v.suggestion)
 

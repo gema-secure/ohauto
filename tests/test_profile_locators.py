@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -50,9 +51,11 @@ class TestProfileLocators(unittest.TestCase):
 
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix='ohauto_locators_')
+        self.addCleanup(shutil.rmtree, self.dir, True)
 
     def test_missing_dir_rejected(self):
         empty = tempfile.mkdtemp(prefix='ohauto_empty_')
+        self.addCleanup(shutil.rmtree, empty, True)
         result = _run(empty)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('未找到', result.stderr.decode('utf-8', 'replace'))

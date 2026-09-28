@@ -997,5 +997,59 @@ class TestFailureSnapshots(unittest.TestCase):
         self.assertGreater(v.confidence, 0)
 
 
+# ================================================================ 评审 P2 回归钉
+
+
+class TestMultiCaseBundle(unittest.TestCase):
+    """run() 多用例：每个用例可自带 bundle/ability，不能只取 norm[0]。"""
+
+    def test_each_case_uses_its_own_bundle(self):
+        made = []
+        real_driver = R.Driver
+
+        class SpyDriver(real_driver):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, **kw)
+                made.append((self.bundle, self.ability))
+
+        R.Driver = SpyDriver
+        try:
+            R.run([
+                {'name': 'a', 'bundle': 'b1',
+                 'steps': [{'tap': {'id': 'username'}}]},
+                {'name': 'b', 'bundle': 'b2', 'ability': 'OtherAbility',
+                 'steps': [{'tap': {'id': 'username'}}]},
+            ], {'sim': True})
+        finally:
+            R.Driver = real_driver
+        self.assertEqual([m[0] for m in made], ['b1', 'b2'],
+                         '混包用例被发到了同一个 bundle —— norm[0] 缺陷回归')
+        self.assertEqual(made[1][1], 'OtherAbility')
+
+
+class TestScreenSizeHonesty(unittest.TestCase):
+    """screen_size 实测不到必须给 None，不许退回 1080×2340 瞎猜（评审 P2）。
+
+    旧兜底值对 720×1280 的真机是错的，压测几何曾被系统性带偏。
+    """
+
+    class _DumbHdc:
+        target = 'fake'
+
+        def shell(self, cmd, **kw):
+            class _R:
+                stdout = ''
+            return _R()
+
+    def test_screen_size_returns_none_when_unmeasurable(self):
+        d = Driver(bundle='b', hdc=self._DumbHdc(), verbose=False)
+        self.assertIsNone(d.screen_size())
+
+    def test_swipe_refuses_guessed_geometry(self):
+        d = Driver(bundle='b', hdc=self._DumbHdc(), verbose=False)
+        with self.assertRaises(RuntimeError):
+            d.swipe('up')
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

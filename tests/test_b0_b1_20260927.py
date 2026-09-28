@@ -14,8 +14,10 @@
 
 全部离线，不碰设备/网络。
 """
+import atexit
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -23,6 +25,10 @@ from types import SimpleNamespace
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+
+# 模块级 helper 造的临时目录统一挂到进程根目录下，退出时整体清理（评审 P2：只建不删）
+_TMP_ROOT = tempfile.mkdtemp(prefix='ohauto_b01_root_')
+atexit.register(shutil.rmtree, _TMP_ROOT, True)
 sys.path.insert(0, ROOT)
 
 from ohauto.action import load_case, run_steps                        # noqa: E402
@@ -85,7 +91,8 @@ def _branch_stub(logs=None):
 
 
 def _gen(stub, name='用例'):
-    out = os.path.join(tempfile.mkdtemp(prefix='ohauto_b01_'), 'case.yaml')
+    out = os.path.join(tempfile.mkdtemp(prefix='cases_', dir=_TMP_ROOT),
+                       'case.yaml')
     Explorer.generate_case(stub, out, name=name)
     return out
 
@@ -339,6 +346,7 @@ class TestGenerateCaseIsActuallyReplayable(unittest.TestCase):
     def test_explored_product_runs_green_on_a_fresh_device(self):
         _sim, _d, ex = self._explore(4)
         tmp = tempfile.mkdtemp(prefix='ohauto_b01_')
+        self.addCleanup(shutil.rmtree, tmp, True)
         path = ex.generate_case(os.path.join(tmp, 'case.yaml'), name='探索回归')
         case = load_case(path)
         self.assertGreaterEqual(
@@ -357,6 +365,7 @@ class TestGenerateCaseIsActuallyReplayable(unittest.TestCase):
     def test_generate_cases_covers_all_edges_across_files(self):
         _sim, _d, ex = self._explore(4)
         tmp = tempfile.mkdtemp(prefix='ohauto_b01_')
+        self.addCleanup(shutil.rmtree, tmp, True)
         paths = ex.generate_cases(tmp, name_prefix='探索回归')
         self.assertGreaterEqual(len(paths), 1)
 

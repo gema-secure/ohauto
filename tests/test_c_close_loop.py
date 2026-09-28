@@ -15,6 +15,7 @@
 用 `run_step` 替身注入失败，不依赖真机、不依赖归因引擎。
 """
 import os
+import shutil
 import tempfile
 import unittest
 
@@ -160,6 +161,7 @@ class TestVerdictReachesReport(unittest.TestCase):
     def test_markdown_has_diagnosis_section(self):
         data = report.collect(DriverStub(), run_report=self._case_result())
         out = tempfile.mkdtemp(prefix='ohauto_close_')
+        self.addCleanup(shutil.rmtree, out, True)
         path = report.to_markdown(data, os.path.join(out, 'r.md'))
         with open(path, encoding='utf-8') as f:
             text = f.read()
@@ -170,6 +172,7 @@ class TestVerdictReachesReport(unittest.TestCase):
     def test_html_has_diagnosis_section(self):
         data = report.collect(DriverStub(), run_report=self._case_result())
         out = tempfile.mkdtemp(prefix='ohauto_close_')
+        self.addCleanup(shutil.rmtree, out, True)
         path = report.to_html(data, os.path.join(out, 'r.html'))
         with open(path, encoding='utf-8') as f:
             text = f.read()
@@ -180,6 +183,7 @@ class TestVerdictReachesReport(unittest.TestCase):
         r = _runner_with_failing_step3()
         data = report.collect(DriverStub(), run_report=r.run_case(DriverStub(), CASE))
         out = tempfile.mkdtemp(prefix='ohauto_close_')
+        self.addCleanup(shutil.rmtree, out, True)
         path = report.to_markdown(data, os.path.join(out, 'r.md'))
         with open(path, encoding='utf-8') as f:
             self.assertNotIn('失败步归因', f.read())

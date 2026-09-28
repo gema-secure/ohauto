@@ -681,6 +681,7 @@ def _parse_iso_like(text: str, default: float) -> float:
 # ================================================================ ls -l 解析
 
 _LS_DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+_LS_SHORT_DATE_RE = re.compile(r'^\d{2}-\d{2}$')   # toybox 近期文件的 MM-DD
 _LS_TIME_RE = re.compile(r'^\d{2}:\d{2}(:\d{2})?$')
 
 
@@ -688,8 +689,10 @@ def parse_ls_line(line: str) -> Optional[Dict[str, Any]]:
     """解析 `ls -l` 的一行，返回 {'name', 'size', 'mtime'}；不是文件行返回 None。
 
     设备侧 mtime 是**设备时钟域**的。toybox 的 `ls -l` 对近期文件只给
-    `MM-DD HH:MM`，这种情况下按「本设备年的同一天」近似 —— 精度到分钟足够，
-    而且文件名里通常有更精确的时间戳，会优先采用（见 _file_time_epoch）。
+    `MM-DD HH:MM`（无年份）：此时同样定位日期列、解析 size，年份按
+    **本机当前年**补齐；若补出的时刻在未来（跨年读旧文件），回退一年。
+    精度到分钟足够，而且文件名里通常有更精确的时间戳，会优先采用
+    （见 _file_time_epoch）。
     """
     s = (line or '').rstrip()
     if not s or s.startswith('total') or s.startswith('ls:') :
@@ -703,9 +706,14 @@ def parse_ls_line(line: str) -> Optional[Dict[str, Any]]:
     # 不能从前往后找：`rw-r 1 root log 388096 ...` 里的硬链接数 `1` 也是数字，
     # 从前往后取会把它当成文件大小。
     date_at = None
+    short_date = False
     for i, tok in enumerate(parts[:-1]):
         if _LS_DATE_RE.match(tok):
             date_at = i
+            break
+        if _LS_SHORT_DATE_RE.match(tok):
+            date_at = i
+            short_date = True
             break
     if date_at is None:
         return {'name': name, 'size': 0, 'mtime': None}
@@ -722,6 +730,15 @@ def parse_ls_line(line: str) -> Optional[Dict[str, Any]]:
     elif date_at + 2 < len(parts) - 1 and _LS_TIME_RE.match(parts[date_at + 1]) \
             and parts[date_at + 2].isdigit():
         stamp = f'{parts[date_at]} {parts[date_at + 1]}'
+    if stamp and short_date:
+        # MM-DD 无年份：补本机当前年；跨年读旧文件时补出的时刻会落在未来，
+        # 回退一年（slack 1 天，容忍设备时钟小偏差）。
+        year = time.localtime().tm_year
+        mtime = _parse_iso_like(f'{year}-{stamp}', default=-1.0)
+        if mtime > time.time() + 86400:
+            mtime = _parse_iso_like(f'{year - 1}-{stamp}', default=-1.0)
+        return {'name': name, 'size': size,
+                'mtime': mtime if mtime and mtime > 0 else None}
     mtime = _parse_iso_like(stamp, default=-1.0) if stamp else None
     if mtime is not None and mtime < 0:
         mtime = None

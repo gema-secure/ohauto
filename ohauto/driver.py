@@ -494,8 +494,12 @@ class Driver:
             if anchor is not None:
                 r = anchor.rect
             else:
-                w, h = self.screen_size()
-                r = Rect(0, 0, w, h)
+                size = self.screen_size()
+                if size is None:
+                    raise RuntimeError(
+                        '屏幕尺寸实测不到（hidumper 与控件树均不可用），'
+                        '拒绝用猜测的全屏几何执行滑动')
+                r = Rect(0, 0, size[0], size[1])
 
             cx, cy = r.center
             dx, dy = int(r.width * scale / 2), int(r.height * scale / 2)
@@ -557,8 +561,13 @@ class Driver:
 
     # -------------------------------------------------------- 屏幕
 
-    def screen_size(self) -> Tuple[int, int]:
-        """获取屏幕尺寸（px）。"""
+    def screen_size(self) -> Optional[Tuple[int, int]]:
+        """获取屏幕尺寸（px）。
+
+        返回 None 表示**实测不到**——宁可交 None 让调用方降级，
+        也不再硬编码 1080×2340 去猜（真机是 720×1280，旧兜底值是错的，
+        评审 P2：压测几何曾被系统性带偏）。
+        """
         res = self.hdc.shell('hidumper -s RenderService -a screen')
         m = None
         import re
@@ -572,7 +581,7 @@ class Driver:
                 return r.width, r.height
         except Exception:
             pass
-        return 1080, 2340       # 最后兜底值
+        return None       # 实测不到 ≠ 允许瞎猜
 
     # -------------------------------------------------------- 截图
 

@@ -335,6 +335,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument('--execute', action='store_true',
                     help='对 L2 通过的用例在真机上跑一遍，给 L3 执行口径')
     ap.add_argument('--out', default=OUT)
+    ap.add_argument('--min-executable', type=float, default=0.8,
+                    help='L2 executable_rate 的验收阈值，低于它退出码给 1 '
+                         '（与 eval_kpi_offline 的 80%% 闸对齐）')
     args = ap.parse_args(argv)
 
     os.makedirs(args.out, exist_ok=True)
@@ -469,7 +472,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                   f, ensure_ascii=False, indent=2)
     print(f'\n[报告] {md_path}')
     print(f'[数据] {json_path}')
-    return 0
+    # ★ KPI 未达标退出码必须给 1 —— 否则 CI 拿着「全绿」的假信号把坏数字放行（评审 P2）
+    gate_pass = (report.executable_rate is not None
+                 and report.executable_rate >= args.min_executable)
+    print(f'[退出码] executable_rate={report.executable_rate} '
+          f'阈值={args.min_executable} → '
+          f'{"0（达标）" if gate_pass else "1（未达标）"}')
+    return 0 if gate_pass else 1
 
 
 if __name__ == '__main__':

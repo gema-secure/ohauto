@@ -103,8 +103,10 @@ class PostInjectsThinkingSwitch(unittest.TestCase):
         return captured
 
     def _with_png(self):
+        import shutil
         import tempfile
         d = tempfile.mkdtemp(prefix='ohauto_think_')
+        self.addCleanup(shutil.rmtree, d, True)
         p = os.path.join(d, 'shot.png')
         with open(p, 'wb') as f:
             f.write(self._PNG)
