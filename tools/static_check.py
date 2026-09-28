@@ -19,6 +19,14 @@
 另外加了若干**危险模式**检查（裸 except / eval / exec / 可变默认参数），
 这些是评审里「工程规范性」的加分点，也是真实的坑。
 
+三道**团队约定闸**（来自真机执行日复盘，见 `docs/指标汇总` §十二）：
+
+| 码 | 级别 | 查什么 |
+|---|---|---|
+| `T101` | error | tests/ 里 `try` 内含 `self.assert*` 且 `except Exception: pass`——断言被吞，测试空转全绿（本仓库真实踩过） |
+| `NAR001` | 棘轮 | 注释/docstring 里的**纪要语体**（日期戳 / 回执引用 / 修复前叙事）。基线冻结在 `NARRATIVE_BASELINE`：存量→warning，**任何文件超出基线→error**（防反弹；实测清理期间日期戳一度不降反升） |
+| `CONV2` | warning | tools/ 里 `return 2` / `sys.exit(2)` 却没接 `require_device`——退出码 2 约定保留给「设备不在场」 |
+
 用法
 ----
 
@@ -224,10 +232,212 @@ class _Visitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+# ---------------------------------------------------------------- 团队约定闸
+
+#: 纪要语体特征：日期戳 / 回执编号引用 / 修复前叙事。
+#: 只扫**注释与 docstring**（字符串常量里的日期是数据，不是叙事）。
+_NARRATIVE_PATTERNS: Tuple[re.Pattern, ...] = (
+    re.compile(r'20\d{2}-\d{2}'),
+    re.compile(r'回执'),
+    re.compile(r'修复前'),
+)
+
+#: 棘轮基线（相对路径 → 允许命中数）。口径 = 仅注释 + docstring。
+#: **规则**：命中数 ≤ 基线 → warning（存量，逐步清）；> 基线或文件不在表内 →
+#: error（新增，阻断门禁）。故意调高基线 = 显式接受，必须写明理由。
+NARRATIVE_BASELINE: Dict[str, int] = {
+    'doctor.py': 1,
+    'examples/run_suite.py': 2,
+    'ohauto/__init__.py': 4,
+    'ohauto/action.py': 1,
+    'ohauto/crossform.py': 2,
+    'ohauto/diagnose.py': 9,
+    'ohauto/explorer.py': 10,
+    'ohauto/generator.py': 4,
+    'ohauto/hdc.py': 2,
+    'ohauto/layout.py': 3,
+    'ohauto/locator.py': 7,
+    'ohauto/matcher.py': 1,
+    'ohauto/report.py': 2,
+    'ohauto/runner.py': 5,
+    'ohauto/signals.py': 8,
+    'ohauto/treesum.py': 3,
+    'ohauto/vision.py': 5,
+    'tests/test_a_defects_20260923.py': 6,
+    'tests/test_a_locator.py': 1,
+    'tests/test_a_pins_20260927.py': 7,
+    'tests/test_a_vision.py': 1,
+    'tests/test_b0_b1_20260927.py': 1,
+    'tests/test_c_close_loop.py': 1,
+    'tests/test_c_deep_text.py': 1,
+    'tests/test_c_defects_20260923.py': 1,
+    'tests/test_c_env_consistency.py': 1,
+    'tests/test_c_explorer_fixes.py': 1,
+    'tests/test_c_thinking_flag.py': 2,
+    'tests/test_core.py': 2,
+    'tests/test_crossform.py': 6,
+    'tests/test_diagnose.py': 8,
+    'tests/test_explorer_b1.py': 4,
+    'tests/test_explorer_tarpit.py': 1,
+    'tests/test_export_hypium.py': 1,
+    'tests/test_hdc_pull.py': 1,
+    'tests/test_integration_sim.py': 1,
+    'tests/test_real_device_20260923.py': 1,
+    'tests/test_runner.py': 1,
+    'tests/test_signals.py': 7,
+    'tools/capture_app.py': 1,
+    'tools/collect_page_evidence_real.py': 4,
+    'tools/crossform_run.py': 1,
+    'tools/demo_full_chain.py': 1,
+    'tools/demo_onepager.py': 2,
+    'tools/e2e_smoke_real.py': 1,
+    'tools/emulator_cli.py': 1,
+    'tools/eval_kpi_offline.py': 1,
+    'tools/eval_vision_offline.py': 12,
+    'tools/explore_emulator.py': 2,
+    'tools/export_hypium.py': 2,
+    'tools/lint_hypium_out.py': 1,
+    'tools/preflight.py': 1,
+    'tools/quality_gate.py': 1,
+    'tools/sign_hap.py': 2,
+    'tools/static_check.py': 3,   # 本文件：规则文档里必须写明模式词
+    'tools/sync_device_time.py': 1,
+    'tools/trace_to_case.py': 1,
+    'tools/verify_core_flows_real.py': 1,
+    'tools/verify_signals_injection_real.py': 1,
+    'tools/wire_locator_sink.py': 2,
+}
+
+
+def _docstring_lines(tree) -> List[Tuple[int, str]]:
+    """收集所有 docstring 的 (行号, 文本)（模块/类/函数的首个字符串常量）。"""
+    out: List[Tuple[int, str]] = []
+    seen = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                 ast.AsyncFunctionDef)):
+            continue
+        body = getattr(node, 'body', None)
+        if not body:
+            continue
+        first = body[0]
+        if (isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)
+                and id(first.value) not in seen):
+            seen.add(id(first.value))
+            out.append((first.lineno, first.value.value))
+    return out
+
+
+def _check_narrative(path: str, rel: str, text: str, tree) -> Optional[Finding]:
+    """纪要语体棘轮：注释 + docstring 里的日期戳/回执/修复前叙事。
+
+    过程叙事（哪天改的、谁发现的、第几号回执）属于 commit message 和 docs/，
+    不属于代码 —— 约束留下来，过程走出去。
+    """
+    import io as _io
+    import tokenize as _tokenize
+    hits: List[Tuple[int, str]] = []
+    try:
+        for tok in _tokenize.generate_tokens(_io.StringIO(text).readline):
+            if tok.type == _tokenize.COMMENT:
+                hits.append((tok.start[0], tok.string))
+    except _tokenize.TokenError:
+        pass
+    hits.extend(_docstring_lines(tree))
+    matched = [(ln, s) for ln, s in hits
+               if any(p.search(s) for p in _NARRATIVE_PATTERNS)]
+    if not matched:
+        return None
+    base = NARRATIVE_BASELINE.get(rel, 0)
+    where = ', '.join(f'第{ln}行' for ln, _ in sorted(matched)[:8])
+    more = '' if len(matched) <= 8 else f'（等共 {len(matched)} 处）'
+    if len(matched) > base:
+        extra = len(matched) - base
+        return Finding(
+            'error', path, sorted(matched)[0][0], 'NAR001',
+            f'纪要语体新增 {extra} 处（现 {len(matched)}/基线 {base}）：'
+            f'日期戳/回执/修复前叙事请移出代码 —— {where}{more}')
+    return Finding(
+        'warning', path, sorted(matched)[0][0], 'NAR001',
+        f'纪要语体存量 {len(matched)}/基线 {base}（新增会转 error）—— {where}{more}')
+
+
+def _check_exit2(path: str, rel: str, text: str, tree) -> Optional[Finding]:
+    """tools/ 约定：退出码 2 保留给「设备不在场」（preflight.require_device）。
+
+    其它脚本用 2 表达「用法错误/前置不满足」会让 CI 无法区分
+    「该重试的设备缺席」和「真失败」—— 要么接 preflight，要么换码。
+    """
+    if not rel.startswith('tools/'):
+        return None
+    if 'require_device' in text:
+        return None
+    first = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Return) and isinstance(node.value, ast.Constant) \
+                and node.value.value == 2 and first is None:
+            first = node.lineno
+        if isinstance(node, ast.Call) and first is None:
+            f = node.func
+            name = f.id if isinstance(f, ast.Name) else (
+                f.attr if isinstance(f, ast.Attribute) else '')
+            if name in ('exit', 'SystemExit') and node.args:
+                a0 = node.args[0]
+                if isinstance(a0, ast.Constant) and a0.value == 2:
+                    first = node.lineno
+    if first is None:
+        return None
+    return Finding(
+        'warning', path, first, 'CONV2',
+        '退出码 2 约定保留给「设备不在场」（preflight.require_device）——'
+        '确认此处不是设备缺席路径，或接入 preflight')
+
+
+def _check_swallowed_assert(path: str, rel: str, tree) -> List[Finding]:
+    """tests/ 专项：try 内含 self.assert*，而 except Exception 的体是 pass。
+
+    这不是防御式编程，是**测试自杀**：断言抛出的 AssertionError 会被
+    同一个 except 吞掉，故障注入一旦失效，测试空转通过（本仓库真实踩过）。
+    修法：断言移出 try；或 except 里显式 self.fail / 记录后重新抛出。
+    """
+    out: List[Finding] = []
+    if not rel.startswith('tests/'):
+        return out
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Try):
+            continue
+        for handler in node.handlers:
+            broad = (handler.type is None
+                     or (isinstance(handler.type, ast.Name)
+                         and handler.type.id in ('Exception', 'BaseException'))
+                     or (isinstance(handler.type, ast.Attribute)
+                         and handler.type.attr == 'Exception'))
+            if not broad:
+                continue
+            if not all(isinstance(s, ast.Pass) for s in handler.body):
+                continue
+            for stmt in node.body:
+                for n in ast.walk(stmt):
+                    if (isinstance(n, ast.Call)
+                            and isinstance(n.func, ast.Attribute)
+                            and n.func.attr.startswith('assert')
+                            and isinstance(n.func.value, ast.Name)
+                            and n.func.value.id == 'self'):
+                        out.append(Finding(
+                            'error', path, n.lineno, 'T101',
+                            f'self.{n.func.attr}() 在 try 内且被 '
+                            f'except Exception: pass 吞掉 —— 断言永远不会让测试变红'))
+                        break
+                else:
+                    continue
+                break
+    return out
+
+
 def _check_import_boundary(path: str, tree) -> List[Finding]:
     """模块边界：**生产代码不得反向依赖测试 / 示例 / CI 代码。**
 
-    依赖方向必须单向：`tests/` → `ohauto/`，绝不能反过来。
     一旦 `ohauto/` 里 import 了 `tests/`，包就不再是自包含的，
     别人 `pip install` 或单独 copy 这个包会直接 ImportError。
 
@@ -298,12 +508,37 @@ def iter_target_files(root: str) -> List[str]:
     return sorted(files)
 
 
+def iter_tests_files(root: str) -> List[str]:
+    """tests/ 下的测试文件 —— 只吃团队约定闸（NAR001/T101），不吃风格规则。"""
+    base = os.path.join(root, 'tests')
+    if not os.path.isdir(base):
+        return []
+    return sorted(os.path.join(base, n) for n in os.listdir(base)
+                  if n.endswith('.py') and n.startswith('test_'))
+
+
 def run(root: str = ROOT, check_annotations: bool = True,
         show_all: bool = False, quiet: bool = False) -> List[Finding]:
     findings: List[Finding] = []
     files = iter_target_files(root)
     for p in files:
         findings.extend(_check_file(p, check_annotations))
+
+    # ---- 团队约定闸（NAR001 / CONV2 / T101）：覆盖含 tests/ 在内的全部 .py
+    for p in sorted(set(files + iter_tests_files(root))):
+        rel = os.path.relpath(p, ROOT).replace(os.sep, '/')
+        try:
+            text = open(p, encoding='utf-8').read()
+            tree = ast.parse(text, filename=p)
+        except (OSError, SyntaxError):
+            continue                     # 语法/读入问题已由主检查报错
+        nf = _check_narrative(p, rel, text, tree)
+        if nf:
+            findings.append(nf)
+        ef = _check_exit2(p, rel, text, tree)
+        if ef:
+            findings.append(ef)
+        findings.extend(_check_swallowed_assert(p, rel, tree))
 
     errors = [f for f in findings if f.level == 'error']
     warns = [f for f in findings if f.level == 'warning']
