@@ -69,16 +69,17 @@ def _page_key(tree, bundle=BUNDLE):
 
 
 def _failed_step(kind=FailureKind.LOCATE, err='DriverError: 未找到控件',
-                 index=2, target='btn_submit'):
-    sr = StepResult(index=index, action='tap', target=target, ok=False, kind=kind)
+                 index=2, target='btn_submit', action='tap'):
+    sr = StepResult(index=index, action=action, target=target, ok=False, kind=kind)
     sr.attempts.append(StepAttempt(attempt=1, ok=False, kind=kind, error=err,
                                    elapsed_ms=8000))
     return sr
 
 
-def _rescued_step(first_kind=FailureKind.LOCATE, index=2, target='btn_submit'):
+def _rescued_step(first_kind=FailureKind.LOCATE, index=2, target='btn_submit',
+                  action='tap'):
     """首次失败、重试后成功 —— 时序问题的教科书形态。"""
-    sr = StepResult(index=index, action='tap', target=target, ok=True)
+    sr = StepResult(index=index, action=action, target=target, ok=True)
     sr.attempts.append(StepAttempt(attempt=1, ok=False, kind=first_kind,
                                    error='TimeoutError: 8000ms 内未等到控件',
                                    elapsed_ms=8000))
@@ -324,8 +325,27 @@ class TestTiming(unittest.TestCase):
             trees=[empty, empty, _good_page()],
             expected_target={'id': 'btn_submit'})
         v = diagnose(rec)
-        self.assertEqual(v.category, Category.TIMING, v.evidence)
+        self.assertEqual(v.category, Category.TIMING)
         self.assertTrue(any('才出现' in e for e in v.evidence), v.evidence)
+
+    def test_single_snapshot_cannot_claim_late_appearing(self):
+        """★ A6 扩容样例抓到的空真缺陷回归（2026-09-27）。
+
+        只有一张快照时，「目标在失败后的快照里才出现」无从谈起：
+        `present_early = any(trees[:-1])` 对**空序列**恒为 False，原实现把
+        『目标就在树里（还是 disabled）』误判成时序问题(0.75)。
+        修复后「晚到」判据要求至少两张快照；本形态按「控件在树里但不可用」
+        归**用例缺陷**。
+        """
+        disabled = _tree([_node('Button', 'btn_submit', '提交',
+                                _b(120, 700, 960, 800), enabled='false')])
+        rec = ExecutionRecord(bundle=BUNDLE, step=_failed_step(),
+                              trees=[disabled],
+                              expected_target={'id': 'btn_submit'})
+        v = diagnose(rec)
+        self.assertNotEqual(v.category, Category.TIMING,
+                            '单快照不构成「晚到」证据')
+        self.assertEqual(v.category, Category.CASE_DEFECT, v.evidence)
 
     def test_success_without_retry_is_not_a_failure(self):
         """这步没失败，就不该被归成任何失败类别。"""
@@ -561,6 +581,11 @@ class TestInjectedSamples20(_TmpCase):
 
     样例全部在 `FakeHdc` 上造，**不需要真机** —— 这也是「B 不碰真机」这条
     分工约定下唯一可行的做法。
+
+    ★ A6 扩容（2026-09-27）：原 20 条**原样保留**（对应任务卡原文，动一条
+    对比基线就断了），另增 `_extra_samples()` 四类各 5 例——机制不变、
+    表面参数变化（故障类型 / 动作形态 / 快照序列），由
+    `test_accuracy_of_40_expanded_samples` 跑 4×10 = 40 条的扩容验收。
     """
 
     def _sig(self, **sim_kw):
@@ -699,10 +724,180 @@ class TestInjectedSamples20(_TmpCase):
 
         return out
 
-    def test_accuracy_of_20_injected_samples(self):
-        samples = self._samples()
-        self.assertEqual(len(samples), 20, '四类各 5 例')
+    def _extra_samples(self):
+        """A6 扩容：四类各 5 例（2026-09-27）。
 
+        与原 20 条的关系是「同一机制的表面参数变化」，不是新机制 ——
+        故障类型（jscrash / appfreeze / OOM / SIGABRT）、动作形态（input）、
+        快照序列（4 张 / 全有 / 全缺）、错误文本形态（超时 / 断言 / 定位）。
+        换参数不走运地漏判，说明判据对「表面」过敏，这正是扩容要暴露的。
+        """
+        good = _good_page()
+        page = _page_key(good)
+        empty = _tree([_node('Text', 'tv_title', '我的订单',
+                             _b(40, 120, 500, 200), 'false')])
+        # 含输入框的登录页 —— input 动作形态的样例用（_good_page 没有输入框）
+        login = _tree([
+            _node('Text', 'tv_title', '用户登录', _b(40, 120, 500, 200), 'false'),
+            _node('TextInput', 'username', '', _b(120, 400, 960, 500)),
+            _node('Button', 'btn_submit', '提交订单', _b(120, 700, 960, 800)),
+        ])
+        login_page = _page_key(login)
+        out = []
+
+        # ---------------- 应用缺陷 × 5（故障类型面）
+        out.append(('A6 jscrash 异常栈',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩A6',
+                                    step=_failed_step(),
+                                    trees=[good],
+                                    hilog=[f'F C04200/jscrash: Fault thread info: pid=310 {BUNDLE}',
+                                           'F C04200/jscrash: Error name: TypeError, '
+                                           'Error message: undefined is not callable']),
+                    Category.APP_DEFECT))
+        out.append(('A7 appfreeze（卡死栈）',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩A7',
+                                    step=_failed_step(),
+                                    trees=[good],
+                                    hilog=[f'F C04200/appfreeze: Fault thread info: pid=410 {BUNDLE}',
+                                           'F C04200/appfreeze: #00 pc 0x000bda libentry.so']),
+                    Category.APP_DEFECT))
+        out.append(('A8 SIGABRT 崩溃（超时形态错误文本）',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩A8',
+                                    step=_failed_step(FailureKind.TIMEOUT,
+                                                      'TimeoutError: 8000ms 内未等到控件'),
+                                    trees=[good],
+                                    hilog=[f'F C04200/cppcrash: Fault thread info: pid=512 {BUNDLE}',
+                                           'F C04200/cppcrash: #00 pc 0x000bda libentry.so(SIGABRT)']),
+                    Category.APP_DEFECT))
+        out.append(('A9 OOM（内存耗尽）',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩A9',
+                                    step=_failed_step(),
+                                    trees=[good],
+                                    hilog=['I C04200/MemMgr: LowMemory Killer: '
+                                           f'kill {BUNDLE}',
+                                           f'F C04200/cppcrash: Out of memory, pid=613 {BUNDLE}']),
+                    Category.APP_DEFECT))
+        sim = FakeHdc(screen=(120, 260)); sim.inject_crash(bundle=BUNDLE)
+        r = ExecutionRecord(bundle=BUNDLE, case_name='扩A10 崩溃+断言形态',
+                            step=_failed_step(FailureKind.ASSERT, '断言失败'),
+                            trees=[good])
+        r.signals = self._signals(sim)
+        out.append(('扩A10 崩溃（错误文本像断言失败）', r, Category.APP_DEFECT))
+
+        # ---------------- 时序 × 5（动作形态 / 快照序列面）
+        out.append(('T6 断言失败后重试成功',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩T6',
+                                    step=_rescued_step(FailureKind.ASSERT),
+                                    trees=[good]), Category.TIMING))
+        out.append(('T7 目标在第四张快照才出现',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩T7',
+                                    step=_failed_step(),
+                                    trees=[empty, empty, empty, good],
+                                    expected_target={'id': 'btn_submit'}),
+                    Category.TIMING))
+        out.append(('T8 超时但控件在树里（input 动作）',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩T8',
+                                    step=_failed_step(FailureKind.TIMEOUT,
+                                                      'TimeoutError: 8000ms 内未等到控件',
+                                                      target='username', action='input'),
+                                    trees=[login],
+                                    expected_target={'id': 'username'}),
+                    Category.TIMING))
+        out.append(('T9 首次定位落空、重试成功（第 3 步）',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩T9',
+                                    step=_rescued_step(FailureKind.TIMEOUT,
+                                                       index=3, target='btn_login'),
+                                    trees=[good]), Category.TIMING))
+        out.append(('T10 超时 + 目标在最后一张快照出现',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩T10',
+                                    step=_failed_step(FailureKind.TIMEOUT,
+                                                      'TimeoutError: 8000ms 内未等到控件'),
+                                    trees=[empty, empty, good],
+                                    expected_target={'id': 'btn_submit'}),
+                    Category.TIMING))
+
+        # ---------------- 定位失败 × 5（错误形态 / 快照面）
+        out.append(('L6 超时形态、目标确实不在树',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩L6',
+                                    step=_failed_step(FailureKind.TIMEOUT,
+                                                      'TimeoutError: 8000ms 内未等到控件'),
+                                    trees=[good],
+                                    expected_target={'id': 'btn_missing'},
+                                    expected_page=page), Category.LOCATOR))
+        out.append(('L7 input 目标不在树',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩L7',
+                                    step=_failed_step(target='username2',
+                                                      action='input'),
+                                    trees=[login],
+                                    expected_target={'id': 'username2'},
+                                    expected_page=login_page), Category.LOCATOR))
+        out.append(('L8 目标在所有快照都缺席',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩L8',
+                                    step=_failed_step(),
+                                    trees=[good, good, good],
+                                    expected_target={'id': 'btn_missing'},
+                                    expected_page=page), Category.LOCATOR))
+        out.append(('L9 同前缀线索（input 控件改名）',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩L9',
+                                    step=_failed_step(target='input_search',
+                                                      action='input'),
+                                    trees=[_tree([_node('TextInput', 'input_search_v2', '',
+                                                        _b(120, 400, 960, 500))])],
+                                    expected_target={'id': 'input_search'},
+                                    expected_page=_page_key(_tree([
+                                        _node('TextInput', 'input_search_v2', '',
+                                              _b(120, 400, 960, 500))]))),
+                    Category.LOCATOR))
+        out.append(('L10 未声明期望页面（超时形态）',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩L10',
+                                    step=_failed_step(FailureKind.TIMEOUT,
+                                                      'TimeoutError: 8000ms 内未等到控件'),
+                                    trees=[good],
+                                    expected_target={'id': 'btn_missing'}),
+                    Category.LOCATOR))
+
+        # ---------------- 用例缺陷 × 5（前置 / 落点 / 控件状态面）
+        out.append(('C6 前置条件不满足（定位形态）',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩C6',
+                                    step=_failed_step(),
+                                    trees=[good],
+                                    precondition={'id': 'need_login_first'}),
+                    Category.CASE_DEFECT))
+        out.append(('C7 DSL 错误（缺参数）',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩C7',
+                                    step=_failed_step(FailureKind.DSL,
+                                                      'DslError: swipe 缺少方向参数'),
+                                    trees=[good]), Category.CASE_DEFECT))
+        out.append(('C8 落点页面与声明不符（断言形态）',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩C8',
+                                    step=_failed_step(FailureKind.ASSERT, '断言失败'),
+                                    trees=[good],
+                                    expected_target={'id': 'btn_submit'},
+                                    expected_page='0' * 40), Category.CASE_DEFECT))
+        out.append(('C9 目标控件 disabled（定位形态）',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩C9',
+                                    step=_failed_step(target='btn_submit'),
+                                    trees=[_tree([_node('Button', 'btn_submit', '提交',
+                                                        _b(120, 700, 960, 800),
+                                                        enabled='false')])],
+                                    expected_target={'id': 'btn_submit'},
+                                    expected_page=_page_key(_tree([
+                                        _node('Button', 'btn_submit', '提交',
+                                              _b(120, 700, 960, 800),
+                                              enabled='false')]))),
+                    Category.CASE_DEFECT))
+        out.append(('C10 前置条件 + 超时形态',
+                    ExecutionRecord(bundle=BUNDLE, case_name='扩C10',
+                                    step=_failed_step(FailureKind.TIMEOUT,
+                                                      'TimeoutError: 8000ms 内未等到控件'),
+                                    trees=[good],
+                                    precondition={'id': 'vip_only'}),
+                    Category.CASE_DEFECT))
+
+        return out
+
+    def _accuracy_report(self, samples):
+        """跑一批样例并生成准确率报告（原 20 条与扩容 40 条共用一套口径）。"""
         per_cat = {}
         correct = 0
         lines = []
@@ -714,7 +909,7 @@ class TestInjectedSamples20(_TmpCase):
             if hit:
                 correct += 1
                 per_cat[want.value][0] += 1
-            lines.append(f'  {"✓" if hit else "✗"} {name:<22} '
+            lines.append(f'  {"✓" if hit else "✗"} {name:<28} '
                          f'期望={CATEGORY_CN[want]} 实判={v.category_cn}'
                          f'({v.confidence:.2f})')
             if not hit:
@@ -726,9 +921,28 @@ class TestInjectedSamples20(_TmpCase):
                   + '\n  分类明细：' + '  '.join(
                       f'{CATEGORY_CN[Category(k)]} {v[0]}/{v[1]}'
                       for k, v in sorted(per_cat.items())))
-        print(report)
+        return acc, report
 
+    def test_accuracy_of_20_injected_samples(self):
+        samples = self._samples()
+        self.assertEqual(len(samples), 20, '四类各 5 例')
+
+        acc, report = self._accuracy_report(samples)
+        print(report)
         self.assertGreaterEqual(acc, 0.80, f'归因准确率未达 80%{report}')
+
+    def test_accuracy_of_40_expanded_samples(self):
+        """★ A6 扩容验收（2026-09-27）：四类各 10 例，准确率 ≥ 80%。
+
+        样例 = 原 20 条 + `_extra_samples()` 20 条。分类明细随测试输出打印，
+        离线 KPI 工具（tools/eval_kpi_offline.py）复用同一份样例集出报告。
+        """
+        samples = self._samples() + self._extra_samples()
+        self.assertEqual(len(samples), 40, '四类各 10 例')
+
+        acc, report = self._accuracy_report(samples)
+        print(report)
+        self.assertGreaterEqual(acc, 0.80, f'扩容归因准确率未达 80%{report}')
 
     def test_every_injected_crash_is_app_defect(self):
         """★ 验收硬要求单独再钉一遍：**真崩溃必须判为应用缺陷**。"""

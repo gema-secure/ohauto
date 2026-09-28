@@ -763,7 +763,12 @@ def _timing(rec: ExecutionRecord, trees: Sequence[Optional[LayoutNode]],
         return 0.0, ev
 
     # ---- ② 超时，但目标控件在超时之后的快照里出现了
-    if target is not None and trees:
+    #   ★ A6 扩容样例（2026-09-27）抓到的空真缺陷：单快照记录下
+    #   `present_early = any(trees[:-1])` 对**空序列**恒为 False，
+    #   于是「目标就在唯一的快照里」被误读成「失败后才出现 → 界面没稳定」，
+    #   把「控件在树里但 disabled」这类失败误判成时序问题(0.75)。
+    #   「晚到」至少要两张快照才说得通——失败前的快照里得真的找过。
+    if target is not None and len(trees) >= 2:
         present_late = _find_in_tree(target, trees[-1])
         present_early = any(_find_in_tree(target, r) for r in trees[:-1])
         if present_late and not present_early:

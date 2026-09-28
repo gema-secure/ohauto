@@ -15,6 +15,8 @@ B1/B2 改造（2026-09-21）：
     ★ 覆盖度度量    已访可交互 / 全部可交互，按**结构签名**归并页面
     ★ 四档优先级    弹窗内控件置顶；危险控件默认拦截，放开后置顶
     ★ Budget        一次探索的资源上限，替代散落的三个参数
+    ★ Tarpit        防粘滞（2026-09-27，借鉴 HapTest --simk）：
+                    「点一下、文案变一点」的页面不再把 BFS 队列灌满
 
     from ohauto.explorer import Explorer, Budget
 
@@ -473,6 +475,63 @@ class CoverageReport:
                 'per_page': self.per_page}
 
 
+# ================================================================ ★ Tarpit 防粘滞
+#
+# 借鉴 HapTest 的 `--simk`（UI 相似度阈值跳出，见
+# docs/调研-业界方案与技术栈-扩展版-2026-09-27.md §三）。
+#
+# 问题的形态：列表翻页、开关切换、「加一」按钮这类操作，每次点击都让文案
+# 变一点 —— 内容签名体系下每点一次都是一个「新页面」。B1 的双签名解决了
+# 「返回栈回溯被文案变化骗走」的问题，但 BFS 队列仍然会把这些同族小变体
+# 逐个入队探索：预算被「同一页的影子」吃光，覆盖率虚高、状态图被灌水。
+# 这就是 tarpit（焦油坑）—— 探索器看得见出口，却总在同一段路上打转。
+#
+# 防线只有一条原则：**只影响「要不要入队探索」，不影响记账。**
+# 状态照加、边照记、相似度和原因照存 —— 报告里查得到「为什么没探这一页」，
+# 绝不静默丢弃（与 generate_case 的「不许静默丢边」是同一条红线）。
+
+def content_similarity(a: PageSignature, b: PageSignature) -> float:
+    """两个页面状态的内容相似度（Jaccard，0~1）。
+
+    粒度取**控件行**（type|id|text|descr|WxH），不取整串哈希 ——
+    要度量的正是「大部分控件没变、少数文案变了」这种局部差异。
+    两页控件完全一致 → 1.0；完全不同 → 0.0。
+    """
+    sa = {p for p in a.content.split(';') if p}
+    sb = {p for p in b.content.split(';') if p}
+    union = sa | sb
+    if not union:
+        return 1.0        # 两张全空页视为相同（内容键相等时根本走不到这里）
+    return len(sa & sb) / len(union)
+
+
+@dataclass
+class TarpitPolicy:
+    """tarpit 防粘滞策略。
+
+    sim_threshold       与来源页的相似度 ≥ 此值 → 视为「没走出原页」，不入队。
+                        0.90 的量级参考：20 个控件的列表页翻页（改 1~2 行）≈ 0.86~0.95；
+                        小页面上的开关切换（3 控件改 1 行）≈ 0.5 —— 不会误伤。
+    max_family_states   同一结构签名下最多入队多少个状态。防「每次变化都够大、
+                        但始终在同一结构里绕圈」的残余形态；给 4 是给
+                        合法的同构兄弟页（如同模板的详情页）留的余量。
+    """
+    enabled: bool = True
+    sim_threshold: float = 0.90
+    max_family_states: int = 4
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= float(self.sim_threshold) <= 1.0:
+            raise ValueError('TarpitPolicy.sim_threshold 必须在 [0, 1]')
+        if int(self.max_family_states) < 1:
+            raise ValueError('TarpitPolicy.max_family_states 必须为正整数')
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {'enabled': self.enabled,
+                'sim_threshold': self.sim_threshold,
+                'max_family_states': self.max_family_states}
+
+
 # ---------------------------------------------------------------- 状态图
 
 @dataclass
@@ -608,9 +667,11 @@ class Explorer:
     STATUS_BAR_MAX_TOP = 72
 
     def __init__(self, driver: Driver, policy: Optional[SafetyPolicy] = None,
-                 artifact_dir: Optional[str] = None, verbose: bool = True):
+                 artifact_dir: Optional[str] = None, verbose: bool = True,
+                 tarpit_policy: Optional[TarpitPolicy] = None):
         self.driver = driver
         self.policy = policy or SafetyPolicy()
+        self.tarpit_policy = tarpit_policy or TarpitPolicy()
         self.graph = StateGraph()
         self.artifact_dir = artifact_dir or getattr(driver, 'artifact_dir', None)
         self.verbose = verbose
@@ -624,6 +685,9 @@ class Explorer:
         self._exhausted: Set[str] = set()
         # 被安全策略拦下的控件（结构签名::控件 ID）—— 计入分母但不计入分子
         self._blocked: Set[str] = set()
+        # tarpit 台账：同结构签名的状态计数 + 被拦截不入队的记录（供报告取证）
+        self._tarpit_family: Dict[str, int] = {}
+        self.tarpit_hits: List[Dict[str, Any]] = []
         # 返回核对的判定流水，供报告与测试查看（exact / content-changed / ...）
         self.back_verdicts: List[str] = []
         self.last_budget: Optional[Budget] = None
@@ -788,6 +852,30 @@ class Explorer:
             return {'descr': node.descr}
         return {'type': node.type, 'nth': 0}
 
+    def _tarpit_judge(self, new_sig: PageSignature,
+                      cur_sig: PageSignature) -> Optional[str]:
+        """新状态要不要入队探索？返回拦截原因；None = 放行。
+
+        只在 **fresh**（内容签名第一次见）的新状态上调用。
+        两条判据见 `TarpitPolicy` 的说明；拦截的记录进 `tarpit_hits`。
+        """
+        if not self.tarpit_policy.enabled:
+            return None
+        sim = content_similarity(new_sig, cur_sig)
+        if sim >= self.tarpit_policy.sim_threshold:
+            return (f'与来源页相似度 {sim:.2f} ≥ '
+                    f'{self.tarpit_policy.sim_threshold:.2f}（同页小变体）')
+        fam = self._tarpit_family.get(new_sig.structural_key, 0)
+        if fam >= self.tarpit_policy.max_family_states:
+            return (f'同结构状态已入队 {fam} 个 ≥ 上限 '
+                    f'{self.tarpit_policy.max_family_states}（同族封顶）')
+        return None
+
+    def _tarpit_note(self, sig: PageSignature) -> None:
+        """把一个已登记状态计入其结构族的台账（含入口页与被拦截的状态）。"""
+        self._tarpit_family[sig.structural_key] = \
+            self._tarpit_family.get(sig.structural_key, 0) + 1
+
     # ------------------------------------------------------------ 主循环
 
     def explore(self, max_pages: Optional[int] = None,
@@ -837,6 +925,7 @@ class Explorer:
         steps = 0
         root, sig = self._observe()
         start = self.graph.add_state(sig, self._page_title())
+        self._tarpit_note(sig)
         self.log(f'起始页面 {start.sid}「{start.title}」 结构签名 {sig.structural_key[:8]}')
 
         queue: deque = deque([start])
@@ -920,14 +1009,23 @@ class Explorer:
                 else:
                     st = self.graph.states.get(new_sig.content_key)
                     fresh = st is None
+                    # ★ tarpit 判定必须在登记之前：拦截依据是「现有的」同族数量
+                    tarpit_reason = self._tarpit_judge(new_sig, sig) if fresh else None
                     if fresh:
                         st = self.graph.add_state(
                             new_sig, self._page_title(), shot,
                             path=list(cur.path) + [dict(spec)])
-                    self.graph.add_edge(cur.sid, st.sid, label, spec)      # type: ignore[union-attr]
+                        self._tarpit_note(new_sig)
+                        if tarpit_reason:
+                            self.tarpit_hits.append(
+                                {'src': cur.sid, 'dst': st.sid, 'control': label,
+                                 'spec': dict(spec), 'reason': tarpit_reason})
+                    note = f'tarpit 不入队：{tarpit_reason}' if tarpit_reason else ''
+                    self.graph.add_edge(cur.sid, st.sid, label, spec, note=note)  # type: ignore[union-attr]
                     self.log(f'  点击「{node.label}」-> {st.sid}「{st.title}」'  # type: ignore[union-attr]
-                             f'{"（新页面）" if fresh else "（已知页面）"}')
-                    if fresh:
+                             f'{"（新页面）" if fresh else "（已知页面）"}'
+                             + (f'〔{tarpit_reason}，不入队〕' if tarpit_reason else ''))
+                    if fresh and not tarpit_reason:
                         queue.append(st)                                   # type: ignore[arg-type]
 
                 if return_back:
@@ -942,6 +1040,8 @@ class Explorer:
                  f'覆盖度 {self.coverage.ratio:.1%}'
                  f'（{self.coverage.interactive_visited}/{self.coverage.interactive_total}'
                  f'{f"，其中 {self.coverage.blocked} 个被安全策略拦下" if self.coverage.blocked else ""}）'
+                 + (f'；tarpit 拦截 {len(self.tarpit_hits)} 次不入队'
+                    if self.tarpit_hits else '')
                  + (f'；不可达页面 {unreachable}' if unreachable else ''))
         return self.graph
 
@@ -1092,6 +1192,8 @@ class Explorer:
         payload['mermaid'] = self.to_mermaid()
         payload['skipped_controls'] = _dedup_skipped(self.skipped)
         payload['coverage'] = self.coverage.to_dict()
+        payload['tarpit'] = {'policy': self.tarpit_policy.to_dict(),
+                             'hits': list(self.tarpit_hits)}
         if self.last_budget is not None:
             payload['budget'] = self.last_budget.to_dict()
         with open(path, 'w', encoding='utf-8') as f:

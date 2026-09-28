@@ -45,6 +45,24 @@ CLUES = [{'id': ids, 'type': t, 'description': f'控件{k}'}
                                           ['w1', 'w2', 'w3', 'w4', 'w5']))]
 
 
+TEN_TYPES = ('Button', 'TextInput', 'Checkbox', 'Switch', 'Search',
+             'Slider', 'Radio', 'Toggle', 'Select', 'TextArea')
+
+
+def ten_widget_page(ids):
+    """10 个不同类型可交互控件的页面（A6 扩容验收的舞台，机制同 five_widget_page）。"""
+    root = node('root', bounds=(0, 0, 720, 1280))
+    col = node('Column', parent=root)
+    for t, i in zip(TEN_TYPES, ids):
+        node(t, id=i, bounds=(10, 10, 110, 50), clickable=True, parent=col)
+    return root
+
+
+CLUES10 = [{'id': ids, 'type': t, 'description': f'控件{k}'}
+           for k, (t, ids) in enumerate(zip(TEN_TYPES,
+                                            [f'w{i}' for i in range(1, 11)]))]
+
+
 class TestChainBasics(unittest.TestCase):
     def test_l1_id_exact_hit(self):
         m = LocatorManager()
@@ -111,6 +129,33 @@ class TestAcceptance5Ids(unittest.TestCase):
             successes += 1 if r.level in ('id_exact', 'id_fuzzy_text',
                                           'path_type', 'repaired') else 0
         self.assertEqual(successes, 5)
+        for s in specs:
+            self.assertGreaterEqual(m.health(s.locator_id).success_rate, 0.8)
+            self.assertGreater(m.health(s.locator_id).degrade_count, 0,
+                               '走了降级链才算「自愈」，直连成功不算')
+
+
+class TestAcceptance10Ids(unittest.TestCase):
+    """★ A6 扩容验收（2026-09-27）：同一场景把样本量翻倍——
+    人为改 10 个控件 id，不人工干预自动恢复，成功率 ≥ 80%。
+
+    与 TestAcceptance5Ids 的关系：机制完全相同，只是舞台从 5 个控件
+    扩到 10 个（多 5 种控件类型）。原 5-id 验收原样保留（对应任务卡原文）。
+    """
+
+    def test_ten_renamed_ids_auto_recover(self):
+        m = LocatorManager()
+        page = ten_widget_page([f'w{i}' for i in range(1, 11)])
+        specs = [m.register(c, page, page_signature='P1') for c in CLUES10]
+
+        new_page = ten_widget_page([f'x{i}' for i in range(1, 11)])
+        successes = 0
+        for clue in CLUES10:
+            r = m.locate(clue, new_page, page_signature='P1')
+            self.assertIsNotNone(r, f'{clue["description"]} 定位失败')
+            successes += 1 if r.level in ('id_exact', 'id_fuzzy_text',
+                                          'path_type', 'repaired') else 0
+        self.assertEqual(successes, 10)
         for s in specs:
             self.assertGreaterEqual(m.health(s.locator_id).success_rate, 0.8)
             self.assertGreater(m.health(s.locator_id).degrade_count, 0,
