@@ -40,10 +40,26 @@ def collect(driver, run_report=None, extra: Optional[Dict[str, Any]] = None
 
 # ---------------------------------------------------------------- JSON
 
+def _json_fallback(o: Any) -> Any:
+    """非原生类型的兜底序列化。
+
+    runner 的 `StepResult.trees` 设计上允许两种形态（文件路径 str 或
+    内存态 `LayoutNode`——真机 pull 偶发竞态时快照落不了盘就退内存），
+    JSON 层必须兜得住，否则**执行跑完了、报告写崩了**，100 步的现场
+    全丢（B5 真机首跑实测踩到）。
+    """
+    if hasattr(o, 'to_dict'):
+        return o.to_dict()
+    if hasattr(o, 'describe'):
+        return o.describe()
+    return str(o)
+
+
 def to_json(data: Dict[str, Any], path: str, indent: int = 2) -> str:
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=indent)
+        json.dump(data, f, ensure_ascii=False, indent=indent,
+                  default=_json_fallback)
     return path
 
 
