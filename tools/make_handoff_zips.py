@@ -4,6 +4,8 @@
 用法::
 
     python tools/make_handoff_zips.py
+
+产物落在项目上级目录（与历史交付包同级）。
 """
 from __future__ import annotations
 
@@ -17,72 +19,68 @@ ROOT = os.path.dirname(HERE)
 OUT = os.path.dirname(ROOT)          # D:/project/（与历史交付包同级）
 PY = sys.executable
 
-README_A = """# 派活 · 给 A（2026-09-25）：自愈幂等代次修复
+README_A = """# 派活 · 给 A：视觉模块收尾（两条 + 一条研究性）
 
 ## 先看这个（5 分钟）
 
-1. `派活-给A-自愈幂等代次.md` —— 根因行号级证据 + 可直接抄的修法 + 验收命令
-2. `证据-wire_locator_sink自测输出.txt` —— 当前断点的现场记录（连续失败停在 1）
-3. `参考-C侧接线wire_locator_sink.py` —— C 侧怎么把 attempt 传进来，你照着对齐签名
+1. `派活-给A-视觉模块收尾.md` —— 行号级证据 + 修法约束 + 验收命令
+2. `参考-vision模块当前副本.py` —— 打包时刻的 vision.py，对照用（勿直接改它交付）
+3. `证据-视觉复测95.md` —— B13 真模型复测 95.0%（19/20），thinking 真关口径
 
-## 一句话背景
+## 两条正式任务
 
-挑战 #5「归因→自愈」闭环里，**归因侧全通**（结论带 locator_id、回写生效），
-卡在最后一环：你的幂等闸把执行器回写误判成重复记账 → 连续失败停在 1
-→ 自愈阈值够不着 → 生产链路上自愈**一次都不会触发**。
+1. `vision.py` 的 `_hints` 两份逐字拷贝（304/573 行）→ 提取公共函数合一，补一致性钉子；
+2. `from_env` 转发 `disable_thinking` —— 工装侧已覆写兜底（见
+   `tools/eval_vision_offline.py` 的 RecordingProvider），彻底修法在你这里；
+   **约束**：转发必须「显式传了才覆盖」，NoThinkingProvider 在 __init__
+   自塞 True，别把它的开关清掉（回归钉 test_c_thinking_flag.py 必须保持绿）。
+   改完知会 C，C 拆工装侧覆写。
 
-## 你要改的（一个文件、一个函数）
+## 一条选做（研究性，需真机与 C 排期）
 
-`ohauto/locator.py`：`record_locator_failure` 与 `_count_failure` 加**可选**参数
-`attempt`（执行尝试序号），幂等键优先用它；不传时退回现有 `_locate_seq`
-—— 内部 `locate()` 路径行为零变化，你的测试不用动。
+B10 真机自愈修复失败：重探索「无唯一匹配候选」→ 修复候选唯一性策略
+引入 text_deep / 并列候选清单。离线自愈 100% 与真机边界两行并列汇报。
 
-## C 侧已备好（你改完自动生效）
+## 门禁与纪律（本周起生效）
 
-- `ohauto/runner.py`：每次回写递增 `_attempt_seq`，按 sink 签名自适应传出
-- `tools/wire_locator_sink.py`：sink 收到 attempt 后三参转发、`TypeError` 退回两参
-
-## 验收（三条都要过）
-
-```
-python tools/wire_locator_sink.py      # 连续失败递增到 6、自愈换代触发
-python -m unittest tests.test_a_locator -q
-python tools/quality_gate.py           # 1080+ 项 OK / 0 error / 88%
-```
-
-改完把 diff 发群里，C 复跑验收并回填 `docs/指标汇总`。
+- `NAR001` 棘轮：你文件里的注释/docstring 基线已冻结，**新增日期戳/回执/
+  修复前叙事 → error 阻断门禁**（过程归 commit message，约束才留代码）；
+- `T101`：tests 里 try+assert* 被 except Exception:pass 吞 → error；
+- 交付前自测：`python tools/quality_gate.py --fast` 全绿再交，diff 发群里；
+- 真机被 C 长稳占用（今晚），📱 验收先做离线钉子。
 """
 
-README_B = """# 派活 · 给 B（2026-09-25）：空壳用例校验补闸
+README_B = """# 派活 · 给 B：生成与探索收尾（四改一确认）
 
 ## 先看这个（5 分钟）
 
-1. `派活-给B-空壳用例校验.md` —— 根因行号级证据 + 修法建议 + 验收命令
-2. `证据-L3真机评测报告.md` —— 空壳用例 2/2 全过、真引用控件 0/3 的现场数据
+1. `派活-给B-生成与探索收尾.md` —— 四条改动 + 一条复核，行号级证据都在里面
+2. `证据-nl_eval.md` —— B8 真机执行报告：L3 两条用例各挂 1 步，根因同源
+3. `证据-note用例真机10轮失败.log` —— note_stability 用例过期的现场
 
-## 一句话背景
+## 四条正式任务
 
-`validate_case` 只做**逐步**检查，没有「用例整体必须做事」的总闸 →
-只含 `start`/`waitIdle`/`screenshot` 的空壳用例每步都合法、顺利放行。
-L3 真机实测：**空壳 2/2 全过，真引用控件的 3 条 0/3 整全过**。
+1. **断言目标选择**（B8 抓到的生成质量缺陷）：模型把导航前页面控件
+   （tv_probe_always）写进导航后断言 → 两条用例用例级 0/2。修法方向：
+   断言目标与当前页 page_path 一致性校验（PageState.page_path 已可用）；
+2. `trace_to_steps` 未处理 kind 静默丢（double_tap/long_press/fling/
+   screenshot/home/key）→ unresolved 占位，与你 336-340 行自己的红线对齐；
+3. `generator.py` dry_run 消费端不看 `kind='assert'` → 带导航后断言的
+   用例被系统性误杀，转「需真机确认」类；
+4. 分辨率家族 B 侧 3 处（1307/1725/1827 的 1080×2340）→ 真机 720×1280，
+   能取实测取实测，回落值注明出处。
 
-「可执行」不等于「做了事」—— 这句会被评审问倒，所以必须补这条规则。
+## 一条复核确认（一行字回执即可）
 
-## 你要改的（一个文件、一条检查）
+`explorer.PageState.page_path` 是 C 代补（签名层有、状态层没带出）——
+核对字段位置、add_state 透传、与你的双签名口径是否一致，确认即销账。
 
-`ohauto/generator.py::validate_case`：用例级总闸——所有动作都属于
-「不引用控件」集合时直接拒（集合口径请把关 `waitGone` 等边界）。
-拒绝分类可复用 `EMPTY` 或新增，并补 `reason.cn` 映射。
+## 门禁与纪律（本周起生效）
 
-## 验收
-
-```
-# 三步空壳用例 {'start':True},{'waitIdle':2},{'screenshot':'x'} → issues 非空
-python -m unittest tests.test_core tests.test_diagnose -q
-python tools/eval_nl_generation_real.py --execute   # 负样本误放 3/6 → 0/6（需 key+真机，可与 C 联跑）
-```
-
-改完把 diff 发群里，C 复跑验收并回填 `docs/指标汇总`。
+- `NAR001` 棘轮：你的文件基线已冻结，注释新增日期戳/回执/修复前 → error；
+- `T101`：tests 里 try+assert* 被 except Exception:pass 吞 → error；
+- 交付前自测：`python tools/quality_gate.py --fast` 全绿再交，diff 发群里；
+- 真机被 C 长稳占用（今晚），📱 验收先做离线钉子，与 C 排期联跑。
 """
 
 
@@ -108,33 +106,39 @@ def _zip(path: str, members) -> None:
 
 
 def main() -> int:
-    print('采集证据（跑自测）…')
-    ev_a = _run([PY, os.path.join('tools', 'wire_locator_sink.py')])
+    ev_a = _run([PY, '-m', 'unittest', 'tests.test_a_vision',
+                 'tests.test_a_locator', '-q'])
+    ev_b = _run([PY, '-m', 'unittest', 'tests.test_generator',
+                 'tests.test_explorer_b1', 'tests.test_c_thinking_flag', '-q'])
 
-    a = os.path.join(OUT, 'C交付-给A-2026-09-25.zip')
+    a = os.path.join(OUT, 'C交付-给A-2026-09-28.zip')
     _zip(a, [
         ('README-给A.md', None),
-        ('派活-给A-自愈幂等代次.md',
-         os.path.join(ROOT, 'docs', '派活-给A-自愈幂等代次-2026-09-25.md')),
-        ('证据-wire_locator_sink自测输出.txt', None),
-        ('参考-C侧接线wire_locator_sink.py',
-         os.path.join(ROOT, 'tools', 'wire_locator_sink.py')),
+        ('派活-给A-视觉模块收尾.md',
+         os.path.join(ROOT, 'docs', '派活-给A-视觉模块收尾-2026-09-28.md')),
+        ('参考-vision模块当前副本.py', os.path.join(ROOT, 'ohauto', 'vision.py')),
+        ('证据-视觉复测95.md',
+         os.path.join(ROOT, '_out', 'vision_eval', 'vision_eval.md')),
+        ('证据-A侧相关测试基线.txt', None),
     ])
-    # README/证据用字符串写入
     with zipfile.ZipFile(a, 'a', zipfile.ZIP_DEFLATED) as z:
         z.writestr('README-给A.md', README_A)
-        z.writestr('证据-wire_locator_sink自测输出.txt', ev_a)
+        z.writestr('证据-A侧相关测试基线.txt', ev_a)
 
-    b = os.path.join(OUT, 'C交付-给B-2026-09-25.zip')
+    b = os.path.join(OUT, 'C交付-给B-2026-09-28.zip')
     _zip(b, [
         ('README-给B.md', None),
-        ('派活-给B-空壳用例校验.md',
-         os.path.join(ROOT, 'docs', '派活-给B-空壳用例校验-2026-09-25.md')),
-        ('证据-L3真机评测报告.md',
-         os.path.join(ROOT, 'tools', '_out', 'nl_eval', 'nl_eval.md')),
+        ('派活-给B-生成与探索收尾.md',
+         os.path.join(ROOT, 'docs', '派活-给B-生成与探索收尾-2026-09-28.md')),
+        ('证据-nl_eval.md', os.path.join(ROOT, 'tools', '_out', 'nl_eval',
+                                         'nl_eval.md')),
+        ('证据-note用例真机10轮失败.log',
+         os.path.join(ROOT, 'tools', '_out', 'b5_note_stale_evidence.log')),
+        ('证据-B侧相关测试基线.txt', None),
     ])
     with zipfile.ZipFile(b, 'a', zipfile.ZIP_DEFLATED) as z:
         z.writestr('README-给B.md', README_B)
+        z.writestr('证据-B侧相关测试基线.txt', ev_b)
     return 0
 
 
