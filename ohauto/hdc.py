@@ -415,7 +415,15 @@ class Hdc:
     def input_text(self, x: int, y: int, text: str) -> None:
         # 文本必须整体作为**一个**参数下到设备侧 shell —— 见 `_sh_quote` 的说明。
         # 含空格/引号/$ 的输入文本在 UI 测试里是高频场景，不是边角情况。
-        self._ui_input('inputText', int(x), int(y), self._sh_quote(text))
+        quoted = self._sh_quote(text)
+        if len(quoted) > 30000:
+            # Windows 单条命令行上限 32767 字符，超限是 subprocess 直接炸
+            # （红队实测 50KB 文本命中）。宁可响亮地失败——分段注入需要
+            # 真机验证「追加语义」，没验证过的分支不做。
+            raise HdcError(
+                '输入文本过长（引号后 %d 字符 > 30000 上限）——请拆分用例步骤；'
+                '自动分段注入需真机验证后开放' % len(quoted))
+        self._ui_input('inputText', int(x), int(y), quoted)
 
     def swipe(self, fx: int, fy: int, tx: int, ty: int, velocity: int = 600) -> None:
         self._ui_input('swipe', int(fx), int(fy), int(tx), int(ty), velocity)

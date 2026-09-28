@@ -176,7 +176,26 @@ def main():
                     pass
             items.append((d, c))
 
-    suite = runner.run_suite(items, guard=guard)
+    # 逐轮执行 + **每轮增量落盘**：进程被杀（长稳实测被外部终止过）也留得住
+    # 已完成的轮次；顺带每轮重钉一次息屏（power-shell timeout 只保 30 分钟，
+    # 2 小时长稳中途会息屏进锁屏——首轮 ensure_awake 不够）。
+    from ohauto.runner import SuiteResult
+    suite = SuiteResult()
+    for i, (d, c) in enumerate(items, 1):
+        one = runner.run_suite([(d, c)], guard=guard)
+        suite.cases.extend(one.cases)
+        suite.elapsed_ms += one.elapsed_ms
+        if one.guard_stats:
+            suite.guard_stats = one.guard_stats
+        try:
+            report.to_json({'suite': suite.to_dict(),
+                            'kpi_target': args.kpi,
+                            'mode': 'sim' if args.sim else 'device',
+                            'rounds_done': i},
+                           os.path.join(args.out, 'suite_report_partial.json'))
+        except Exception as e:
+            print('[warn] 增量报告落盘失败（不影响执行）: %s: %s'
+                  % (type(e).__name__, e))
 
     # ---------------------------------------------------------- 汇总
     _print_summary(suite, guard, args)
