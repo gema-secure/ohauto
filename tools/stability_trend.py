@@ -131,10 +131,10 @@ def main(argv: List[str] = None) -> int:
         suite = load_suite(args.report)
     except (OSError, ValueError) as e:
         print('报告不可读: %s' % e)
-        return 2
+        return 1
     if not suite.get('case_results'):
         print('报告里没有 case_results——确认是 run_suite 的产物')
-        return 2
+        return 1
 
     r = analyze(suite, group=max(1, args.group))
     print(render(r))
