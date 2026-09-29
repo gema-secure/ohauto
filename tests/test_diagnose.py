@@ -1226,14 +1226,52 @@ class TestSnapshotLoader(unittest.TestCase):
             fh.write('{ 这不是 json')
         self.assertEqual(len(load_snapshots(self.dir)), 1)
 
-    def test_step_index_prefers_matching_names(self):
-        self._write('step2_layout.json', _good_page())
-        self._write('step3_layout.json', _tree([
+    def test_snapshots_are_ordered_by_four_digit_seq(self):
+        """★ 排序键 = **4 位采集序号前缀**（B 交付 09-29，C 的权威命名规则）。
+
+        `driver._art()` 产出 `f'{seq:04d}_{ext}'`，`seq` 是全局递增计数器。
+        只有按这个序号排才是「执行顺序」；按文件名里有没有 layout 字样排是
+        恒真的（真名全都带），等于没排。
+        """
+        self._write('0003_layout.json', _tree([
             _node('Text', 'other', '另一页', _b(0, 0, 100, 100), 'false')]))
-        trees = load_snapshots(self.dir, step_index=3)
-        self.assertEqual(len(trees), 1)
-        self.assertIn('other', [c.id for c in trees[0].children],
-                      '应该挑中 step3 那张，不是 step2')
+        self._write('0001_layout.json', _good_page())
+        self._write('0010_layout.json', _tree([
+            _node('Text', 'other', '另一页', _b(0, 0, 100, 100), 'false')]))
+        trees = load_snapshots(self.dir)
+        self.assertEqual(len(trees), 3)
+        self.assertEqual([t.type for t in trees], ['Root'] * 3)
+        self.assertEqual(trees[0].children[1].id, 'btn_submit',
+                         '0001 应排最前（升序返回）')
+
+    def test_step_index_is_not_a_filename_filter(self):
+        """★ `step_index` **不再筛名** —— 真名里没有步号，筛了只会筛掉全部。
+
+        原实现拿 `3` / `03` / `step3` 去匹配文件名，而真名是
+        `0001_layout.json`：既匹配不到，又会误中无关序号。
+        现在它只是兼容占位，给不给结果一样（B 交付 09-29）。
+        """
+        self._write('0001_layout.json', _good_page())
+        self._write('0002_layout.json', _good_page())
+        with_index = load_snapshots(self.dir, step_index=3)
+        without = load_snapshots(self.dir)
+        self.assertEqual(len(with_index), 2, '给了 step_index 也不许筛掉文件')
+        self.assertEqual([t.type for t in with_index], [t.type for t in without])
+
+    def test_limit_keeps_the_most_recent_snapshots(self):
+        """★ 取**序号最大**的那几张：本函数在「失败发生的那一刻」被调用，
+        离现场最近的快照才有用 —— 取最早几张会把失败现场整个漏掉（B 交付 09-29）。
+        """
+        self._write('0001_layout.json', _good_page())
+        for i in range(2, 6):
+            self._write(f'{i:04d}_layout.json',
+                        _tree([_node('Text', 'other', '另一页',
+                                     _b(0, 0, 100, 100), 'false')]))
+        trees = load_snapshots(self.dir, limit=2)
+        self.assertEqual(len(trees), 2)
+        for t in trees:
+            self.assertIn('other', [c.id for c in t.children],
+                          '限制张数时应保留序号最大的（离失败最近）')
 
     def test_missing_directory_returns_empty_not_raises(self):
         self.assertEqual(load_snapshots(None), [])

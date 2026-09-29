@@ -955,24 +955,40 @@ _SNAPSHOT_EXCLUDE = ('report', 'graph', 'summary', 'suite', 'case',
                      'signals', 'steps', 'manifest', 'index')
 
 
+_SNAP_SEQ_RE = re.compile(r'^(\d{4})_')
+
+
 def load_snapshots(artifact_dir: Any, *, step_index: Optional[int] = None,
                    limit: int = 8) -> List[LayoutNode]:
-    """从产物目录里捞控件树快照，**按文件名排序**返回（最早的在前）。
+    """从产物目录里捞控件树快照，按**采集序号**升序返回。
 
     这是为 C 的「闭环接入」补的：`ExecutionRecord.trees` 需要失败步前后的
     `dumpLayout` 快照，而产物目录里混着报告 / 用例 / 图等一堆 json，
     **不能盲读** —— 所以这里逐个尝试解析，只有能解析出带 bounds 的控件树才采用，
     其余静默跳过（坏文件不该让归因失败）。
 
-    C 那边已实现「失败步自动留 2 张快照」；本函数对命名**不挑食**：
-    带 `layout / dump / tree / snapshot` 字样的排前面，其余按名字顺序兜底，
-    这样他的命名调整不会让我这边失效。
+    ⚠️ **`step_index` 不是文件名过滤器**（09-29 按 C 的实测更正，移植人 B）
+    ---------------------------------------------------------------
+    产物文件名来自 `driver._art()`：`f'{seq:04d}_{ext}'`，`seq` 是
+    **全局递增的采集计数器**（截图与控件树共用一个），**一步可产生 0..N 张** ——
+    **文件名里没有步号**。所以原来「第 3 步 → 找名字带 3 的文件」
+    永远匹配不到真名（真名是 `0003_layout.json`），还会误中无关序号。
+
+    参数保留只为兼容调用方：给了也**不筛名、不参与任何判定**。
+    要精确定位失败步的快照请走 `runner.StepResult.trees`（C 的权威通道）；
+    本函数是它的兜底。
+
+    取哪几张
+    --------
+    **从序号最大的往回取**：本函数的使用场景是「失败发生的那一刻被调用」，
+    此时离现场最近的快照才有用 —— 取最早那几张会把失败现场整个漏掉。
+
+    仓库侧保留 `_SNAPSHOT_EXCLUDE` 过滤（报告/用例等非快照 json 的黑名单，
+    本文件 09-22 起的既有防护，B 交付版基线里没有——移植时保留）。
 
     Parameters
     ----------
-    step_index: 若给出，只优先取文件名里带该步号（`3` / `03` / `step3`）的快照，
-                取不到就退回全部 —— **宁可多给几张，也不要给空**。
-    limit:      最多返回几张（默认 8）。
+    limit: 最多返回几张（默认 8）。返回顺序仍是**升序**（最早的在前）。
     """
     import json as _json
 
@@ -980,7 +996,7 @@ def load_snapshots(artifact_dir: Any, *, step_index: Optional[int] = None,
         return []
 
     names = []
-    for fn in sorted(os.listdir(str(artifact_dir))):
+    for fn in os.listdir(str(artifact_dir)):
         low = fn.lower()
         if not low.endswith('.json'):
             continue
@@ -988,18 +1004,15 @@ def load_snapshots(artifact_dir: Any, *, step_index: Optional[int] = None,
             continue
         names.append(fn)
 
-    if step_index is not None:
-        want = (f'{step_index}', f'{step_index:02d}', f'step{step_index}',
-                f'step_{step_index}', f'step-{step_index}')
-        prefer = [n for n in names if any(w in n.lower() for w in want)]
-        if prefer:
-            names = prefer
+    def _key(n: str):
+        m = _SNAP_SEQ_RE.match(n)
+        hinted = 0 if any(h in n.lower() for h in _SNAPSHOT_HINTS) else 1
+        return (0, int(m.group(1)), 0, n) if m else (1, 0, hinted, n)
 
-    names.sort(key=lambda n: (0 if any(h in n.lower() for h in _SNAPSHOT_HINTS)
-                              else 1, n))
+    names.sort(key=_key)
 
     out: List[LayoutNode] = []
-    for fn in names:
+    for fn in reversed(names):          # 从序号最大的往回取（离失败现场最近）
         if len(out) >= limit:
             break
         path = os.path.join(str(artifact_dir), fn)
@@ -1011,6 +1024,7 @@ def load_snapshots(artifact_dir: Any, *, step_index: Optional[int] = None,
         root = _as_tree(data)
         if root is not None:
             out.append(root)
+    out.reverse()                       # 返回顺序保持升序（最早的在前）
     return out
 
 
