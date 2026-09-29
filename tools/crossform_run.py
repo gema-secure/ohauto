@@ -65,7 +65,31 @@ from ohauto.crossform import (          # noqa: E402
 from ohauto.crossform_report import write_all      # noqa: E402
 from ohauto.devices import FormProfile             # noqa: E402
 from ohauto.layout import parse_layout             # noqa: E402
-from preflight import require_device                  # noqa: E402
+from preflight import require_device, default_target   # noqa: E402
+
+
+def _emulator_target(real_serial: str) -> Optional[str]:
+    """多设备在线时解析出**模拟器自己的 hdc 目标**。
+
+    真机与模拟器同时在线时，折叠态切换（Emulator.exe -foldedState）只作用于
+    模拟器——若采集目标被自动钉到真机，两轮采集就是一模一样的树，
+    B12 会静默产出 0 差异的废报告（09-29 双设备实测场景）。
+    解析规则：排除配置的真机串号后，优先形如 `host:port` 的 TCP 目标。
+    """
+    from ohauto.hdc import Hdc
+    h = Hdc()
+    try:
+        ts = h.list_targets() or []
+    except Exception:
+        return None
+    ts = [t for t in ts if t]
+    if not ts:
+        return None
+    if len(ts) == 1:
+        return ts[0]
+    others = [t for t in ts if t != real_serial]
+    tcp = [t for t in others if ':' in t]
+    return (tcp or others or [None])[0]
 
 # 复用上一步做好的纯函数与模拟器
 from tools.emulator_cli import parse_screen_info   # noqa: E402
@@ -198,7 +222,10 @@ def capture_online(device: str, form_state: Optional[str],
         print(f'  [fold] {device} -> {folded_state} :: '
               f'{str(r.get("stdout", "")).strip()[:80]}')
 
-    hdc = require_device()
+    # ★ 多设备在线时必须**显式选模拟器**：真机也在 targets 里，而折叠态
+    #   切换只作用于模拟器——采错目标就是两轮一模一样的废报告。
+    tgt = _emulator_target(default_target())
+    hdc = require_device(target=tgt)
     last_err = ''
     for attempt in range(1, retries + 1):
         # 折叠态切换后系统要重新完成布局，等不够会拿到旧树或空树。
