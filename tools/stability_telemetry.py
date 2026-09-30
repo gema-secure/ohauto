@@ -64,17 +64,25 @@ def _device_sample(hdc: Hdc, bundle: str) -> Dict[str, Any]:
 
     try:
         r = hdc.shell('hidumper --mem %s' % s['pid'], timeout=30)
-        # ⚠️ 解析格式**待真机回连校准**：当前按「含 PSS 字样的行里最后一个
-        # 数字 = 合计」猜测——首采（设备在线时）没解析到，说明真实表头
-        # 可能不含 PSS 字样。回连后先抓一份原始输出贴进这里再定稿。
+        # 解析格式（真机 DAYU200 实测定稿）：表头行含 `Pss  Shared ...`，
+        # **数值在紧随其后的 `Total 41322 ...` 行**——表头行本身没有数字。
+        # 规则：见到 Pss 表头后，扫其后首个 Total 行，取第一个数字 = PSS 合计。
         pss = None
+        seen_header = False
         for line in (r.stdout or '').splitlines():
-            if 'PSS' in line.upper():
+            up = line.upper()
+            if 'PSS' in up:
+                seen_header = True
+                continue
+            # 表格有**两行** Total 开头：先是单位行（Total Clean Dirty...，无数字），
+            # 后才是数值行（Total 41322 ...）——只在拿到数字时才停。
+            if seen_header and re.match(r'\s*Total\b', line, re.IGNORECASE):
                 nums = re.findall(r'(\d+)', line)
                 if nums:
-                    pss = int(nums[-1])       # 该行最后一个数字 = 合计
+                    pss = int(nums[0])
+                    break
         if pss is None:
-            s['warn'].append('hidumper 输出里没解析到 PSS 行（格式待校准）')
+            s['warn'].append('hidumper 输出里没解析到 PSS（表头+Total 结构缺失）')
         else:
             s['pss_kb'] = pss
     except Exception as e:
@@ -198,9 +206,17 @@ def main(argv: List[str] = None) -> int:
         rounds = None
         if args.partial and os.path.isfile(args.partial):
             try:
+                # cycles 文件是 **JSONL**（每周期一行）——整文件 json.load 会炸，
+                # 只读最后一行的 totals.cycles（B15 首跑踩过）。
                 with open(args.partial, encoding='utf-8') as f:
-                    d = json.load(f)
-                rounds = (d.get('suite') or d).get('cases')
+                    last = ''
+                    for line in f:
+                        if line.strip():
+                            last = line
+                if last:
+                    d = json.loads(last)
+                    totals = d.get('totals') or {}
+                    rounds = totals.get('cycles')
             except Exception:
                 pass
         s = take_sample(hdc, args.bundle, args.host_pid, rounds)

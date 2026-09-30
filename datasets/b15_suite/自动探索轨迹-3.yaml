@@ -1,0 +1,11 @@
+name: 自动探索轨迹-3
+bundle: com.huawei.hmos.settings
+ability: ''
+steps:
+- start: true
+- tap:
+    id: hms_account_home_settings
+- waitIdle: true
+note: '本用例是探索图拆出的第 3/3 条路径，覆盖 1/3 条跳转边：hms_account_home_settings(S1→S3)
+
+  其余边在同目录的其它用例里 —— 总覆盖率看全部，别只看这一条。'
