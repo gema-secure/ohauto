@@ -99,11 +99,17 @@ def _dump_texts_and_icon(hdc: Hdc) -> Tuple[set, Optional[Tuple[int, int]]]:
     return texts, found[0]
 
 
-def _ensure_settings_foreground(hdc: Hdc, attempts: int = 2) -> bool:
-    """Home → 点设置图标 → 验证主页标记。失败重试一次，仍失败返回 False。"""
+def _ensure_settings_foreground(hdc: Hdc, attempts: int = 2,
+                                start_cmd: Optional[str] = None) -> bool:
+    """验证主页标记；不在则拉起。
+
+    两条拉起路径：`start_cmd`（真机型：应用有 MainAbility，aa start 可靠）
+    或图标点击（模拟器 hmos 变体：无 MainAbility，只能点桌面图标）。
+    验证一律以主页标记为准（WLAN 等）。"""
     for attempt in range(1, attempts + 1):
-        hdc.shell('uitest uiInput keyEvent Home', timeout=20)
-        time.sleep(2)
+        if start_cmd:
+            hdc.shell(start_cmd, timeout=30)
+            time.sleep(4)
         texts, icon = _dump_texts_and_icon(hdc)
         if any(m in texts for m in MAIN_MARKERS):
             return True                      # 已在设置主页（如上一周期残留）
@@ -146,6 +152,8 @@ def main(argv: List[str] = None) -> int:
     ap.add_argument('--fold-instance', default=None)
     ap.add_argument('--fold-every', type=int, default=10)
     ap.add_argument('--fold-states', default='close,open')
+    ap.add_argument('--start-cmd', default=None,
+                    help='真机型显式拉起命令（aa start ...），缺省走图标点击路径')
     args = ap.parse_args(argv)
 
     cases = sorted(glob.glob(os.path.join(args.suite_dir, '*.yaml')))
@@ -180,7 +188,7 @@ def main(argv: List[str] = None) -> int:
             time.sleep(6)
 
         # ---- 前台核验（失败绝不重放）
-        if not _ensure_settings_foreground(hdc):
+        if not _ensure_settings_foreground(hdc, start_cmd=args.start_cmd):
             totals['fg_fail'] += 1
             rec['error'] = '前台核验失败——未在设置主页，本周期跳过重放'
             rec['totals'] = dict(totals)
