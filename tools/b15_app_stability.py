@@ -109,12 +109,16 @@ def _ensure_settings_foreground(hdc: Hdc, attempts: int = 2,
     for attempt in range(1, attempts + 1):
         if start_cmd:
             hdc.shell(start_cmd, timeout=30)
-            time.sleep(4)
+            # 冷启动时间不定（真机实测 6s+），逐次加长等待；
+            # 重试**不再重复 force-stop**——那会把刚拉起的应用又杀掉，
+            # 核验永远追不上冷启动（首测 4s×2 次就是这个死循环）。
+            time.sleep(4 + 4 * attempt)
         texts, icon = _dump_texts_and_icon(hdc)
         if any(m in texts for m in MAIN_MARKERS):
             return True                      # 已在设置主页（如上一周期残留）
         if icon is None:
-            _log('前台核验 %d/%d：桌面上没找到设置图标' % (attempt, attempts))
+            _log('前台核验 %d/%d：未见设置主页标记，也无设置图标可点'
+                 % (attempt, attempts))
             continue
         hdc.shell('uitest uiInput click %d %d' % icon, timeout=20)
         time.sleep(4)
@@ -201,8 +205,15 @@ def main(argv: List[str] = None) -> int:
         # ---- replay 冻结套件（无 start 步，前台已核验）
         cycle_steps = cycle_pass = 0
         case_results = []
-        for cf in cases:
+        for idx, cf in enumerate(cases):
             try:
+                if idx > 0 and args.start_cmd:
+                    # 用例间复位：force-stop + 显式拉起 → 每条用例都从设置
+                    # 主页出发。**顺序依赖缺陷的根治**（首轮 90 败：轨迹-3
+                    # 单测 4/4 过、跟在轨迹-1 后每周期必挂——其规格依赖
+                    # 前序页面状态）。
+                    hdc.shell(args.start_cmd, timeout=30)
+                    time.sleep(4)
                 d = Driver(bundle=args.bundle, ability='',
                            hdc=Hdc(target=args.target), verbose=False)
                 res = runner.run_case(d, _strip_start_steps(load_case(cf)))
