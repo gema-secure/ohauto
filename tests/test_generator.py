@@ -499,22 +499,30 @@ class TestGenerateFlow(_SimCase):
             g.generate_case('用户能登录')
         self.assertEqual(cm.exception.outcome.reason, RejectReason.PROVIDER)
 
-    def test_dry_run_failure_is_classified(self):
-        """干跑失败要单独成一类原因。
+    def test_dry_run_assert_failure_is_not_graded_as_dry_run_failure(self):
+        """干跑失败要单独成类 —— 而**断言**那类不算「干跑失败」。
 
         这里刻意用「控件存在、但断言文本对不上」：它能过静态校验
-        （控件确实在树里），只在**真的执行**时才暴露 —— 这正是干跑该抓的东西。
+        （控件确实在树里），只在**真的执行**时才暴露。
         用「引用不存在的文案」是抓不到的，那在静态校验就成 CONTROL_MISSING 了。
+
+        干跑会跳过 `tap`，于是断言挂在「还没导航过去」的页面上必然不成立 ——
+        它证明的是「离线判不了」，不是「用例写错了」。判成 DRYRUN_FAILED
+        会让所有带导航后断言的用例只要传了 driver 就被误杀。
         """
         bad = _good_case(steps=[
             {'start': True},
+            {'tap': {'id': 'btn_login'}},
             {'assert': {'text': {'id': 'title', 'equals': '这里不是欢迎登录'}}},
         ])
         g = Generator(provider=_StageAwareProvider(case=bad),
                       bundle='com.demo.app', page=self.page, max_repair=0)
         out = g.generate('用户能登录', driver=self.driver)
-        self.assertEqual(out.reason, RejectReason.DRYRUN_FAILED)
-        self.assertIn('干跑失败', out.detail)
+        self.assertEqual(out.reason, RejectReason.ASSERT_NEEDS_DEVICE)
+        self.assertNotEqual(out.reason, RejectReason.DRYRUN_FAILED)
+        self.assertIn('真机', out.detail)
+        self.assertTrue(any('真机' in n for n in out.case.repair_notes),
+                        out.case.repair_notes)
 
     def test_case_round_trips_to_executable_dsl(self):
         """生成的用例要能**真的被执行器吃下去** —— 生成与执行之间不另发明格式。"""

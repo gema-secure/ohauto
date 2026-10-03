@@ -561,6 +561,10 @@ class PageState:
              'screenshot': self.screenshot,
              'content_key': self.content_key,
              'structural_key': self.structural_key,
+             # 设备自报路由：签名层参与哈希、状态层存了字段，这里必须一并带出 ——
+             # 不然落盘的 graph.json 里读不到它，「页级归并」的消费方只能拿
+             # structural_key 反推，而那正是 page_path 想替掉的事。
+             'page_path': self.page_path,
              'reachable': self.reachable}
         if self.path:
             d['path'] = self.path

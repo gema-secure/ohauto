@@ -54,10 +54,23 @@ class TestParserSurvivesHostileInput(unittest.TestCase):
         self.assertEqual(len(ON.text_contains('ok').filter(list(root.walk()))), 1)
 
 
+def _hdc_available() -> bool:
+    """本机是否装了 hdc——超长文本护栏的拦截发生在 exec 层构造 Hdc 时，
+    无 hdc 的机器（如 CI runner）上这条测的是环境而非护栏本身。
+    探测口径与 doctor.py 一致：构造 Hdc()，抛错即视为无 hdc。"""
+    try:
+        from ohauto.hdc import Hdc as _H
+        _H()
+        return True
+    except Exception:
+        return False
+
+
 class TestInputTextLengthGuard(unittest.TestCase):
     """50KB 文本会让 hdc 命令超 Windows 32767 上限直接炸 subprocess——
     红队实测，故超限必须响亮拒绝而不是碰运气。"""
 
+    @unittest.skipUnless(_hdc_available(), '无 hdc：exec 层拦截在装 hdc 的机器上验')
     def test_oversized_text_rejected_loudly(self):
         from ohauto.hdc import Hdc, HdcError
         hdc = Hdc()

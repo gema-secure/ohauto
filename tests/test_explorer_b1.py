@@ -5,6 +5,7 @@
 这里刻意把「双签名」当成一号被测对象：任务卡说它是「B1 最该先定下来的东西，
 定错了后面全白做」，所以它的行为必须有测试钉住，而不是靠注释解释。
 """
+import json
 import os
 import shutil
 import sys
@@ -838,3 +839,61 @@ class TestRefreshSignatureRegression(_SimCase):
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
+
+
+# ================================================================ 页面路由（状态层）
+
+class TestPagePathReachesTheArtifact(_SimCase):
+    """设备自报的页面路由要从签名层一路透到**落盘产物**。
+
+    只把字段挂在 dataclass 上是不够的：消费方（页级归并、覆盖率报告）
+    读的是 `save_graph()` 落下的 JSON —— 序列化那一环断了，字段等于没有，
+    而字段本身还在，读代码时看不出来。
+    """
+
+    def _page(self, path='pages/Index'):
+        root = _tree([_node('Button', 'b', 'x', _b(10, 10, 100, 100))])
+        root['attributes']['pagePath'] = path
+        return root
+
+    def _sig(self, path='pages/Index', bundle='com.demo.app'):
+        return build_page_signature(parse_layout(self._page(path)), bundle=bundle)
+
+    def test_signature_carries_the_device_reported_route(self):
+        self.assertEqual(self._sig().page_path, 'pages/Index')
+
+    def test_route_participates_in_both_signatures(self):
+        """路由是**身份**的一部分：换个页面就该是另一个 key。"""
+        a, b = self._sig('pages/A'), self._sig('pages/B')
+        self.assertNotEqual(a.content_key, b.content_key)
+        self.assertNotEqual(a.structural_key, b.structural_key)
+
+    def test_state_layer_keeps_the_route(self):
+        g = StateGraph()
+        st = g.add_state(self._sig(), '首页')
+        self.assertEqual(st.page_path, 'pages/Index')
+
+    def test_to_dict_exports_the_route(self):
+        g = StateGraph()
+        st = g.add_state(self._sig(), '首页')
+        self.assertIn('page_path', st.to_dict())
+        self.assertEqual(st.to_dict()['page_path'], 'pages/Index')
+
+    def test_saved_graph_carries_the_route(self):
+        sim, d = self._sim_driver()
+        ex = Explorer(d, artifact_dir=self.tmp, verbose=False)
+        ex.graph.add_state(self._sig(), '首页')
+        path = ex.save_graph(os.path.join(self.tmp, 'g.json'))
+        with open(path, encoding='utf-8') as fh:
+            payload = json.load(fh)
+        routes = [s.get('page_path') for s in payload['states']]
+        self.assertIn('pages/Index', routes,
+                      '落盘产物里读不到 page_path，消费方就只能拿 structural_key 反推')
+
+    def test_legacy_bare_signature_is_still_accepted(self):
+        """旧调用方式（裸字符串签名）不炸，路由留空。"""
+        g = StateGraph()
+        st = g.add_state('raw-signature', '旧式')
+        self.assertEqual(st.page_path, '')
+        self.assertIn('page_path', st.to_dict())
+

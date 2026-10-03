@@ -441,6 +441,66 @@ def _assert_step(kind: str, s: Any) -> Dict[str, Any]:
     return {'assert': {field: spec}}
 
 
+#: 「调用方显式关掉了这一类」的哨兵 —— 与「这条没被处理」严格区分开。
+#: 只有它能让一步留痕**有理由地**不进产物；其余任何 kind 都必须有产物。
+_OPTED_OUT = object()
+
+#: 留痕 kind → DSL 动作名：形状与已支持项**完全同构**、能无损直译的那些。
+#:
+#: `longPress` 与 `tap` 同形（都由 `node_path` 反解出规格）；
+#: `waitGone` 与 `waitFor` 同形（都是带超时的具名等待）。
+#: 它们没有理由退化成占位 —— 占位会让人以为「这条还原不了」，
+#: 而真相是「还原得了，只是以前没写」。
+_TRACE_DIRECT: Dict[str, str] = {
+    'longPress': 'long_press',
+    'waitGone': 'waitGone',
+}
+
+
+def _trace_step_of(kind: str, s: Any, *, include_waits: bool,
+                   include_asserts: bool) -> Any:
+    """把一个留痕还原成 DSL 步骤；`_OPTED_OUT` 表示调用方关掉了这一类。
+
+    兜底原则：**除「调用方显式关掉」之外，任何 kind 都返回产物** ——
+    能忠实还原就给可执行步骤，还原不了给 `unresolved` 占位。
+
+    `tap_xy` 刻意只给占位：它是视觉通道的落点坐标，而坐标是探索期的偶然，
+    不是回归期的契约（红线第 5 条）。占位里保留 `node_path` 供上层补定位规格。
+    """
+    if kind == 'start':
+        return {'start': True}
+    if kind in ('tap', 'longPress'):
+        spec = _path_to_spec(s.node_path)
+        if not spec:
+            return _unresolved_step(kind, s.node_path, '留痕里没有可解析的控件路径')
+        return {_TRACE_DIRECT.get(kind, kind): spec}
+    if kind == 'input':
+        if s.value is None:
+            return _unresolved_step('input', s.node_path, '留痕里没有输入值')
+        spec = _path_to_spec(s.node_path)
+        if not spec:
+            return _unresolved_step('input', s.node_path,
+                                    '留痕里没有可解析的控件路径', value=s.value)
+        spec['value'] = s.value
+        return {'input': spec}
+    if kind == 'swipe':
+        return {'swipe': {'direction': s.target or 'up', 'scale': s.value or 0.6}}
+    if kind in ('back', 'home'):
+        return {kind: True}
+    if kind in ('waitFor', 'waitGone'):
+        if not include_waits:
+            return _OPTED_OUT
+        spec = _path_to_spec(s.node_path)
+        return {_TRACE_DIRECT.get(kind, kind): spec or s.target}
+    if kind.startswith('assert'):
+        return _assert_step(kind, s) if include_asserts else _OPTED_OUT
+    if kind == 'tap_xy':
+        return _unresolved_step('tap_xy', s.node_path,
+                                '留痕只有裸坐标，而坐标不入用例；'
+                                '请按 node_path 补定位规格')
+    return _unresolved_step(kind, s.node_path, f'未映射的留痕类型 {kind}')
+
+
 def trace_to_steps(driver: Driver, include_waits: bool = True,
                    include_asserts: bool = False) -> List[Dict[str, Any]]:
     """把 Driver 的执行留痕转回 DSL 步骤 —— 脚本生成的雏形。
@@ -448,21 +508,25 @@ def trace_to_steps(driver: Driver, include_waits: bool = True,
     这是「一次操作即一条用例」的关键：人工或模型驱动一次探索，
     留下的轨迹可直接沉淀成可重放的回归脚本。
 
-    ★ 两条口径（C 复核缺陷，2026-09-23 修）：
+    ★ 三条口径
 
     1. **不再吐 `tap_xy`** —— 红线第 5 条明令禁止用例里硬编码坐标。
        路径解析不出规格时，产出 `unresolved` 占位并保留 `node_path` 原文，
        由上层决定人工/模型补定位规格，而不是静默塞进一组坐标。
-       后果：**「一次探索 → 可维护的回归脚本」这条路此前产出的脚本
-       既违规（硬编码坐标）又证明不了任何事（没断言）**，现在两头都补上。
 
-    2. **断言能带出来了**（`include_asserts=True`）。原来无条件 `continue`，
-       产物里永远没有断言。现在从留痕反解匹配器规格；反解不出来同样给占位，
-       **不猜** —— 猜错的断言比没有断言更坏。
+    2. **断言能带出来了**（`include_asserts=True`）。从留痕反解匹配器规格；
+       反解不出来同样给占位，**不猜** —— 猜错的断言比没有断言更坏。
+
+    3. **不静默丢**。除「调用方显式关掉」的两类（`include_waits=False` 关掉
+       具名等待、`include_asserts=False` 关掉断言）之外，**每个成功留痕都有产物**：
+       能忠实还原给可执行步骤，还原不了给 `unresolved` 占位。
+       缺了步骤的脚本**恰恰是「看起来能跑」的那种** —— 那比当场报错更坏，
+       因为它会把一条永远测不到东西的脚本混进回归集。
+       直译表见 `_TRACE_DIRECT`，兜底见 `_trace_step_of`。
 
     Parameters
     ----------
-    include_waits:   是否保留 `waitFor`（默认 True，保持原行为）
+    include_waits:   是否保留具名等待（`waitFor` / `waitGone`；默认 True）
     include_asserts: 是否把断言步骤带进产物（默认 False，保持原行为；
                      开 True 才能得到「带断言的回归脚本」）
     """
@@ -470,37 +534,11 @@ def trace_to_steps(driver: Driver, include_waits: bool = True,
     for s in driver.steps:
         if not s.ok:
             continue
-        k = s.kind
-        if k == 'start':
-            out.append({'start': True})
-        elif k == 'tap':
-            spec = _path_to_spec(s.node_path)
-            if spec:
-                out.append({'tap': spec})
-            else:
-                out.append(_unresolved_step('tap', s.node_path,
-                                            '留痕里没有可解析的控件路径'))
-        elif k == 'input' and s.value is not None:
-            spec = _path_to_spec(s.node_path)
-            if not spec:
-                out.append(_unresolved_step('input', s.node_path,
-                                            '留痕里没有可解析的控件路径',
-                                            value=s.value))
-                continue
-            spec['value'] = s.value
-            out.append({'input': spec})
-        elif k == 'swipe':
-            out.append({'swipe': {'direction': s.target or 'up',
-                                  'scale': s.value or 0.6}})
-        elif k == 'back':
-            out.append({'back': True})
-        elif k == 'waitFor' and include_waits:
-            spec = _path_to_spec(s.node_path)
-            out.append({'waitFor': spec or s.target})
-        elif k.startswith('assert'):
-            if not include_asserts:
-                continue          # 旧行为：断言由人工或模型补
-            out.append(_assert_step(k, s))
+        step = _trace_step_of(s.kind, s, include_waits=include_waits,
+                              include_asserts=include_asserts)
+        if step is _OPTED_OUT:
+            continue
+        out.append(step)
     return out
 
 

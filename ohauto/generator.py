@@ -95,6 +95,9 @@ class RejectReason(str, Enum):
     DRYRUN_FAILED = 'DRYRUN_FAILED'        # 干跑失败，且修复无效
     UNEXPECTED = 'UNEXPECTED'              # 未预期异常（已降级为单条失败，不中断整批）
     NO_SUBSTANCE = 'NO_SUBSTANCE'          # 空壳用例：全是不「会失败」的动作，什么都没验证
+    #: 断言语义干跑验不了：干跑跳过副作用步，断言目标的前置根本没执行。
+    #: 这**不是**「用例写错了」，是「离线判不了」—— 单列一类，别混进 DRYRUN_FAILED。
+    ASSERT_NEEDS_DEVICE = 'ASSERT_NEEDS_DEVICE'
 
     @property
     def cn(self) -> str:
@@ -110,6 +113,7 @@ class RejectReason(str, Enum):
             'DRYRUN_FAILED': '干跑失败',
             'UNEXPECTED': '未预期异常',
             'NO_SUBSTANCE': '空壳用例（没有会失败的动作）',
+            'ASSERT_NEEDS_DEVICE': '断言需真机确认',
         }[self.value]
 
 
@@ -1280,6 +1284,18 @@ class Generator:
             res = self.dry_run_runner(case, driver)
             if not res.ok:
                 f0 = res.failures[0] if res.failures else {}
+                # 干跑**跳过**副作用步，所以「导航后断言」的前提根本没执行 ——
+                # 断言不成立只能说明「离线判不了」，不能说明「用例写错了」。
+                # 一律判 DRYRUN_FAILED 的话，凡是带导航后断言的用例只要传了
+                # driver 就被误杀，而这两者的修复方向完全不同。
+                bad = [f for f in res.failures if f.get('kind') != 'assert']
+                if res.failures and not bad:
+                    case.repair_notes.append(
+                        '断言语义需真机验证：干跑跳过了副作用步，'
+                        '断言目标的前置未执行')
+                    return (case, issues, RejectReason.ASSERT_NEEDS_DEVICE,
+                            f'断言语义需真机确认（干跑已执行 {res.executed} 步、'
+                            f'跳过 {res.skipped} 步）：{f0.get("error", "")}')
                 return (case, issues, RejectReason.DRYRUN_FAILED,
                         f'干跑失败（已执行 {res.executed} 步、跳过 {res.skipped} 步）：'
                         f'{f0.get("error", "")}')
@@ -1289,7 +1305,7 @@ class Generator:
 
     def generate_stress(self, kind: Any = None,
                         *, page: Any = None, driver: Any = None, **kw) -> Case:
-        """造一条压测用例（B5）。屏幕尺寸默认从 driver 拿，拿不到用 1080×2340。
+        """造一条压测用例（B5）。屏幕尺寸按「实测 → 默认」的顺序取，见下。
 
         造出来之后走**和普通用例同一套**校验与入库路径 ——
         压测用例也是用例，不另开一条旁路。
@@ -1299,15 +1315,25 @@ class Generator:
         """
         kind = StressKind.REPEAT_TAP if kind is None else _as_stress_kind(kind)
         screen = kw.pop('screen', None)
+        origin = '调用方显式传入'
         if screen is None:
             try:
                 screen = driver.screen_size() if driver is not None else None
+                origin = '设备实测'
             except Exception:
                 screen = None
-        screen = tuple(screen) if screen else (1080, 2340)
+        if not screen:
+            screen = DEFAULT_SCREEN
+            origin = (f'回落默认 {DEFAULT_SCREEN[0]}×{DEFAULT_SCREEN[1]}'
+                      f'（取不到设备实测）')
+        screen = tuple(screen)
         case = generate_stress(kind, bundle=self.bundle, ability=self.ability,
                                page=page if page is not None else self.page,
                                screen=screen, **kw)
+        # 屏幕尺寸必须能追溯：滑动几何全按它算，用错屏时「离边缘 150–200px」
+        # 在真机上会静默失效，而离线校验照样全绿。
+        case.notes.append(
+            f'屏幕尺寸 {screen[0]}×{screen[1]}（{origin}）')
         issues = validate_case(case, page if page is not None else self.page)
         if issues:
             raise GenerationError(GenerationOutcome(
@@ -1500,6 +1526,14 @@ SWIPE_EDGE_MARGIN_MAX = 200
 DEFAULT_STRESS_ROUNDS = 20
 # 单条用例的步数上限（超了按轮数截断并留 note，**不许悄悄生成一个上万步的用例**）
 DEFAULT_STRESS_MAX_STEPS = 600
+
+#: 取不到设备实测屏幕时的回落尺寸。
+#:
+#: **必须是真机典型状态**，不能是随手写的模拟器数字 —— 压测的滑动几何
+#: （起止点、边缘余量、分片步数）全部由屏幕边长算出来，用错屏会让
+#: 「离边缘 150–200px」这条硬约束在真机上失效，而离线测试照样全绿。
+#: 项目唯一的真机 DAYU200 实测 720×1280，所以回落值取它。
+DEFAULT_SCREEN: Tuple[int, int] = (720, 1280)
 
 # 适合「重复点击」的控件语义（点完还留在原页，才能压出累积效应）
 STRESS_TAP_HINTS = ('刷新', '更多', '展开', '收起', '收藏', '点赞', '切换',
@@ -1722,7 +1756,7 @@ def _stress_fallback_spec(node: LayoutNode, root: LayoutNode
 
 def build_stress_case(spec: StressSpec, *, bundle: str = '',
                       ability: str = 'EntryAbility',
-                      screen: Tuple[int, int] = (1080, 2340),
+                      screen: Optional[Tuple[int, int]] = None,
                       page: Any = None,
                       margin: int = SWIPE_EDGE_MARGIN_PX,
                       max_steps: int = DEFAULT_STRESS_MAX_STEPS) -> Case:
@@ -1732,9 +1766,17 @@ def build_stress_case(spec: StressSpec, *, bundle: str = '',
     DSL 现在没有循环结构，加一个等于改对外接口（还要拉上 C5 的 hypium 导出一起改），
     冻结前不值得。所以这里把 N 轮**展开**成 N 组步骤，并用 `max_steps` 封顶 ——
     真正的长时间运行交给「多条同构用例顺序跑」（见 `split_stress_cases`）。
+
+    `screen` 不给就回落 `DEFAULT_SCREEN`，并把出处记进 `case.notes` ——
+    滑动几何全按屏幕边长算，尺寸来源必须可追溯。
     """
     kind = _as_stress_kind(spec.kind)
     notes: List[str] = []
+    if screen is None:
+        screen = DEFAULT_SCREEN
+        notes.append(f'屏幕尺寸 {screen[0]}×{screen[1]}'
+                     f'（未指定，回落真机典型值）')
+    screen = tuple(screen)
     m = clamp_margin(margin, notes)
     rounds = max(1, int(spec.rounds))
 
@@ -1824,9 +1866,16 @@ def split_stress_cases(spec: StressSpec, *, chunks: int = 4, **kw) -> List[Case]
     return out
 
 
-def stress_safety_report(case: Case, screen: Tuple[int, int] = (1080, 2340),
+def stress_safety_report(case: Case, screen: Optional[Tuple[int, int]] = None,
                          margin: int = SWIPE_EDGE_MARGIN_PX) -> List[SwipeSafety]:
-    """把用例里所有水平滑动逐条过一遍安全校验 —— 报告与 CI 都用它。"""
+    """把用例里所有水平滑动逐条过一遍安全校验 —— 报告与 CI 都用它。
+
+    `screen` 不给就回落 `DEFAULT_SCREEN`（真机典型值）。屏幕尺寸直接决定
+    「起止点离边缘还有多少 px」，用错屏会让边缘约束的结论整个反过来。
+    """
+    if screen is None:
+        screen = DEFAULT_SCREEN
+    screen = tuple(screen)
     out: List[SwipeSafety] = []
     for _, action, arg in _iter_steps(case.steps):
         if action != 'swipe' or not isinstance(arg, dict):
