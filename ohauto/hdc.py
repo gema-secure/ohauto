@@ -121,7 +121,7 @@ class Hdc:
                 '  2) 环境变量（仅当前进程）：设置 HDC_PATH\n'
                 '  3) 代码里显式传参：Hdc(hdc_path=r"...\\hdc.exe")\n'
                 '  4) 安装 DevEco Studio（自带 SDK 与 hdc）\n'
-                '  5) 运行 guochuang-2026/tools/fetch_sdk.py 获取 OpenHarmony SDK'
+                '  5) 运行 tools/fetch_sdk.py 获取 OpenHarmony SDK'
             )
 
     # ------------------------------------------------------------ 查找

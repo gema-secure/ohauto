@@ -35,9 +35,7 @@ sys.path.insert(0, ROOT)
 from ohauto.layout import parse_layout                        # noqa: E402
 
 #: 9/19 采集的真机样本（设备自带「设置」页）
-REAL_SAMPLES = os.path.join(
-    os.path.dirname(ROOT), 'guochuang-2026',
-    '真机采集-20260919', 'samples')
+REAL_SAMPLES = os.path.join(ROOT, 'datasets', 'real_samples_20260919')
 
 
 def _b(l, t, r, bo):

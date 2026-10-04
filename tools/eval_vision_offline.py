@@ -99,11 +99,9 @@ except ModuleNotFoundError as exc:                      # pragma: no cover
         '    python tools/eval_vision_offline.py --dry\n'
         '（它会自己把仓库根加进 sys.path；放到别处运行会找不到 ohauto。）') from exc
 
-#: 样本目录（按顺序取第一个存在的）。第一项是仓库内自包含副本，
-#: 第二项是 2026-09-19 真机采集的原始位置。
+#: 样本目录（按顺序取第一个存在的），仓库内自包含副本。
 DEFAULT_SAMPLES = (
     os.path.join(ROOT, 'datasets', 'real_samples_20260919'),
-    r'D:\project\guochuang-2026\真机采集-20260919\samples',
 )
 
 DEFAULT_OUT = os.path.join(ROOT, '_out', 'vision_eval')

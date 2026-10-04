@@ -106,8 +106,8 @@ def main() -> int:
             check('hdc 可执行文件', BAD,
                   '未找到 hdc。请任选一种方式（都不会改系统环境变量）：\n'
                   '  A) 安装 DevEco Studio（自带 SDK 与 hdc）\n'
-                  '  B) 运行 guochuang-2026/tools/fetch_sdk.py 获取 OpenHarmony SDK\n'
-                  '  C) 运行 guochuang-2026/tools/configure_hdc.py --path <你的hdc路径>\n'
+                  '  B) 运行 tools/fetch_sdk.py 获取 OpenHarmony SDK\n'
+                  '  C) 运行 tools/configure_hdc.py --path <你的hdc路径>\n'
                   '  D) 代码里显式传参：Hdc(hdc_path=r"...\\hdc.exe")')
             return _summary()
     else:
