@@ -681,7 +681,7 @@ class Explorer:
     BLIND_PAGE_THRESHOLD = 3
     #: 视觉定位指令：产出与控件树候选同构（可点击元素名列表），才能进探索队列
     VISION_INSTRUCTION = ('列出当前屏幕上所有可点击的元素（按钮/开关/列表项），'
-                          '每行一个，只写名称')
+                          '每个元素给出名称和位置')
 
     def __init__(self, driver: Driver, policy: Optional[SafetyPolicy] = None,
                  artifact_dir: Optional[str] = None, verbose: bool = True,
@@ -694,8 +694,11 @@ class Explorer:
         # 可点击目标（Canvas/无标识按钮）。缓存命中统计由定位器自带
         # （cache_hit_rate），这里只透传——B14 的 KPI 数字从这里出。
         self.vision_locator = vision_locator
-        self.vision_stats: Dict[str, Any] = {'calls': 0, 'errors': 0,
+        self.vision_stats: Dict[str, Any] = {'calls': 0, 'cache_hits': 0,
+                                             'cache_misses': 0, 'errors': 0,
                                              'suggested': 0, 'tapped_ok': 0}
+        # 页级缓存：页面指纹 → 视觉候选（同页重访即命中，B14 的测量口径）
+        self._vision_page_cache: Dict[str, List[LayoutNode]] = {}
         self.graph = StateGraph()
         self.artifact_dir = artifact_dir or getattr(driver, 'artifact_dir', None)
         self.verbose = verbose
@@ -866,20 +869,26 @@ class Explorer:
                                  dangerous=bad,
                                  allow_dangerous=self.policy.allow_dangerous)
 
-    def _vision_candidates(self, limit: int) -> List[LayoutNode]:
-        """半盲页的视觉候选：截图 → 定位器 → 过安全围栏 → **伪控件节点**。
+    def _vision_candidates(self, limit: int, fingerprint: str) -> List[LayoutNode]:
+        """半盲页的视觉候选：截图 → Provider 枚举 → 过安全围栏 → **伪控件节点**。
 
         伪节点带视觉框（rect）与 label，能直接流进既有探索循环
         （tap 走 node.center，产物规格为 {'text': label}——无坐标，红线安全）。
-        定位器自带的缓存按（页面指纹, 指令）键控——页面重访即命中，
-        B14 的缓存命中率从 vision_stats/locator.cache_hit_rate 出。"""
+        页级缓存按**页面内容指纹**键控——同页重访即命中（B14 的测量口径），
+        命中/未命中计入 vision_stats 供 KPI 出数。"""
+        cached = self._vision_page_cache.get(fingerprint)
+        if cached is not None:
+            self.vision_stats['cache_hits'] += 1
+            return cached[:limit]
+
+        self.vision_stats['cache_misses'] += 1
         shot = self.driver.screenshot()
         if not shot:
             return []
         try:
             w, h = self.driver.screen_size()
             targets = self.vision_locator.locate(
-                self.driver.root, shot, self.VISION_INSTRUCTION, w, h)
+                shot, self.VISION_INSTRUCTION, w, h) or []
             self.vision_stats['calls'] += 1
         except Exception as e:                              # noqa: BLE001
             self.vision_stats['errors'] += 1
@@ -887,7 +896,7 @@ class Explorer:
             return []
 
         out: List[LayoutNode] = []
-        for t in targets or []:
+        for t in targets:
             label = (getattr(t, 'label', '') or '').strip()
             rect = getattr(t, 'rect', None)
             if not label or rect is None:
@@ -906,6 +915,7 @@ class Explorer:
             out.append(fake)
             if len(out) >= limit:
                 break
+        self._vision_page_cache[fingerprint] = out
         self.vision_stats['suggested'] += len(out)
         return out
 
@@ -1032,8 +1042,11 @@ class Explorer:
             cands = self._candidates(root)[:b.max_actions_per_page]
             if (self.vision_locator is not None
                     and len(cands) < self.BLIND_PAGE_THRESHOLD):
+                # 缓存键 = 结构指纹（内容变化时稳定——设置页每次回访
+                # 内容都有微变，content_key 会让缓存永不命中）
                 v = self._vision_candidates(
-                    max(0, b.max_actions_per_page - len(cands)))
+                    max(0, b.max_actions_per_page - len(cands)),
+                    fingerprint=sig.structural_key)
                 if v:
                     self.log(f'  半盲页：视觉补充 {len(v)} 个候选')
                     cands = cands + v
