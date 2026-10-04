@@ -29,7 +29,9 @@ class _StubLocator:
         self.cache_hits = 0
         self.cache_misses = 0
 
-    def locate(self, root, image_path, instruction, w, h):
+    def locate(self, image_path, instruction, w, h):
+        # 契约 = Provider.locate(image, instruction, w, h) —— 探索器 duck-type
+        # 调用的就是 Provider 形状（vision.py:221 的签名）
         self.calls += 1
         return self.targets
 
