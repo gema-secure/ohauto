@@ -39,7 +39,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from .driver import Driver, DriverError
-from .layout import LayoutNode, flatten
+from .layout import LayoutNode, flatten, Rect  # noqa: E402
 
 
 # ---------------------------------------------------------------- 安全策略
@@ -677,12 +677,25 @@ class Explorer:
     # 取页面标题时要剔掉这个区域 —— 否则取到的永远是状态栏文本。
     STATUS_BAR_MAX_TOP = 72
 
+    #: 半盲页阈值：树内可交互候选少于它 → 视觉定位介入（仅当注入了定位器）
+    BLIND_PAGE_THRESHOLD = 3
+    #: 视觉定位指令：产出与控件树候选同构（可点击元素名列表），才能进探索队列
+    VISION_INSTRUCTION = ('列出当前屏幕上所有可点击的元素（按钮/开关/列表项），'
+                          '每行一个，只写名称')
+
     def __init__(self, driver: Driver, policy: Optional[SafetyPolicy] = None,
                  artifact_dir: Optional[str] = None, verbose: bool = True,
-                 tarpit_policy: Optional[TarpitPolicy] = None):
+                 tarpit_policy: Optional[TarpitPolicy] = None,
+                 vision_locator: Optional[Any] = None) -> None:
         self.driver = driver
         self.policy = policy or SafetyPolicy()
         self.tarpit_policy = tarpit_policy or TarpitPolicy()
+        # 视觉定位器（可选）：半盲页（树候选过少）时介入，补充控件树看不到的
+        # 可点击目标（Canvas/无标识按钮）。缓存命中统计由定位器自带
+        # （cache_hit_rate），这里只透传——B14 的 KPI 数字从这里出。
+        self.vision_locator = vision_locator
+        self.vision_stats: Dict[str, Any] = {'calls': 0, 'errors': 0,
+                                             'suggested': 0, 'tapped_ok': 0}
         self.graph = StateGraph()
         self.artifact_dir = artifact_dir or getattr(driver, 'artifact_dir', None)
         self.verbose = verbose
@@ -853,6 +866,49 @@ class Explorer:
                                  dangerous=bad,
                                  allow_dangerous=self.policy.allow_dangerous)
 
+    def _vision_candidates(self, limit: int) -> List[LayoutNode]:
+        """半盲页的视觉候选：截图 → 定位器 → 过安全围栏 → **伪控件节点**。
+
+        伪节点带视觉框（rect）与 label，能直接流进既有探索循环
+        （tap 走 node.center，产物规格为 {'text': label}——无坐标，红线安全）。
+        定位器自带的缓存按（页面指纹, 指令）键控——页面重访即命中，
+        B14 的缓存命中率从 vision_stats/locator.cache_hit_rate 出。"""
+        shot = self.driver.screenshot()
+        if not shot:
+            return []
+        try:
+            w, h = self.driver.screen_size()
+            targets = self.vision_locator.locate(
+                self.driver.root, shot, self.VISION_INSTRUCTION, w, h)
+            self.vision_stats['calls'] += 1
+        except Exception as e:                              # noqa: BLE001
+            self.vision_stats['errors'] += 1
+            self.log(f'  视觉定位失败（不影响探索）: {type(e).__name__}: {str(e)[:80]}')
+            return []
+
+        out: List[LayoutNode] = []
+        for t in targets or []:
+            label = (getattr(t, 'label', '') or '').strip()
+            rect = getattr(t, 'rect', None)
+            if not label or rect is None:
+                continue
+            nums = [int(v) for v in re.findall(r'\d+', str(rect))]
+            if len(nums) < 4:
+                continue
+            fake = LayoutNode(type='Vision', id='', text=label,
+                              rect=Rect(nums[0], nums[1], nums[2], nums[3]),
+                              clickable=True)
+            dangerous, _pat = _matches_danger(fake, self.policy.deny_patterns)
+            if dangerous and not self.policy.allow_dangerous:
+                self.skipped.append({'label': label,
+                                     'reason': 'dangerous(vision)'})
+                continue
+            out.append(fake)
+            if len(out) >= limit:
+                break
+        self.vision_stats['suggested'] += len(out)
+        return out
+
     def _spec_of(self, node: LayoutNode) -> Dict[str, Any]:
         """给控件生成优先稳定的匹配器规格：id 优先，其次 text，再次 label。"""
         if node.id:
@@ -974,6 +1030,13 @@ class Explorer:
                 continue
 
             cands = self._candidates(root)[:b.max_actions_per_page]
+            if (self.vision_locator is not None
+                    and len(cands) < self.BLIND_PAGE_THRESHOLD):
+                v = self._vision_candidates(
+                    max(0, b.max_actions_per_page - len(cands)))
+                if v:
+                    self.log(f'  半盲页：视觉补充 {len(v)} 个候选')
+                    cands = cands + v
             self.log(f'候选控件 {len(cands)} 个'
                      f'{"（弹窗优先）" if self.dialog.is_dialog else ""}')
 
@@ -995,6 +1058,8 @@ class Explorer:
 
                 try:
                     self.driver.tap(node, post_idle=True)
+                    if node.type == 'Vision':
+                        self.vision_stats['tapped_ok'] += 1
                     if shot:
                         self.driver.screenshot(shot)
                 except Exception as e:
