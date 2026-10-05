@@ -1,0 +1,5 @@
+{
+  "bundle": "com.ohos.updateapp",
+  "ability": "com.ohos.updateapp.MainAbility",
+  "ts": "2026-10-05 18:47:22"
+}
