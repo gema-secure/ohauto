@@ -289,12 +289,21 @@ class Hdc:
         return self.run(['-v'], check=True).stdout.strip()
 
     def uitest_version(self) -> Optional[str]:
-        """检测设备是否支持 uitest 命令行通路 —— 决定技术路线。"""
+        """检测设备是否支持 uitest 命令行通路 —— 决定技术路线。
+
+        **判据是返回码，不是"有没有输出"**：设备上没有 uitest 时 rc≠0，
+        stderr 里是一句错误文本。老实现 `stdout or stderr` 会把那句错误文本
+        当成"版本号"返回，`examples/smoke_test.py` 的 `if uv:` 于是打印
+        「[通过] no uitest」并宣称技术路线可用 —— 那是假绿，
+        比报错更难发现。查不到就返回 None。
+        """
         try:
             res = self.shell('uitest --version', timeout=15)
-            return res.stdout.strip() or res.stderr.strip()
         except HdcError:
             return None
+        if not res.ok:
+            return None
+        return res.stdout.strip() or None
 
     # ------------------------------------------------------------ 截图
 
