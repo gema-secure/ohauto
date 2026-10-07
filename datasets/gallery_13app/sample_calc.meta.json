@@ -1,0 +1,27 @@
+{
+  "name": "sample_calc",
+  "bundle": "ohos.samples.distributedcalc",
+  "ability": "MainAbility",
+  "captured_at": "2026-09-19T14:54:14",
+  "warnings": [],
+  "launched": true,
+  "node_count": 144,
+  "interactive": 20,
+  "with_id": 21,
+  "with_text": 5,
+  "types": {
+    "Row": 46,
+    "Image": 24,
+    "GridItem": 21,
+    "Button": 18,
+    "Text": 8,
+    "Column": 7,
+    "Stack": 6,
+    "Flex": 6,
+    "root": 4,
+    "Grid": 2,
+    "(空)": 1,
+    "Blank": 1
+  },
+  "clean": true
+}

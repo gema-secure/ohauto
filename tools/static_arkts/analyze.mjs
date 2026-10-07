@@ -93,6 +93,31 @@ function main() {
   const routes = new Set();
   const controls = [];
   const moduleAbilities = [];
+  const dialogFiles = new Set();    // 弹窗内容文件（其控件**按需渲染**，见下方说明）
+
+  // ---- 0. 弹窗组件名：两条线索取并集
+  //   a) `builder: XxxDialog()` —— CustomDialogController 挂的 builder；
+  //   b) `@CustomDialog` 装饰的 struct。
+  // 这些 struct 里的控件**只有弹窗打开时才进控件树**——把它们算进
+  // 「真缺失」会造成结构性误报（2026-10-06 官方样例实测：cancel/confirm
+  // 被报缺失，实际只是弹窗没开）。
+  const dialogBuilders = new Set();
+  for (const f of files) {
+    let src0;
+    try {
+      src0 = fs.readFileSync(f, 'utf8');
+    } catch {
+      continue;
+    }
+    for (const m of src0.matchAll(/builder:\s*([A-Za-z_$][\w$]*)\s*\(/g)) {
+      dialogBuilders.add(m[1]);
+    }
+    if (/@CustomDialog/.test(src0)) {
+      for (const m of src0.matchAll(/struct\s+([A-Za-z_$][\w$]*)/g)) {
+        dialogBuilders.add(m[1]);
+      }
+    }
+  }
 
   // ---- 1. 路由：main_pages.json（配置声明，最权威）
   for (const f of walk(root)) {
@@ -135,6 +160,11 @@ function main() {
     }
     const rel = path.relative(root, f).split(path.sep).join('/');
 
+    // 弹窗内容文件：文件里的 struct 被 builder 引用，或文件带 @CustomDialog
+    const structNames = [...src.matchAll(/\bstruct\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]);
+    const isDialogFile = structNames.some((n) => dialogBuilders.has(n)) || /@CustomDialog/.test(src);
+    if (isDialogFile) dialogFiles.add(rel);
+
     // 页面：@Entry 装饰的 struct 视为一个页面 —— **但要把桌面卡片排除掉**。
     // 判定依据是 form_config.json 声明的 src（路径后缀匹配），不是目录名：
     // 卡片和页面都可能放在 `pages/` 下，靠目录区分不了。
@@ -161,11 +191,11 @@ function main() {
     ].filter((t) => t && t.trim());
 
     for (const id of ids) {
-      controls.push({ file: rel, id, clickable: RE_ONCLICK.test(src), dangerous: false });
+      controls.push({ file: rel, id, clickable: RE_ONCLICK.test(src), dialog: isDialogFile, dangerous: false });
     }
     for (const t of texts) {
       const dangerous = DANGER_PATTERNS.some((re) => re.test(t));
-      controls.push({ file: rel, id: '', text: t, clickable: RE_ONCLICK.test(src), dangerous });
+      controls.push({ file: rel, id: '', text: t, clickable: RE_ONCLICK.test(src), dialog: isDialogFile, dangerous });
     }
   }
 
@@ -177,6 +207,8 @@ function main() {
     pages: [...pages].sort(),
     // 桌面卡片页面：**不是应用内页面**，别拿去当探索目标
     widget_pages: [...widgetDecls].sort(),
+    // 弹窗内容文件：其中的控件**按需渲染**，缺失不算缺陷
+    dialog_files: [...dialogFiles].sort(),
     routes_in_source: [...routes].sort(),
     abilities: [...new Set(moduleAbilities)].sort(),
     controls,

@@ -68,6 +68,7 @@ class Claim:
     scope: str = ''
     confidence: float = 1.0
     evidence: str = ''
+    ondemand: bool = False         # 按需渲染（弹窗/条件分支）：缺失不算缺陷
 
     @property
     def key(self) -> tuple:
@@ -103,6 +104,7 @@ class Target:
     seen_by: List[str] = field(default_factory=list)
     confidence: float = 0.0
     evidence: List[str] = field(default_factory=list)
+    ondemand: bool = False         # 任一声明源标记了按需渲染 → 缺失不算缺陷
 
     @property
     def status(self) -> str:
@@ -165,6 +167,8 @@ def fuse(sources: Sequence[SourceResult], *, scope: str = '',
             else:
                 if s.name not in t.seen_by:
                     t.seen_by.append(s.name)
+            if getattr(c, 'ondemand', False):
+                t.ondemand = True
             if c.evidence:
                 ev = '%s: %s' % (s.name, c.evidence)
                 if ev not in t.evidence:
@@ -237,10 +241,11 @@ def source_static_project(root: str, *, page: str = '',
         f = str(c.get('file') or '')
         if not (mapper or default_mapper)(f, key):
             continue
+        od = bool(c.get('dialog'))      # 弹窗内容：按需渲染，缺失不算缺陷
         if c.get('id'):
-            claims.append(Claim('id', c['id'], scope=key, evidence=f))
+            claims.append(Claim('id', c['id'], scope=key, evidence=f, ondemand=od))
         if c.get('text'):
-            claims.append(Claim('text', c['text'], scope=key, evidence=f))
+            claims.append(Claim('text', c['text'], scope=key, evidence=f, ondemand=od))
     pages = info.get('pages') or []
     for p in pages:
         claims.append(Claim('page', p, scope=p, evidence='main_pages.json'))
@@ -594,7 +599,9 @@ def render_md(rep: FusionReport, *, title: str = '融合报告',
     s = rep.summary
     _miss_all = rep.by_status('missing')
     page_missing = sum(1 for t in _miss_all if t.kind == 'page')
-    real_missing = s['missing'] - page_missing
+    ondemand_missing = sum(1 for t in _miss_all
+                           if t.kind != 'page' and t.ondemand)
+    real_missing = s['missing'] - page_missing - ondemand_missing
     L = ['# %s' % title, '']
     if rep.scope:
         L.append('- 作用域：`%s`' % rep.scope)
@@ -615,6 +622,7 @@ def render_md(rep: FusionReport, *, title: str = '融合报告',
           '| 确认存在 | %d |' % s['confirmed'],
           '| **声明了但没出现（总）** | %d |' % s['missing'],
           '| 　↳ 其中 **🔴 真缺失**（id/text，非页面） | %d |' % real_missing,
+          '| 　↳ 其中 按需渲染控件未出现（弹窗/条件渲染，**不是缺陷**） | %d |' % ondemand_missing,
           '| 　↳ 其中 未观察到的页面（**不是缺陷**） | %d |' % page_missing,
           '| 未声明（仅观察） | %d |' % s['undeclared'], '']
 
@@ -627,9 +635,11 @@ def render_md(rep: FusionReport, *, title: str = '融合报告',
     if miss:
         # ⚠️ 不同 kind 的「缺失」含义完全不同，**不能一句"缺陷"了事**：
         #    · page —— 只是**这次没访问到**（未观察到 ≠ 页面不存在）
-        #    · id/text —— 才是"声明了但运行时找不到"，可能真缺陷
+        #    · id/text 且非按需 —— "声明了但运行时找不到"，可能真缺陷
+        #    · id/text 且按需渲染（弹窗/条件分支）—— 没触发而已，不是缺陷
         pages = [t for t in miss if t.kind == 'page']
-        others = [t for t in miss if t.kind != 'page']
+        ondemand = [t for t in miss if t.kind != 'page' and t.ondemand]
+        others = [t for t in miss if t.kind != 'page' and not t.ondemand]
         if pages:
             L += ['## 未观察到的页面（**不是缺陷**）', '',
                   '> 这些页面在源码里声明了，但本次采集的运行时树里没有 —— '
@@ -637,6 +647,13 @@ def render_md(rep: FusionReport, *, title: str = '融合报告',
             for t in pages:
                 L.append('- `%s`（声明方：%s）'
                          % (t.value, '、'.join('`%s`' % x for x in t.declared_by)))
+            L.append('')
+        if ondemand:
+            L += ['## 按需渲染的控件未出现（**不是缺陷**）', '',
+                  '> 这些控件在弹窗/条件分支里声明（builder 引用或 @CustomDialog），'
+                  '**只有触发时才进控件树** —— 本次没触发而已。', '']
+            for t in ondemand:
+                L.append('- `%s`（%s）' % (t.value, t.kind))
             L.append('')
         if others:
             L += ['## 🔴 声明了但没出现', '']
