@@ -320,7 +320,92 @@ class LayoutNode:
 
 # ---------------------------------------------------------------- 构建
 
-def _build(raw: Any, parent: Optional[LayoutNode] = None) -> Optional[LayoutNode]:
+#: 控件树的最大解析深度。真机树实测 30 层上下，留 6 倍余量。
+#: 超过这个数的只可能是敌意输入或坏数据 —— 再往下递归会撞 Python 的栈上限，
+#: 裸崩成 `RecursionError`（看起来像代码 bug，实际是输入问题）。
+MAX_TREE_DEPTH = 200
+
+#: JSON 文本的括号嵌套深度上限。**`json.loads` 自己也是递归实现** ——
+#: 实测（本机 3.13）控件树形状在 ~1500 层树深处开始 `RecursionError`，
+#: 而且崩在标准库里面，拦截点在 `_build` 之前根本轮不到。
+#: 取 1000（≈ 500 层树）留一倍余量：既能挡下敌意输入，又比真正的崩点低一半。
+MAX_JSON_NESTING = 1000
+
+#: 设备侧 `dumpLayout` 失败时返回的文本前缀。它不是 JSON，形如
+#: `[Fail]Not match target founded, check config or confirm the key`
+DEVICE_FAIL_PREFIX = '[Fail]'
+
+
+class LayoutParseError(ValueError):
+    """控件树输入无法解析。
+
+    `reason` 是机器可读的短串，调用方据此区分"如实说设备不在场"和"数据坏了"：
+
+        'device_fail'  设备侧返回的是失败文本（多半设备没插 / uitest 未就绪）
+        'not_json'     输入不是 JSON
+        'too_deep'     嵌套深到会撞栈（拒绝解析）
+        'empty'        空输入
+        'io'           读文件失败
+    """
+
+    def __init__(self, message: str, reason: str = 'not_json') -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+def _json_nesting_depth(text: str) -> int:
+    """粗算 JSON 的括号嵌套深度。**迭代实现**（要拦的就是递归），
+    并跳过字符串字面量里的括号。"""
+    depth = deepest = 0
+    in_str = esc = False
+    for ch in text:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == '\\':
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in '{[':
+            depth += 1
+            deepest = max(deepest, depth)
+        elif ch in '}]':
+            depth -= 1
+    return deepest
+
+
+def _loads_json(text: str) -> Any:
+    """解析 JSON 文本；不是 JSON 时给**说得清**的错误。
+
+    裸抛 `JSONDecodeError` 会让"设备没插"看起来像"代码崩了" —— 这是最误导的
+    一类失败，所以这里把原因分开标出来。嵌套过深则在 `json.loads` 之前拦下。
+    """
+    stripped = text.lstrip()
+    if stripped.startswith(DEVICE_FAIL_PREFIX):
+        raise LayoutParseError(
+            f'设备侧返回失败文本（不是控件树）：{text.strip()[:200]}'
+            f' —— 多半是设备不在场或 uitest 未就绪', 'device_fail')
+    if not stripped.startswith(('{', '[')):
+        raise LayoutParseError(
+            f'输入不是 JSON 文本（前 80 字符）：{text.strip()[:80]!r}', 'not_json')
+    depth = _json_nesting_depth(text)
+    if depth > MAX_JSON_NESTING:
+        raise LayoutParseError(
+            f'JSON 嵌套过深（{depth} 层 > 上限 {MAX_JSON_NESTING}）—— 拒绝解析：'
+            f'再深会在 json.loads 内部撞栈', 'too_deep')
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        raise LayoutParseError(f'JSON 解析失败: {e}', 'not_json') from e
+    except RecursionError as e:                  # 兜底：扫描判据没覆盖的形状
+        raise LayoutParseError('JSON 嵌套过深，解析时撞栈', 'too_deep') from e
+
+
+def _build(raw: Any, parent: Optional[LayoutNode] = None,
+           depth: int = 0) -> Optional[LayoutNode]:
     if not isinstance(raw, dict):
         return None
 
@@ -357,8 +442,13 @@ def _build(raw: Any, parent: Optional[LayoutNode] = None) -> Optional[LayoutNode
     for ck in CHILD_KEYS:
         kids = raw.get(ck)
         if isinstance(kids, list):
+            if depth + 1 >= MAX_TREE_DEPTH:
+                # 截断：不再下探。**记在节点上**，别静默把子树丢掉 ——
+                # 一条"树被截断了"的标记，比一个看起来正常的浅树有用得多。
+                node.truncated_children = len(kids)
+                break
             for k in kids:
-                child = _build(k, node)
+                child = _build(k, node, depth + 1)
                 if child is not None:
                     node.children.append(child)
             break
@@ -374,18 +464,37 @@ def parse_layout(source: Any) -> LayoutNode:
     source:
         - str：若像是文件路径且存在，则读文件；否则当作 JSON 文本
         - dict：直接解析
+
+    Raises
+    ------
+    LayoutParseError:
+        输入不是 JSON、是空串，或**设备侧的失败文本**（`[Fail]...`，多半是
+        设备不在场）。带 `reason` 字段，调用方据此如实报告而不是崩栈。
+    TypeError: 输入类型不支持。
+
+    Notes
+    -----
+    敌意/坏数据的超深嵌套在 `MAX_TREE_DEPTH` 处截断，截断点的节点上带
+    `truncated_children` 计数 —— 不裸崩 `RecursionError`，也不静默丢子树。
+    真机树实测 30 层上下，正常样本永远碰不到这个上限。
     """
     if isinstance(source, dict):
         data = source
     elif isinstance(source, (bytes, bytearray)):
-        data = json.loads(source.decode('utf-8', 'replace'))
+        data = _loads_json(source.decode('utf-8', 'replace'))
     elif isinstance(source, str):
         s = source.strip()
+        if not s:
+            raise LayoutParseError('输入是空字符串 —— 没有控件树可解析', 'empty')
         if not s.startswith(('{', '[')) and os.path.exists(s):
-            with open(s, 'r', encoding='utf-8', errors='replace') as f:
-                data = json.load(f)
+            try:
+                with open(s, 'r', encoding='utf-8', errors='replace') as f:
+                    text = f.read()
+            except OSError as e:
+                raise LayoutParseError(f'读文件失败（{s}）: {e}', 'io') from e
+            data = _loads_json(text)
         else:
-            data = json.loads(s)
+            data = _loads_json(s)
     else:
         raise TypeError(f'不支持的输入类型: {type(source)}')
 

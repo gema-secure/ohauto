@@ -1,16 +1,16 @@
-"""`tools/eval_vision_offline.py` 的 `disable_thinking` 透传钉子。
+"""`disable_thinking` 透传钉子 —— 开关必须真的落到实例与 payload 上。
 
-★ 背景（2026-09-27，评审高危遗留第 7 条）：
-基类 `OpenAICompatibleProvider.from_env(**kw)` 只挑 base_url / api_key /
-model / timeout，**其余 kwarg 被静默吞掉**。`--read-page` / `--page-intent`
-传的 `disable_thinking=True` 从未生效 —— 思考实际开着，报告头却写着
-「thinking=disabled」（假信息）。
+★ 背景：`OpenAICompatibleProvider.from_env(**kw)` 曾经只挑
+base_url / api_key / model / timeout，**其余 kwarg 被静默吞掉**。
+`--read-page` / `--page-intent` 传的 `disable_thinking=True` 从未生效 ——
+思考实际开着，报告头却写着「thinking=disabled」（假信息）。
 
-主评测路径（`--no-thinking`）不受影响：`NoThinkingProvider` 是在
-`__init__` 里自塞 True 的，不依赖 `from_env` 透传。
+现在开关由**生产类**托管：`from_env` 显式转发、`locate` 把
+`{"thinking": {"type": "disabled"}}` 注入 payload；工装侧那份覆写已删除，
+同一件事不留两处实现。
 
-⚠️ 修法在工装侧（eval_vision_offline.py 的 `RecordingProvider.from_env`
-覆写），不动 A 的 `vision.py` —— 分工卡边界。
+⚠️ 唯一要守的边界：转发必须「调用方显式传了才覆盖」——
+`NoThinkingProvider` 是在 `__init__` 里自塞 True 的。
 
 **全部离线**：不发起任何 HTTP 请求（`_post` 用 mock 拦截）。
 """
@@ -60,12 +60,43 @@ class FromEnvThinkingFlag(unittest.TestCase):
         self.assertFalse(prov.name.endswith('(thinking=disabled)'))
 
     def test_no_thinking_provider_from_env_still_disables(self):
-        """★ 反向回归：覆写不得把 NoThinkingProvider 在 __init__ 里
-        自塞的 True 清掉（2026-09-22 的 --no-thinking 全量评测走这条）。"""
+        """★ 反向回归：显式转发不得把 `NoThinkingProvider` 在 `__init__` 里
+        自塞的 True 清掉（`--no-thinking` 全量评测走这条）。"""
         prov = ev.NoThinkingProvider.from_env()
         self.assertTrue(prov.disable_thinking,
                         'NoThinkingProvider.from_env 的开关被覆写清掉了 —— '
                         '94.7% 口径的「关思考」将失效')
+
+
+class ProductionProviderOwnsTheSwitch(unittest.TestCase):
+    """开关现在由**生产类**托管（工装侧那份覆写已删除）——
+    这里直接钉生产类，免得将来只有子类还对、基类又坏了。"""
+
+    def setUp(self):
+        self._saved = {k: os.environ.get(k) for k in _ENV}
+        os.environ.update(_ENV)
+
+    def tearDown(self):
+        for k, v in self._saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def test_explicit_true_reaches_production_instance(self):
+        prov = ev.OpenAICompatibleProvider.from_env(disable_thinking=True)
+        self.assertTrue(prov.disable_thinking)
+
+    def test_default_stays_false(self):
+        prov = ev.OpenAICompatibleProvider.from_env()
+        self.assertFalse(prov.disable_thinking)
+
+    def test_forwarding_does_not_swallow_other_kwargs(self):
+        """历史坑：`from_env` 曾经把多余 kwarg 静默吞掉（静默 = 假信息）。"""
+        prov = ev.OpenAICompatibleProvider.from_env(disable_thinking=True,
+                                                    timeout=7)
+        self.assertTrue(prov.disable_thinking)
+        self.assertEqual(prov.timeout, 7)
 
 
 class PostInjectsThinkingSwitch(unittest.TestCase):

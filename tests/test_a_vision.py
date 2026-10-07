@@ -15,7 +15,8 @@ sys.path.insert(0, ROOT)
 from ohauto.layout import LayoutNode, Rect                     # noqa: E402
 from ohauto.vision import (MockProvider, OpenAICompatibleProvider,  # noqa: E402
                            HybridLocator, TieredVisionLocator,
-                           VisionConfigError, VisualTarget, build_provider)
+                           VisionConfigError, VisualTarget, build_provider,
+                           _collect_hints)
 
 
 def png_file(tmpdir, name='shot.png'):
@@ -370,6 +371,35 @@ class TestA4Tiered(unittest.TestCase):
                                  crop_fn=fake_crop)
         tl.locate(root, 'x.png', '搜索', 720, 1280)
         self.assertTrue(cropped['used'], '配置了裁剪钩子时 L2 应走真裁剪')
+
+
+class HintsCollectionIsShared(unittest.TestCase):
+    """两个融合定位器的候选清单必须**同源**。
+
+    这段以前是两份逐字符相同的拷贝（`vision.py` 的 `HybridLocator._hints`
+    与 `TieredVisionLocator._hints`），已经发生过漂移风险；合一之后这里钉住
+    「两入口产出一致」，免得哪天只改了其中一半。
+    """
+
+    def test_both_locators_produce_identical_hints(self):
+        root = simple_page()
+        node('Button', id='btn_a', text='确定', bounds=(10, 10, 60, 50),
+             clickable=True, parent=root)
+        hy = HybridLocator(provider=MockProvider())
+        tl = TieredVisionLocator(provider=MockProvider())
+        self.assertEqual(hy._hints(root), tl._hints(root))
+        self.assertEqual(hy._hints(root), _collect_hints(root))
+
+    def test_hints_keep_the_visible_and_interactive_filter(self):
+        """合一的时候别顺手把口径改掉：仍然只收「可见且可交互」。"""
+        root = simple_page()
+        node('Button', id='btn_a', text='确定', bounds=(10, 10, 60, 50),
+             clickable=True, parent=root)
+        node('Text', id='tv_title', text='标题', bounds=(10, 60, 60, 90),
+             parent=root)
+        ids = [h['id'] for h in _collect_hints(root)]
+        self.assertIn('btn_a', ids)
+        self.assertNotIn('tv_title', ids)
 
 
 if __name__ == '__main__':

@@ -354,6 +354,30 @@ def delete_instance(name: str, force: bool = True,
     return run(args, exe, timeout=120)
 
 
+def images_on_disk_gb() -> float:
+    """镜像目录的实际磁盘占用（GB）。
+
+    ★ 为什么不能只信 `-imageList` 的 downloaded 字段
+    -----------------------------------------------
+    实测：镜像 4.6 GB 在盘、实例已成功跑过，
+    `-imageList` 仍对全部 70 个条目报 `downloaded:"false"` ——
+    该字段对的是**清单里的最新版本号**（7.0.0.107），盘上却是旧版
+    （7.0.0.106）。版本一更新，所有在盘镜像都会被误报成未下载。
+    所以上线自检以磁盘为证据：镜像目录有实质内容就不拦。
+    """
+    root = os.path.join(os.environ.get('LOCALAPPDATA',
+                        os.path.expanduser('~\\AppData\\Local')),
+                        'Huawei', 'Sdk', 'system-image')
+    total = 0
+    for dp, _dn, fn in os.walk(root):
+        for f in fn:
+            try:
+                total += os.path.getsize(os.path.join(dp, f))
+            except OSError:                                 # noqa: PERF203
+                pass
+    return total / 1024 ** 3
+
+
 def preflight(device_type: Optional[str] = None,
               exe: Optional[str] = None) -> List[str]:
     """启动前自检。返回问题列表（空 = 可以启动）。
@@ -370,14 +394,18 @@ def preflight(device_type: Optional[str] = None,
                         f'需你本人执行 `accept --yes`')
     imgs = list_images(exe)
     dl = [i for i in imgs if str(i.get('downloaded')).lower() == 'true']
-    if not dl:
+    if not dl and images_on_disk_gb() < 1.0:
+        # `downloaded` 字段对在盘镜像也会报 false（见 images_on_disk_gb），
+        # 所以只在**磁盘上也没有实质内容**时才拦。
         problems.append('镜像一个都没下载 —— 先 `install <deviceType>`')
-    elif device_type:
-        need = [i for i in dl if i.get('deviceType') == device_type]
-        if not need:
-            have = sorted({i.get('deviceType') for i in dl})
-            problems.append(f'没有 {device_type} 类型的镜像'
-                            f'（已下载的是：{", ".join(have)}）')
+    if device_type:
+        # 类型检查走**全量清单**（不是已下载子集）：downloaded 字段会整体说谎，
+        # 挂在它上面等于永不触发；「清单里有没有这个类型」是清单自身的事实。
+        known = {i.get('deviceType') for i in imgs if i.get('deviceType')}
+        if known and device_type not in known:
+            have = sorted(known)
+            problems.append(f'清单里没有 {device_type} 类型的镜像'
+                            f'（清单里有：{", ".join(have)}）')
     return problems
 
 

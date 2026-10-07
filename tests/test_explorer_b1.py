@@ -843,6 +843,23 @@ if __name__ == '__main__':
 
 # ================================================================ 页面路由（状态层）
 
+class _CollidingSig(PageSignature):
+    """把 `content_key` 固定成给定值 —— 只为构造「同一个 key、不同路由」这个场景。
+
+    真实 `PageSignature` 的 `content_key` 把 `page_path` 也算进哈希，
+    两条路由必然是两把 key，所以这个分支在生产路径上够不着。
+    """
+
+    def __init__(self, key, page_path=''):
+        super().__init__(content='c', structural='s')
+        self._key = key
+        self.page_path = page_path
+
+    @property
+    def content_key(self):
+        return self._key
+
+
 class TestPagePathReachesTheArtifact(_SimCase):
     """设备自报的页面路由要从签名层一路透到**落盘产物**。
 
@@ -896,4 +913,26 @@ class TestPagePathReachesTheArtifact(_SimCase):
         st = g.add_state('raw-signature', '旧式')
         self.assertEqual(st.page_path, '')
         self.assertIn('page_path', st.to_dict())
+
+    def test_existing_state_backfills_an_empty_route(self):
+        """`add_state` 命中已有 state 时要把**空的**路由补上。
+
+        真实 `PageSignature` 把 `page_path` 算进 `content_key`，两条路由必然
+        两个 key —— 所以"同 key、先空后有"在生产路径上够不着。这里用桩签名
+        构造该情形，守的是**公开方法的契约**（`add_state` 不是私有方法）。
+        """
+        g = StateGraph()
+        first = g.add_state(_CollidingSig('k-same', ''), '先到')
+        self.assertEqual(first.page_path, '')
+        again = g.add_state(_CollidingSig('k-same', 'pages/Index'), '后到')
+        self.assertIs(again, first)
+        self.assertEqual(first.page_path, 'pages/Index')
+        self.assertEqual(first.visits, 2)
+
+    def test_existing_route_is_not_overwritten(self):
+        """非空则保留 —— 先到的那次可信观测不该被无声改写。"""
+        g = StateGraph()
+        first = g.add_state(_CollidingSig('k-same', 'pages/Index'), '先到')
+        g.add_state(_CollidingSig('k-same', 'pages/Other'), '后到')
+        self.assertEqual(first.page_path, 'pages/Index')
 

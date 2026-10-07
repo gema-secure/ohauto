@@ -337,15 +337,23 @@ class TestPickImageVersion(unittest.TestCase):
 
 
 class TestPreflight(unittest.TestCase):
-    """启动前自检 —— 把「含糊的启动失败」提前变成「说得清的问题」。"""
+    """启动前自检 —— 把「含糊的启动失败」提前变成「说得清的问题」。
+
+    磁盘证据（`images_on_disk_gb`）读的是**全局机器状态**，必须一并打桩：
+    否则「这台机器上恰好装着镜像」时判据会整体漂移，同一套用例在不同
+    机器上结论不同 —— 单测必须是封闭的。
+    """
 
     def setUp(self):
         self._lic = ec.license_status
         self._imgs = ec.list_images
+        self._disk = ec.images_on_disk_gb
+        ec.images_on_disk_gb = lambda: 0.0      # 默认：磁盘上什么都没有
 
     def tearDown(self):
         ec.license_status = self._lic
         ec.list_images = self._imgs
+        ec.images_on_disk_gb = self._disk
 
     def test_no_problems_when_all_ready(self):
         ec.license_status = lambda: {'A': True, 'B': True}
@@ -381,6 +389,24 @@ class TestPreflight(unittest.TestCase):
         ec.list_images = lambda *a, **kw: [
             {'deviceType': 'phone', 'downloaded': 'true'}]
         self.assertEqual(ec.preflight('phone'), [])
+
+    def test_disk_evidence_overrides_lying_downloaded_field(self):
+        """`-imageList` 会对在盘镜像整体报 downloaded:false —— 以磁盘为准，不误拦。"""
+        ec.license_status = lambda: {'A': True}
+        ec.list_images = lambda *a, **kw: [
+            {'deviceType': 'phone', 'downloaded': 'false'}]
+        ec.images_on_disk_gb = lambda: 4.6
+        self.assertEqual(ec.preflight('phone'), [])
+
+    def test_type_check_does_not_depend_on_downloaded_flag(self):
+        """类型不匹配必须报出来，且不取决于 downloaded 字段 ——
+        那个字段会整体说谎，判据挂在它上面等于永不触发。"""
+        ec.license_status = lambda: {'A': True}
+        ec.list_images = lambda *a, **kw: [
+            {'deviceType': 'tablet', 'downloaded': 'false'}]
+        ec.images_on_disk_gb = lambda: 4.6
+        probs = ec.preflight('foldable')
+        self.assertTrue(any('foldable' in p and 'tablet' in p for p in probs))
 
 
 class TestAvailableMemory(unittest.TestCase):

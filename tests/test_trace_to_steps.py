@@ -164,6 +164,43 @@ class TestNewlyTranslatedKinds(unittest.TestCase):
         self.assertEqual(out, [{'waitGone': 'id=btn_loading'}])
 
 
+class TestSpecSourceIsSharedWithTraceToCase(unittest.TestCase):
+    """定位规格必须与 `tools/trace_to_case.py` **同源**：`node_spec` 优先、
+    `node_path` 回落。
+
+    同一次留痕被两条路径沉淀，产出不同质量的规格，是仓库里确实存在的口径问题：
+    `trace_to_case` 早就在消费 `node_spec`（id + 文案），而这里只按 type/id 反解。
+    真机上可点容器自身文案常为空、文案在子节点上 —— 所以这个差异是实打实的，
+    不是"看起来更整齐"。
+    """
+
+    def test_node_spec_wins_over_node_path(self):
+        s = _step('tap', node_path='Column > Row > Flex',
+                  node_spec={'id': 'item_reset', 'text': '恢复出厂设置'})
+        out = trace_to_steps(_TraceDriver([s]))
+        self.assertEqual(out[0]['tap'],
+                         {'id': 'item_reset', 'text': '恢复出厂设置'})
+
+    def test_falls_back_to_node_path_for_old_traces(self):
+        """旧留痕没有 `node_spec` —— 回落路径必须还在，不能把老轨迹作废。"""
+        s = _step('tap', node_path='Column > Row > Button#btn_login')
+        out = trace_to_steps(_TraceDriver([s]))
+        self.assertEqual(out[0]['tap'], {'id': 'btn_login'})
+
+    def test_input_spec_also_comes_from_node_spec(self):
+        s = _step('input', node_path='Row > TextInput',
+                  node_spec={'id': 'username', 'text': '用户名'}, value='alice')
+        out = trace_to_steps(_TraceDriver([s]))
+        self.assertEqual(out[0]['input'],
+                         {'id': 'username', 'text': '用户名', 'value': 'alice'})
+
+    def test_wait_for_spec_also_comes_from_node_spec(self):
+        s = _step('waitFor', node_path='Button',
+                  node_spec={'id': 'btn_ok', 'text': '确定'})
+        out = trace_to_steps(_TraceDriver([s]))
+        self.assertEqual(out[0]['waitFor'], {'id': 'btn_ok', 'text': '确定'})
+
+
 class TestCoordinateTracesStayOut(unittest.TestCase):
     """`tap_xy` 只给占位：坐标是探索期的偶然，不是回归期的契约。"""
 

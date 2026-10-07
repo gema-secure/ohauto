@@ -129,18 +129,31 @@ bbox 使用截图像素坐标，原点在左上角。
 若图中不存在该目标，输出空数组 []。"""
 
     def __init__(self, base_url: str, api_key: str, model: str,
-                 timeout: int = 60, max_hints: int = 40):
+                 timeout: int = 60, max_hints: int = 40,
+                 disable_thinking: bool = False):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.model = model
         self.timeout = timeout
         self.max_hints = max_hints
+        #: 关掉模型的思考模式：payload 里加 `{"thinking": {"type": "disabled"}}`。
+        #: 为什么值得做成生产开关而不是工装补丁：
+        #:  1. **延迟** —— 目标定位不需要长思维链，实测 p50 1059ms → 3238ms（3.06×）；
+        #:  2. **计费** —— 思维链按输出计价；
+        #:  3. **口径** —— 思考开着时 `temperature` 不生效，我们传的 0 是空转，
+        #:     同一张图两次可能给不同 bbox，「准确率」因此不可复现。
+        self.disable_thinking = disable_thinking
 
     # ------------------------------------------------------ 装配
     @classmethod
     def from_env(cls, **kw) -> 'OpenAICompatibleProvider':
         """从环境变量装配。缺任一项直接抛错 —— 静默降级成 Mock 会让
-        「以为接了真模型、其实在跑关键词匹配」这种假绿测试混进 CI。"""
+        「以为接了真模型、其实在跑关键词匹配」这种假绿测试混进 CI。
+
+        `disable_thinking` **只在调用方显式传了**才转发：子类可能在自己的
+        `__init__` 里自塞 `True`（见工装的 `NoThinkingProvider`），
+        无条件带上默认值会把它的开关反向清掉。
+        """
         def env(*names: str) -> str:
             for n in names:
                 v = os.environ.get(n, '')
@@ -161,8 +174,11 @@ bbox 使用截图像素坐标，原点在左上角。
                 '视觉 Provider 缺少配置: ' + ', '.join(missing) +
                 '（请设置环境变量 OHAUTO_VISION_* 或 OHAUTO_LLM_* 三件套，'
                 'key 绝不写进代码）')
+        extra: Dict[str, Any] = {}
+        if 'disable_thinking' in kw:
+            extra['disable_thinking'] = bool(kw['disable_thinking'])
         return cls(base_url=base_url, api_key=api_key, model=model,
-                   timeout=int(kw.get('timeout', 60)))
+                   timeout=int(kw.get('timeout', 60)), **extra)
 
     @staticmethod
     def available() -> bool:
@@ -240,6 +256,8 @@ bbox 使用截图像素坐标，原点在左上角。
             }],
             'temperature': 0,
         }
+        if self.disable_thinking:
+            payload['thinking'] = {'type': 'disabled'}
         body = None
         try:
             body = self._post(payload)
@@ -285,6 +303,22 @@ bbox 使用截图像素坐标，原点在左上角。
 
 # ---------------------------------------------------------------- 融合定位器
 
+def _collect_hints(root: LayoutNode) -> List[Dict[str, Any]]:
+    """把控件树里**可见且可交互**的节点压成给模型的候选清单。
+
+    两个融合定位器（树+视觉的 `HybridLocator`、分层的 `TieredVisionLocator`）
+    共用这一份 —— 这段以前是两份逐字符相同的拷贝，且已经漂移过一次；
+    合一之后上下文格式只有一处出处，改 prompt 不会漏掉另一半。
+    """
+    out = []
+    for n in flatten(root, only_visible=True, only_interactive=True):
+        out.append({'type': n.type, 'id': n.id, 'text': n.text,
+                    'deep': n.text_deep,
+                    'descr': n.descr, 'hint': n.hint,
+                    'bounds': n.rect.to_dict()})
+    return out
+
+
 class HybridLocator:
     """控件树 + 视觉 双通道融合定位。"""
 
@@ -302,13 +336,7 @@ class HybridLocator:
             print(f'[vision] {msg}')
 
     def _hints(self, root: LayoutNode) -> List[Dict[str, Any]]:
-        out = []
-        for n in flatten(root, only_visible=True, only_interactive=True):
-            out.append({'type': n.type, 'id': n.id, 'text': n.text,
-                        'deep': n.text_deep,
-                        'descr': n.descr, 'hint': n.hint,
-                        'bounds': n.rect.to_dict()})
-        return out
+        return _collect_hints(root)
 
     def locate(self, root: LayoutNode, image_path: str, instruction: str,
                screen_w: int, screen_h: int) -> Optional[VisualTarget]:
@@ -571,13 +599,7 @@ class TieredVisionLocator:
 
     # ------------------------------------------------------ 工具
     def _hints(self, root: LayoutNode) -> List[Dict[str, Any]]:
-        out = []
-        for n in flatten(root, only_visible=True, only_interactive=True):
-            out.append({'type': n.type, 'id': n.id, 'text': n.text,
-                        'deep': n.text_deep,
-                        'descr': n.descr, 'hint': n.hint,
-                        'bounds': n.rect.to_dict()})
-        return out
+        return _collect_hints(root)
 
     def stats(self) -> Dict[str, Any]:
         return {'cache_hits': self.cache_hits, 'cache_misses': self.cache_misses,
@@ -602,6 +624,10 @@ def build_provider(kind: str = 'mock', **kw) -> VisionProvider:
         if kw.get('base_url') and kw.get('api_key') and kw.get('model'):
             return OpenAICompatibleProvider(
                 base_url=kw['base_url'], api_key=kw['api_key'], model=kw['model'],
-                timeout=int(kw.get('timeout', 60)))
-        return OpenAICompatibleProvider.from_env(timeout=int(kw.get('timeout', 60)))
+                timeout=int(kw.get('timeout', 60)),
+                disable_thinking=bool(kw.get('disable_thinking', False)))
+        env_kw: Dict[str, Any] = {'timeout': int(kw.get('timeout', 60))}
+        if 'disable_thinking' in kw:                 # 显式传了才转发（同 from_env 口径）
+            env_kw['disable_thinking'] = kw['disable_thinking']
+        return OpenAICompatibleProvider.from_env(**env_kw)
     raise ValueError(f'未知的 Provider 类型: {kind}')

@@ -23,6 +23,39 @@ from typing import Callable, List, Optional, Sequence
 from .layout import LayoutNode, Rect
 
 
+# ---------------------------------------------------------------- 正则资源闸
+
+class RegexSafetyError(ValueError):
+    """正则被资源闸拒绝。
+
+    这类模式跑一次就能把执行挂住（实测：`(a+)+$` 对 28 个字符回溯 17.6 秒），
+    而匹配发生在 runner 的每一步里，**步上限打断不了一次阻塞的匹配**。
+    所以危险形状必须在**构造期**拒绝，不能等它在某次匹配上挂住。
+    """
+
+
+#: 正则匹配的输入长度上限。超过就不做匹配（返回 False），并记进降级台账。
+#: 界面上单个文本节点长过这个数没有意义，而匹配超长串的耗时不受控。
+MAX_REGEX_INPUT = 4096
+
+#: 已知会造成灾难性回溯的形状：**量词套在「已含量词的组」上**。
+#:     (a+)+   (a*)*   (\w+\s?)+   ((a+)+)   (a+){2,}
+#: 不做「量词套在带分支的组上」的推断 —— `(foo|bar)+` 是完全正常的写法，
+#: 只有「分支互相重叠」（`(a|a)+`）才危险，而那需要语义分析，静态形状判不出来。
+#: 后者的兜底是下面的长度上限：危险的是**回溯**，输入短就翻不出浪。
+_REGEX_NESTED_QUANT = re.compile(r'\([^()]*[*+][^()]*\)\s*[*+{]')
+
+#: 降级台账：每次「因超长跳过匹配」都追一条，工装/报告可直接读。
+REGEX_DEGRADATIONS: List[str] = []
+
+
+def _reject_unsafe_regex(pattern: str) -> None:
+    if _REGEX_NESTED_QUANT.search(pattern):
+        raise RegexSafetyError(
+            f'正则 {pattern!r} 被拒绝：量词套在已含量词的组上，会灾难性回溯。'
+            f'改写即可（如 (a+)+ → a+；或把重复提到组外）')
+
+
 class Matcher:
     """控件匹配器。所有条件为 AND 关系；链式调用返回新的 Matcher（不可变）。"""
 
@@ -35,6 +68,9 @@ class Matcher:
         self._desc: List[str] = list(desc or [])
         self._within = within
         self._index = index
+        #: 本次匹配发生的降级（如"文本超长，跳过了正则"）。**不是装饰**：
+        #: 上层读它就能把"没匹配上"和"根本没匹配"区分开。
+        self.degradations: List[str] = []
 
     # -------------------------------------------------------- 内部
 
@@ -46,7 +82,11 @@ class Matcher:
         base = dict(preds=self._preds, desc=self._desc,
                     within=self._within, index=self._index)
         base.update(kw)
-        return Matcher(**base)
+        m = Matcher(**base)
+        # 谓词闭包写的是同一个台账，所以这里**共享**而不是拷贝 ——
+        # `ON.text_matches(p).nth(0)` 之后也要能读到降级记录。
+        m.degradations = self.degradations
+        return m
 
     # -------------------------------------------------------- 条件
 
@@ -69,9 +109,38 @@ class Matcher:
         return self._add(lambda n: sub in n.text, f'text~{sub!r}')
 
     def text_matches(self, pattern: str, flags: int = 0) -> 'Matcher':
-        rx = re.compile(pattern, flags)
-        return self._add(lambda n: bool(rx.search(n.text)),
-                         f'text/{pattern}/')
+        """正则匹配文本。
+
+        两道资源闸，理由是**正则的来源不可信**（用例 YAML 里能写，模型生成的
+        规格里也能写）：
+
+        1. **构造期**拒绝会造成灾难性回溯的形状（见 `_reject_unsafe_regex`），
+           抛 `RegexSafetyError` —— 响亮地失败，而不是让它挂住；
+        2. **每节点**限制被匹配文本的长度（`MAX_REGEX_INPUT`）。超长文本不匹配，
+           并把这次降级记进 `degradations` / 模块级 `REGEX_DEGRADATIONS`
+           —— 宁可漏掉一条，也不能让一次匹配把执行挂死。
+        """
+        _reject_unsafe_regex(pattern)
+        try:
+            rx = re.compile(pattern, flags)
+        except re.error as e:
+            raise RegexSafetyError(f'正则 {pattern!r} 不合法: {e}') from e
+
+        notes: List[str] = []
+
+        def pred(n: LayoutNode) -> bool:
+            text = n.text
+            if len(text) > MAX_REGEX_INPUT:
+                note = (f'text/{pattern}/ 跳过 {len(text)} 字符文本'
+                        f'（上限 {MAX_REGEX_INPUT}）')
+                notes.append(note)
+                REGEX_DEGRADATIONS.append(note)
+                return False
+            return bool(rx.search(text))
+
+        m = self._add(pred, f'text/{pattern}/')
+        m.degradations = notes
+        return m
 
     def text_in(self, options: Sequence[str]) -> 'Matcher':
         s = set(options)
@@ -219,6 +288,8 @@ class Matcher:
             s += f' within({self._within})'
         if self._index is not None:
             s += f'.nth({self._index})'
+        if self.degradations:
+            s += f' [降级×{len(self.degradations)}]'
         return s
 
     __repr__ = __str__

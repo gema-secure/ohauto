@@ -627,8 +627,16 @@ class StateGraph:
             page_path = ''
 
         if key in self.states:
-            self.states[key].visits += 1
-            return self.states[key]
+            st = self.states[key]
+            st.visits += 1
+            # 路由以**最新的可信观测**为准：空则补写（幂等地填一次），
+            # 非空则保留 —— 先到的那次观测不该被无声改写。
+            # 触发条件是「同一个 key、先空后有」：真实 PageSignature 把
+            # page_path 算进哈希，两条路由必然两个 key，所以生产路径够不着；
+            # 这里守的是公开方法的契约（add_state 不是私有方法）。
+            if not st.page_path and page_path:
+                st.page_path = page_path
+            return st
 
         self._auto += 1
         st = PageState(sid=f'S{self._auto}', signature=content_text,

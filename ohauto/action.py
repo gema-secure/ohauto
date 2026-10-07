@@ -37,7 +37,20 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from .driver import Driver, DriverError
-from .matcher import Matcher, ON
+from .matcher import Matcher, ON, RegexSafetyError
+
+
+def _text_matches(m: Matcher, v: Any) -> Matcher:
+    """DSL 侧包一层：正则资源闸的拒绝也要走 DSL 的错误类型。
+
+    裸抛 `RegexSafetyError` 会让一条用例的规格错误看起来像引擎崩溃；
+    归一成 `DslError` 后，归因链认得它（runner 的失败分类里有"用例缺陷"这一类）。
+    """
+    try:
+        return m.text_matches(v)
+    except RegexSafetyError as e:
+        raise DslError(str(e)) from e
+
 
 try:                                    # PyYAML 可选，缺失时降级为 JSON
     import yaml
@@ -56,7 +69,7 @@ class DslError(ValueError):
 _SPEC_KEYS = {
     'text':          lambda m, v: m.text(v),
     'text_contains': lambda m, v: m.text_contains(v),
-    'text_matches':  lambda m, v: m.text_matches(v),
+    'text_matches':  _text_matches,
     'text_in':       lambda m, v: m.text_in(v),
     'id':            lambda m, v: m.id(v),
     'id_contains':   lambda m, v: m.id(v, exact=False),
@@ -296,20 +309,114 @@ def _exec_assert(driver: Driver, arg: Any) -> None:
 
 # ---------------------------------------------------------------- 序列化
 
+#: 用例文本的体积上限（字节）。用例文件正常只有几 KB，
+#: 而 YAML 解析耗时随体积线性涨（实测 20 万行平铺要 6.7 秒）。
+MAX_CASE_TEXT_BYTES = 1 << 20                   # 1 MiB
+
+#: YAML 的嵌套深度上限。**PyYAML 的扫描器/构造器都是递归的** ——
+#: 实测 flow 形 `a: [[[[…]]]]` 与块状缩进都在 500 层处 `RecursionError` 裸崩。
+MAX_YAML_NESTING = 200
+
+
+def _flow_nesting_depth(text: str) -> int:
+    """flow 形（`[]` / `{}`）的括号嵌套深度。迭代实现，跳过引号内部。"""
+    depth = deepest = 0
+    in_str = esc = False
+    for ch in text:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == '\\':
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in '[{':
+            depth += 1
+            deepest = max(deepest, depth)
+        elif ch in ']}':
+            depth -= 1
+    return deepest
+
+
+def _guard_case_text(text: str) -> None:
+    """用例文本的形状闸 —— 大得离谱 / 深得离谱的都先拦下。
+
+    实测结论（PyYAML 6.0.3），跟红队当初的猜测**不一样**，以实测为准：
+
+    - **别名炸弹不成立**：别名在 PyYAML 里是**引用共享**，不是拷贝
+      （`b: [*x, *x]` 里 `b[0] is b[1] is x`）。经典「30 层 × 12 份」炸弹
+      文本只有 2 KB、峰值内存 57 KB、23 ms —— 不会指数膨胀，所以不需要
+      额外防护，`TestYamlInputGuards` 里用常驻钉把这个性质锁住；
+    - **真正会崩的是嵌套深度**：flow 形 500 层、块状缩进 500 层都是
+      `RecursionError`，且崩在 PyYAML 内部。深度闸在这里挡 flow 形，
+      块状缩进靠 `load_case` 里对 `RecursionError` 的兜底归一。
+    """
+    size = len(text.encode('utf-8'))
+    if size > MAX_CASE_TEXT_BYTES:
+        raise DslError(f'用例文本 {size} 字节，超过上限 {MAX_CASE_TEXT_BYTES}'
+                       f'（用例文件正常只有几 KB）')
+    depth = _flow_nesting_depth(text)
+    if depth > MAX_YAML_NESTING:
+        raise DslError(f'用例文本嵌套过深（{depth} 层 > 上限 {MAX_YAML_NESTING}）'
+                       f'—— 再深会让 YAML 解析器撞栈')
+
+
+def _require_case_mapping(data: Any, where: str) -> Dict[str, Any]:
+    """用例定义的顶层必须是映射（含 `name` / `steps`）。
+
+    顶层 list / 标量 / 空文件是最常见的三类手误 —— 在这里响亮地失败，
+    好过让 `run_case` 靠 `case.get('steps')` 拿 None 然后空转 0 步。
+    """
+    if isinstance(data, dict):
+        return data
+    got = 'None（空文件？）' if data is None else type(data).__name__
+    raise DslError(f'{where}的顶层必须是映射（name / steps），收到 {got}')
+
+
 def load_case(source: Any) -> Dict[str, Any]:
-    """从 YAML 文本 / JSON 文本 / 文件路径 加载用例定义。"""
+    """从 YAML 文本 / JSON 文本 / 文件路径 加载用例定义。
+
+    顶层**必须**是映射。内容不是 JSON/YAML、文件读不出来、类型不对，
+    一律归一成 `DslError` —— 归属归因链里的「用例缺陷」那一类，
+    而不是让 `json.JSONDecodeError` / `yaml.ScannerError` 裸抛出去假装引擎故障。
+    """
     if isinstance(source, dict):
-        return source
+        return _require_case_mapping(source, '入参')
     text = source
     if isinstance(source, str) and not source.lstrip().startswith(('{', 'name:', 'steps:')):
         if os.path.exists(source):
-            with open(source, 'r', encoding='utf-8') as f:
-                text = f.read()
-    if isinstance(text, str) and text.lstrip().startswith('{'):
-        return json.loads(text)
-    if not _HAS_YAML:
-        raise DslError('解析 YAML 需要 PyYAML，请先 pip install pyyaml（或改用 JSON 格式）')
-    return yaml.safe_load(text)
+            try:
+                with open(source, 'r', encoding='utf-8') as f:
+                    text = f.read()
+            except OSError as e:
+                raise DslError(f'读用例文件失败（{source}）: {e}') from e
+    if not isinstance(text, str):
+        raise DslError(
+            f'load_case 只接受 dict / str（路径或文本），收到 {type(text).__name__}')
+
+    where = '用例文本' if text is source else '用例文件'
+    stripped = text.lstrip()
+    if stripped.startswith(('{', '[')):
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as e:
+            raise DslError(f'{where}不是合法 JSON: {e}') from e
+    else:
+        if not _HAS_YAML:
+            raise DslError('解析 YAML 需要 PyYAML，请先 pip install pyyaml（或改用 JSON 格式）')
+        _guard_case_text(text)
+        try:
+            data = yaml.safe_load(text)
+        except yaml.YAMLError as e:
+            raise DslError(f'{where}不是合法 YAML: {e}') from e
+        except RecursionError as e:
+            # 块状缩进的深嵌套不走括号闸，只能在撞栈处兜回来 ——
+            # 抛 DslError，而不是让 RecursionError 冒出去假装引擎故障。
+            raise DslError(f'{where}嵌套过深，YAML 解析时撞栈') from e
+    return _require_case_mapping(data, where)
 
 
 def dump_case(case: Dict[str, Any]) -> str:
@@ -457,6 +564,19 @@ _TRACE_DIRECT: Dict[str, str] = {
 }
 
 
+def _spec_of(s: Any) -> Dict[str, Any]:
+    """取这一步的定位规格：**有 `node_spec` 优先，无则回落 `node_path` 反解**。
+
+    同一个 driver 留痕有两条沉淀路径（这里与 `tools/trace_to_case.py`），
+    必须产出**同质量**的规格。`node_spec` 是留痕时按「id 优先、文案兜底
+    （可点容器自身文案常为空，落到子节点文案）」记下来的；只走 `node_path`
+    反解只能拿到 `type`/`id` —— 真机 id 覆盖仅 5.62%，会退化成按 type 歧义匹配。
+    旧留痕没有 `node_spec`，所以回落路径必须保留。
+    """
+    spec = dict(getattr(s, 'node_spec', None) or {})
+    return spec or _path_to_spec(getattr(s, 'node_path', None))
+
+
 def _trace_step_of(kind: str, s: Any, *, include_waits: bool,
                    include_asserts: bool) -> Any:
     """把一个留痕还原成 DSL 步骤；`_OPTED_OUT` 表示调用方关掉了这一类。
@@ -470,14 +590,14 @@ def _trace_step_of(kind: str, s: Any, *, include_waits: bool,
     if kind == 'start':
         return {'start': True}
     if kind in ('tap', 'longPress'):
-        spec = _path_to_spec(s.node_path)
+        spec = _spec_of(s)
         if not spec:
             return _unresolved_step(kind, s.node_path, '留痕里没有可解析的控件路径')
         return {_TRACE_DIRECT.get(kind, kind): spec}
     if kind == 'input':
         if s.value is None:
             return _unresolved_step('input', s.node_path, '留痕里没有输入值')
-        spec = _path_to_spec(s.node_path)
+        spec = _spec_of(s)
         if not spec:
             return _unresolved_step('input', s.node_path,
                                     '留痕里没有可解析的控件路径', value=s.value)
@@ -490,7 +610,7 @@ def _trace_step_of(kind: str, s: Any, *, include_waits: bool,
     if kind in ('waitFor', 'waitGone'):
         if not include_waits:
             return _OPTED_OUT
-        spec = _path_to_spec(s.node_path)
+        spec = _spec_of(s)
         return {_TRACE_DIRECT.get(kind, kind): spec or s.target}
     if kind.startswith('assert'):
         return _assert_step(kind, s) if include_asserts else _OPTED_OUT
@@ -523,6 +643,10 @@ def trace_to_steps(driver: Driver, include_waits: bool = True,
        缺了步骤的脚本**恰恰是「看起来能跑」的那种** —— 那比当场报错更坏，
        因为它会把一条永远测不到东西的脚本混进回归集。
        直译表见 `_TRACE_DIRECT`，兜底见 `_trace_step_of`。
+
+    4. **定位规格与另一条沉淀路径同源**：`node_spec`（留痕时记的 id / 文案）
+       优先，没有才回落 `node_path` 反解。`tools/trace_to_case.py` 早就在消费
+       `node_spec` 了 —— 同一次留痕不该一条路径拿得到文案、另一条只有 type。
 
     Parameters
     ----------

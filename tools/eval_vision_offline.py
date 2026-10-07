@@ -1229,33 +1229,13 @@ class RecordingProvider(OpenAICompatibleProvider):
     """
     _NAME = 'openai-compatible'
 
-    def __init__(self, *args: Any, disable_thinking: bool = False,
-                 **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        self.disable_thinking = disable_thinking
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)      # disable_thinking 由生产类托管
         self.last_text: str = ''
         self.n_http = 0
 
-    @classmethod
-    def from_env(cls, **kw) -> 'RecordingProvider':
-        """★ 2026-09-27 修（评审高危遗留）：基类 `from_env(**kw)` 只挑
-        base_url/api_key/model/timeout，**其余 kwarg 被静默吞掉** ——
-        `--read-page` / `--page-intent` 传的 `disable_thinking=True`
-        从未生效，思考实际开着，而报告头却写着「thinking=disabled」。
-
-        修法放在工装侧（本文件）而不是 `vision.py` 的 payload ——
-        那是 A 的模块，类注释里已写明边界：彻底修法应改生产 Provider。
-
-        ⚠️ 覆写里**只在调用方显式传了** `disable_thinking` 时才回写属性：
-        `NoThinkingProvider` 是在 `__init__` 里自塞 True 的，若无条件
-        `self.disable_thinking = False` 会把它的开关反向清掉（回归钉子
-        `test_no_thinking_provider_from_env_still_disables` 钉的就是这个）。
-        """
-        disable = kw.pop('disable_thinking', None)
-        prov = super().from_env(**kw)
-        if disable is not None:
-            prov.disable_thinking = bool(disable)
-        return prov
+    # 不再覆写 `from_env`：`disable_thinking` 的转发已经在生产类里做掉，
+    # 这里那份覆写是它缺席时的临时补丁 —— 同一件事两处实现必然分叉。
 
     @property
     def name(self) -> str:                       # type: ignore[override]
@@ -1263,8 +1243,7 @@ class RecordingProvider(OpenAICompatibleProvider):
                              else '')
 
     def _post(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        if self.disable_thinking:
-            payload.setdefault('thinking', {'type': 'disabled'})
+        # `thinking` 开关由生产类在 payload 里注入，这里只负责记原话与计数。
         self.n_http += 1
         body = super()._post(payload)
         try:
@@ -1293,8 +1272,8 @@ class NoThinkingProvider(RecordingProvider):
     与 `temperature` 同级（用 openai SDK 时要放 `extra_body`，我们直接发原始
     JSON，所以放顶层）。
 
-    想彻底修好应该改 `OpenAICompatibleProvider` 的 payload（A 的模块）；
-    本类只是工装侧的对照实验手段。
+    这个开关现在由**生产类** `OpenAICompatibleProvider` 落地（`disable_thinking`
+    参数 + payload 注入）；本类只是把它固定打开的一个薄壳。
     """
     _NAME = 'openai-compatible'
 
