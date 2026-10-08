@@ -232,15 +232,35 @@ def _title(root: LayoutNode, status_top: int = 72) -> str:
     return sorted(cands)[0][2] if cands else ''
 
 
+def _band(root: LayoutNode) -> Tuple[int, int]:
+    """文案采样窗口带 (top, bottom) —— **不写死任何设备的像素值**。
+
+    状态栏：优先实测树里 id/type 含 statusbar 的节点底边，
+    取不到按根屏高 5% 估算（> 状态栏文字 top、< 页面标题 top 的区间，
+    1280 高→64px、2340 高→117px，两台样本均成立）；
+    下沿取树根底边（应用窗口实际底），替代旧版写死的 1208（=1280−72，
+    DAYU200 专属 —— 大分辨率设备上会静默丢掉下半屏文案）。
+    """
+    h = root.rect.height
+    top = int(h * 0.05) if h > 0 else 72
+    bottom = root.rect.bottom
+    for n in flatten(root):
+        if 'statusbar' in ((n.id or '') + (n.type or '')).lower():
+            top = max(top, n.rect.bottom)
+            break
+    return top, bottom
+
+
 def _stats(root: LayoutNode) -> Tuple[int, int, int, List[str]]:
     nodes = list(flatten(root))
     ck = [n for n in nodes if n.clickable and n.type in CLICKABLE_TYPES]
     ids = [n for n in nodes if n.id]
-    # 文案采样**排除状态栏**（top < 72）—— 否则每页前几条永远是
+    # 文案采样**排除状态栏** —— 否则每页前几条永远是
     # 「没有 SIM 卡 / × / 11% / 08:40」，把真正的页面文案挤掉。
     # 这是写完第一版后看产物才发现的问题：搜索页的正文文案一条都没采到。
+    top, bottom = _band(root)
     texts = [n.text for n in nodes
-             if n.text and n.rect.top >= 72 and n.rect.bottom <= 1208][:14]
+             if n.text and n.rect.top >= top and n.rect.bottom <= bottom][:14]
     return len(nodes), len(ck), len(ids), texts
 
 
@@ -384,10 +404,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                   f'{home_sig or "?"} != {p0.sig}），停止探索')
             break
 
+        band_top, band_bottom = _band(home_root)
         cands = [n for n in flatten(home_root)
                  if n.clickable and n.rect.width >= 60 and n.rect.height >= 60
                  and _identity(n)
-                 and n.rect.top >= 72 and n.rect.bottom <= 1208]
+                 and n.rect.top >= band_top and n.rect.bottom <= band_bottom]
         if not cands:
             print(f'    · 第 {round_no} 轮：入口页无可点控件，停止')
             break

@@ -82,7 +82,11 @@ def wake_and_pin(hdc: Hdc, timeout_ms: int = 1_800_000) -> None:
 
 
 def _screen_size(hdc: Hdc) -> Tuple[int, int]:
-    """从 RenderService 取真实分辨率；失败时退回 720×1280（DAYU200 实测值）。"""
+    """从 RenderService 取真实分辨率；失败直接报错 —— 拒绝按猜测的几何解锁。
+
+    旧版失败时回落 720×1280（DAYU200 专属值），换设备后会把解锁滑动
+    打到错误的坐标上，静默采到空树 —— 那比崩溃更难查，所以宁可失败。
+    """
     try:
         r = hdc.shell('hidumper -s RenderService -a screen')
         for line in r.stdout.replace('\r', '').splitlines():
@@ -93,7 +97,9 @@ def _screen_size(hdc: Hdc) -> Tuple[int, int]:
                     return int(m.group(1)), int(m.group(2))
     except Exception:                                          # noqa: BLE001
         pass
-    return 720, 1280
+    raise RuntimeError(
+        '无法实测屏幕尺寸（hidumper RenderService 无输出），'
+        '拒绝按写死的 720×1280 计算解锁滑动 —— 请手动解锁设备后重试')
 
 
 # ---------------------------------------------------------------- 启动应用

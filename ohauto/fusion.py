@@ -516,8 +516,19 @@ def source_ocr(image_path: str, *, name: str = 'ocr',
 VISION_READ_TEXT = '列出画面上的所有文字，每行一条，不要解释，不要加编号。'
 
 
+def _png_size(path: str) -> tuple:
+    """读 PNG IHDR 拿宽高。截图即全屏 → 图尺寸=屏尺寸，不写死任何设备的分辨率。"""
+    import struct
+    with open(path, 'rb') as f:
+        head = f.read(24)
+    if len(head) < 24 or head[:8] != b'\x89PNG\r\n\x1a\n' or head[12:16] != b'IHDR':
+        raise ValueError('不是合法 PNG（缺 IHDR 头）')
+    w, h = struct.unpack('>II', head[16:24])
+    return int(w), int(h)
+
+
 def source_vision(image_path: str, *, instruction: str = VISION_READ_TEXT,
-                  provider: Any = None, screen: tuple = (720, 1280),
+                  provider: Any = None, screen: Any = None,
                   name: str = 'vision') -> SourceResult:
     """观察源：**视觉理解** —— 复用 `ohauto.vision` 的 Provider，不重写。
 
@@ -563,6 +574,8 @@ def source_vision(image_path: str, *, instruction: str = VISION_READ_TEXT,
                                 reason='装配视觉 Provider 失败: %s' % e)
 
     try:
+        if screen is None:
+            screen = _png_size(image_path)   # 截图即全屏：图尺寸=屏尺寸
         targets = provider.locate(image_path, instruction, screen[0], screen[1])
     except Exception as e:
         return SourceResult(name, 'observation', ok=False,

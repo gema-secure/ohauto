@@ -192,17 +192,28 @@ class TestScreenFallbackIsTheRealDevice(unittest.TestCase):
         self.assertEqual(DEFAULT_SCREEN, (720, 1280))
 
     def test_build_stress_case_records_where_the_size_came_from(self):
-        case = build_stress_case(StressSpec(kind=StressKind.SWIPE_LOOP,
-                                            rounds=2))
+        """点击类压测允许回落默认屏，但出处必须记账（可追溯）。"""
+        case = build_stress_case(StressSpec(kind=StressKind.REPEAT_TAP,
+                                            rounds=2,
+                                            target={'id': 'btn_refresh'}))
         self.assertTrue(any('屏幕尺寸' in n for n in case.notes), case.notes)
         self.assertTrue(any('回落' in n for n in case.notes), case.notes)
 
-    def test_geometry_follows_the_fallback_not_a_wider_screen(self):
-        """屏幕换掉，起止点必须跟着换 —— 否则「回落」只是个装饰。"""
+    def test_swipe_stress_without_screen_is_rejected(self):
+        """滑动压测必须给实测屏 —— 拒绝回落写死值（换设备静默失效的根源）。"""
+        with self.assertRaises(ValueError):
+            build_stress_case(StressSpec(kind=StressKind.SWIPE_LOOP,
+                                         rounds=2,
+                                         directions=('left',),
+                                         scale=0.6))
+
+    def test_geometry_follows_the_screen_not_a_wider_screen(self):
+        """屏幕换掉，起止点必须跟着换 —— 否则「跟屏」只是个装饰。"""
         narrow = build_stress_case(StressSpec(kind=StressKind.SWIPE_LOOP,
                                               rounds=2,
                                               directions=('left',),
-                                              scale=0.6))
+                                              scale=0.6),
+                                   screen=(720, 1280))
         wide = build_stress_case(StressSpec(kind=StressKind.SWIPE_LOOP,
                                             rounds=2,
                                             directions=('left',),
@@ -211,12 +222,15 @@ class TestScreenFallbackIsTheRealDevice(unittest.TestCase):
         self.assertNotEqual(narrow.steps, wide.steps,
                             '屏幕尺寸没参与几何计算')
 
-    def test_safety_report_uses_the_same_fallback(self):
+    def test_safety_report_requires_screen_for_swipes(self):
         case = build_stress_case(StressSpec(kind=StressKind.SWIPE_LOOP,
                                             rounds=2,
                                             directions=('left', 'right'),
-                                            scale=0.6))
-        report = stress_safety_report(case)
+                                            scale=0.6),
+                                 screen=(720, 1280))
+        with self.assertRaises(ValueError):
+            stress_safety_report(case)      # 含滑动步骤却不给屏 → 拒绝判定
+        report = stress_safety_report(case, (720, 1280))
         self.assertTrue(report, '水平滑动应当逐条进报告')
         self.assertTrue(all(r.ok for r in report),
                         [r.to_dict() for r in report if not r.ok])

@@ -268,8 +268,8 @@ class DeviceGuard:
 
     KEEP_AWAKE_MS = 1800000      # 默认把息屏超时覆盖成 30 分钟
 
-    def screen_size(self, default: Tuple[int, int] = (720, 1280)) -> Tuple[int, int]:
-        """取设备分辨率；取不到就回退到 DAYU200 的实测值。"""
+    def screen_size(self, default: Optional[Tuple[int, int]] = None) -> Tuple[int, int]:
+        """取设备分辨率；实测不到且未显式给 default 时抛错 —— 拒绝用猜测的几何。"""
         try:
             res = self.hdc.shell('hidumper -s RenderService -a screen', timeout=20)
             m = re.search(r'(\d+)\s*[xX*]\s*(\d+)', getattr(res, 'stdout', '') or '')
@@ -277,6 +277,11 @@ class DeviceGuard:
                 return int(m.group(1)), int(m.group(2))
         except Exception:
             pass
+        if default is None:
+            raise DriverError(
+                '屏幕尺寸实测不到（hidumper RenderService 无输出），'
+                '拒绝回退到写死的设备值 —— 请检查设备在线，'
+                '或显式传入 default=（仅限离线/模拟环境）')
         return default
 
     def has_window(self) -> bool:

@@ -82,7 +82,10 @@ def root_bounds(raw: dict) -> tuple:
     nums = [int(x) for x in re.findall(r'-?\d+', b)]
     if len(nums) >= 4:
         return nums[2], nums[3]
-    return 720, 1280
+    raise RuntimeError(
+        '控件树根 bounds 解析不到，拒绝按写死的 720×1280 折算 —— '
+        '请检查 dumpLayout 输出（解析不到时带着错误几何跑完三场景，'
+        '验证结论会系统性失真）')
 
 
 def find_first(node: dict, pred):

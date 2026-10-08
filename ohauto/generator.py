@@ -1398,9 +1398,14 @@ class Generator:
             except Exception:
                 screen = None
         if not screen:
+            if kind == StressKind.SWIPE_LOOP:
+                raise ValueError(
+                    '连续滑动压测必须提供实测屏幕尺寸（screen= 或 driver）：'
+                    '滑动几何全按屏宽算，用错屏会让「离边缘 150–200px」约束'
+                    '在真机上静默失效 —— 拒绝回落写死的默认值')
             screen = DEFAULT_SCREEN
             origin = (f'回落默认 {DEFAULT_SCREEN[0]}×{DEFAULT_SCREEN[1]}'
-                      f'（取不到设备实测）')
+                      f'（仅点击类压测允许；取不到设备实测）')
         screen = tuple(screen)
         case = generate_stress(kind, bundle=self.bundle, ability=self.ability,
                                page=page if page is not None else self.page,
@@ -1852,9 +1857,13 @@ def build_stress_case(spec: StressSpec, *, bundle: str = '',
     kind = _as_stress_kind(spec.kind)
     notes: List[str] = []
     if screen is None:
+        if spec.kind == StressKind.SWIPE_LOOP:
+            raise ValueError(
+                '连续滑动压测必须显式传入实测屏幕尺寸 screen=：滑动几何全按'
+                '屏幕边长算，写死的默认值在别的设备上会让边缘约束静默失效')
         screen = DEFAULT_SCREEN
         notes.append(f'屏幕尺寸 {screen[0]}×{screen[1]}'
-                     f'（未指定，回落真机典型值）')
+                     f'（未指定，回落真机典型值；仅点击类压测允许）')
     screen = tuple(screen)
     m = clamp_margin(margin, notes)
     rounds = max(1, int(spec.rounds))
@@ -1949,11 +1958,16 @@ def stress_safety_report(case: Case, screen: Optional[Tuple[int, int]] = None,
                          margin: int = SWIPE_EDGE_MARGIN_PX) -> List[SwipeSafety]:
     """把用例里所有水平滑动逐条过一遍安全校验 —— 报告与 CI 都用它。
 
-    `screen` 不给就回落 `DEFAULT_SCREEN`（真机典型值）。屏幕尺寸直接决定
-    「起止点离边缘还有多少 px」，用错屏会让边缘约束的结论整个反过来。
+    `screen` 不给时：用例**含滑动步骤**则直接抛错（屏幕尺寸直接决定
+    「起止点离边缘还有多少 px」，用错屏会让边缘约束的结论整个反过来，
+    拒绝猜测）；不含滑动步骤则无需屏幕，直接返回空报告。
     """
     if screen is None:
-        screen = DEFAULT_SCREEN
+        if any(a == 'swipe' for _, a, _ in _iter_steps(case.steps)):
+            raise ValueError(
+                '用例含滑动步骤：stress_safety_report 必须传入实测屏幕'
+                '尺寸 screen=，拒绝用写死的默认值判定边缘安全')
+        return []
     screen = tuple(screen)
     out: List[SwipeSafety] = []
     for _, action, arg in _iter_steps(case.steps):

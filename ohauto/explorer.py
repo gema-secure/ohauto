@@ -681,8 +681,9 @@ def _sig_hash(sig: str) -> str:
 class Explorer:
     """基于状态图的广度优先自动探索。"""
 
-    # 状态栏高度上限（真机 `SystemUi_StatusBar` 实测 `[0,0,720,72]`）。
-    # 取页面标题时要剔掉这个区域 —— 否则取到的永远是状态栏文本。
+    # 状态栏剔除阈值的「最后兜底」（历史值：DAYU200 实测 72px）。
+    # 运行时优先用 _status_bar_top()：实测 SystemUi_StatusBar 节点底边，
+    # 取不到按屏高 5.6% 估算（72/1280 的来历）—— 不写死任何设备的 px。
     STATUS_BAR_MAX_TOP = 72
 
     #: 半盲页阈值：树内可交互候选少于它 → 视觉定位介入（仅当注入了定位器）
@@ -746,6 +747,29 @@ class Explorer:
         """旧接口保留：只返回内容签名。新代码请用 `_page_signatures()`。"""
         return self._page_signatures().content
 
+    @staticmethod
+    def _status_bar_top(root: Any) -> int:
+        """状态栏剔除阈值（px）—— 不写死任何设备的分辨率。
+
+        优先实测：树里找 id/type 含 statusbar 的节点，取其底边；
+        取不到按根屏高 5% 估算 —— 区间依据：必须 > 状态栏文字的 top
+        （DAYU200 实测 32px/1280 高）且 < 页面标题的 top（1080×2340 上
+        标题在 120，对应 5.1%），5% 在两台样本上都成立；
+        连屏高都拿不到才回落历史常量。
+        """
+        try:
+            h = root.rect.height
+        except Exception:
+            h = 0
+        try:
+            for n in root.walk():
+                tag = ((n.id or '') + (n.type or '')).lower()
+                if 'statusbar' in tag:
+                    return n.rect.bottom
+        except Exception:
+            pass
+        return int(h * 0.05) if h > 0 else Explorer.STATUS_BAR_MAX_TOP
+
     def _page_title(self) -> str:
         """猜页面标题：**排除状态栏后**，取最靠上的短文本。
 
@@ -757,9 +781,12 @@ class Explorer:
         真机状态栏永远在 `top≈32` 且带文本（`没有 SIM 卡` 在 `[43,32][170,50]`），
         所以「最靠上的文本」永远命中状态栏 —— 六个页面标题全成了同一句。
         模拟设备的状态栏文本为空，自测暴露不出来。
+
+        状态栏阈值运行时实测/估算，见 `_status_bar_top()`。
         """
         try:
             root = self.driver.root
+            bar_top = self._status_bar_top(root)
             cands = []
             for n in root.walk():
                 if not (n.visible and n.text) or len(n.text) > 20:
@@ -767,7 +794,7 @@ class Explorer:
                 if n.type not in ('Text', 'Title', 'NavigationTitle',
                                   'NavDestinationTitle'):
                     continue
-                if n.rect.top < self.STATUS_BAR_MAX_TOP:
+                if n.rect.top < bar_top:
                     continue                      # ★ 剔掉状态栏区域
                 cands.append((n.rect.top, -n.rect.area, n.text))
             if cands:
