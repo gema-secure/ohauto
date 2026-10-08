@@ -298,6 +298,16 @@ def _print_summary(suite: SuiteResult, guard, args):
           + (f'（挽救率 {rescued / attempts:.1%}）' if attempts else ''))
     print()
 
+    # 取树账（10-08 落地「合并往返 + 只读步骤复用」）—— 以前只能手工数，
+    # 现在跟着报告一起出来。口径：宿主侧**调用**次数，dumpLayout+cat 已合并为
+    # 一次设备往返；动作步骤前仍必重取，复用只发生在跨越只读步骤时。
+    if suite.tree_dumps or suite.tree_reuses:
+        print(f'  取树              : 真取 {suite.tree_dumps} 次 / '
+              f'复用 {suite.tree_reuses} 次'
+              f'（复用率 {suite.tree_reuse_rate:.1%}，'
+              f'{suite.tree_dumps_per_step():.2f} 次/步）')
+        print()
+
     # 失败归因
     by_kind = suite.failures_by_kind()
     if by_kind:

@@ -531,6 +531,11 @@ class CaseResult:
     steps: List[StepResult] = field(default_factory=list)
     elapsed_ms: int = 0
     device_recoveries: int = 0
+    #: 取树账（10-08「合并往返 + 只读步骤复用」的收益必须有地方自动落账，
+    #: 否则每次对外报数都要回会话记录里手工数）。按用例记增量，
+    #: 同一个 driver 被多条用例复用时不会把上一条的账算到下一条头上。
+    tree_dumps: int = 0
+    tree_reuses: int = 0
 
     # ---------------------------------------------------------- 统计
 
@@ -637,6 +642,15 @@ class CaseResult:
         return round(self.rescued_by_retry / self.retry_attempts, 4)
 
     @property
+    def tree_reuse_rate(self) -> float:
+        """取树复用率 = 复用 /（真取 + 复用）。没取过树时返回 0.0。
+
+        口径与 `Driver.tree_reuse_rate` 一致（宿主侧调用口径、非设备往返数）。
+        """
+        total = self.tree_dumps + self.tree_reuses
+        return round(self.tree_reuses / total, 4) if total else 0.0
+
+    @property
     def ok(self) -> bool:
         return self.failed == 0
 
@@ -669,6 +683,9 @@ class CaseResult:
             'retry_attempts': self.retry_attempts,
             'rescued_by_retry': self.rescued_by_retry,
             'retry_rescue_rate': self.retry_rescue_rate,
+            'tree_dumps': self.tree_dumps,
+            'tree_reuses': self.tree_reuses,
+            'tree_reuse_rate': self.tree_reuse_rate,
             'failures_by_kind': self.failures_by_kind(),
             'slowest': [s.to_dict() for s in self.slowest()],
             'steps': [s.to_dict() for s in self.steps],
@@ -758,6 +775,31 @@ class SuiteResult:
                 out[k] = out.get(k, 0) + v
         return dict(sorted(out.items(), key=lambda kv: -kv[1]))
 
+    # ---- 取树账（10-08 提效的可复现来源；进 suite_report 供趋势对比）
+
+    @property
+    def tree_dumps(self) -> int:
+        """整批用例**真取树**次数合计（dumpLayout 已与 cat 合并为一次往返）。"""
+        return sum(c.tree_dumps for c in self.cases)
+
+    @property
+    def tree_reuses(self) -> int:
+        """整批用例**复用**次数合计（跨越只读步骤的取树）。"""
+        return sum(c.tree_reuses for c in self.cases)
+
+    @property
+    def tree_reuse_rate(self) -> float:
+        """整批取树复用率 = 复用 /（真取 + 复用）。没取过树时返回 0.0。"""
+        total = self.tree_dumps + self.tree_reuses
+        return round(self.tree_reuses / total, 4) if total else 0.0
+
+    def tree_dumps_per_step(self) -> float:
+        """每步摊销真取次数（口径可比：用例步数不同也能横向比）。
+
+        参考值：`note_stability`（10 步）10-08 改前 1.2 次/步 → 改后 0.9 次/步。
+        """
+        return round(self.tree_dumps / self.total, 3) if self.total else 0.0
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             'cases': len(self.cases),
@@ -774,6 +816,10 @@ class SuiteResult:
             'elapsed_ms': self.elapsed_ms,
             'failures_by_kind': self.failures_by_kind(),
             'guard_stats': self.guard_stats,
+            'tree_dumps': self.tree_dumps,
+            'tree_reuses': self.tree_reuses,
+            'tree_reuse_rate': self.tree_reuse_rate,
+            'tree_dumps_per_step': self.tree_dumps_per_step(),
             'case_results': [c.to_dict() for c in self.cases],
         }
 
@@ -1128,6 +1174,11 @@ class Runner:
         res = CaseResult(name=case.get('name') or '', bundle=driver.bundle)
         t0 = time.time()
 
+        # 取树账按**增量**记：同一个 driver 被多条用例复用时（run_suite.py 之外的
+        # 调用方会这么做），直接读累计值会把上一条用例的账算到这一条头上。
+        _dumps0 = int(getattr(driver, 'tree_dumps', 0) or 0)
+        _reuses0 = int(getattr(driver, 'tree_reuses', 0) or 0)
+
         first_failure: Optional[int] = None      # 首个失败步号，用于级联追溯
 
         for i, st in enumerate(steps, 1):
@@ -1203,6 +1254,10 @@ class Runner:
 
         res.elapsed_ms = int((time.time() - t0) * 1000)
         res.device_recoveries = sum(1 for s in res.steps if s.recovered)
+        # 取树账落在 CaseResult 上（suite 级由它汇总）—— 提效收益以后从
+        # suite_report.json 直接读得到，不必再回会话记录里手工数。
+        res.tree_dumps = max(0, int(getattr(driver, 'tree_dumps', 0) or 0) - _dumps0)
+        res.tree_reuses = max(0, int(getattr(driver, 'tree_reuses', 0) or 0) - _reuses0)
         if self.artifact_budget:
             self._prune_artifacts(driver, res)
         return res

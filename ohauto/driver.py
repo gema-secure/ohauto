@@ -751,6 +751,19 @@ class Driver:
     def steps_to_dict(self) -> List[Dict[str, Any]]:
         return [s.to_dict() for s in self.steps]
 
+    @property
+    def tree_reuse_rate(self) -> float:
+        """取树复用率 = 复用次数 /（真取 + 复用）。一次树都没取过时返回 0.0。
+
+        ⚠️ 口径两条（对外引用时必须带上）：
+          ① 这是**宿主侧调用口径**，不是设备侧往返数 —— `refresh()` 已把
+             `dumpLayout && cat` 合并成**一次往返**，但真取一次仍只记 1；
+          ② 复用率高低本身不是目标，「动作步骤前必须重取」是红线 ——
+             复用只发生在**跨越只读步骤**的取树之间（见 `_mark_mutated`）。
+        """
+        total = self.tree_dumps + self.tree_reuses
+        return round(self.tree_reuses / total, 4) if total else 0.0
+
     def summary(self) -> Dict[str, Any]:
         total = len(self.steps)
         failed = [s for s in self.steps if not s.ok]
@@ -761,4 +774,9 @@ class Driver:
             'success_rate': round((total - len(failed)) / total, 4) if total else 0.0,
             'total_elapsed_ms': sum(s.elapsed_ms for s in self.steps),
             'failed_steps': [s.to_dict() for s in failed],
+            # 取树效率（10-08 落地「合并往返 + 只读步骤复用」后必须能自动量到，
+            # 之前只能靠会话记录手工数；B6 的口径讨论全靠这两个数）
+            'tree_dumps': self.tree_dumps,
+            'tree_reuses': self.tree_reuses,
+            'tree_reuse_rate': self.tree_reuse_rate,
         }

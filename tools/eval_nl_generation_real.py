@@ -53,7 +53,7 @@ import os
 import re
 import sys
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -252,6 +252,70 @@ def build_descriptions(root: Any, maximum: int) -> List[str]:
     return out
 
 
+def load_prompts_file(path: str) -> List[str]:
+    """读补充描述文件：**每行一条**，空行与 `#` 开头的注释行跳过。
+
+    为什么要认注释：这类文件是「人工补的样本」，必须能写清**每条的出处**
+    （哪个应用、哪一页、为什么要补）—— 否则下一个人看不懂为什么是这几条，
+    而**注释被当成描述**会直接污染 KPI（那句注释会变成一条被测描述）。
+    """
+    out: List[str] = []
+    with open(path, encoding='utf-8') as f:
+        for line in f:
+            s = line.strip()
+            if not s or s.startswith('#'):
+                continue
+            out.append(s)
+    return out
+
+
+def sample_gate(positive: int, required: int) -> Optional[str]:
+    """样本量闸：正样本不足 `required` 时返回**停止说明**，够（或未设下限）返回 None。
+
+    ★ 为什么单列一个纯函数：这条闸的价值就是「不足时不许产出百分比」，
+    而它必须在**调模型之前**生效（否则白烧一遍 API 才说样本不够）。
+    做成纯函数就能离线钉住，不必接 key 和设备。
+
+    规划原文要求 20 条（`项目规划.md` §三），实测入口页只派生得出 1 条 ——
+    所以这条闸大概率会真的触发，触发时要说清怎么补，而不只是报个错。
+    """
+    if not required or positive >= required:
+        return None
+    return (f'[停止] 正样本只有 {positive} 条，低于 --require-samples {required} ——\n'
+            f'规划原文要求「**20 条**描述生成后逐条执行」；样本量不足时算出的百分比\n'
+            f'既不可比，也不能当作「已按规划验过」。补足办法：\n'
+            f'  ① 加 --multi-page（按页并集派生描述）；\n'
+            f'  ② 用 --prompts 文件追加描述（每行一条）；\n'
+            f'  ③ 换可交互控件更多的应用（实测 calculator 一页可派生 19 条）。')
+
+
+def build_descriptions_from_pages(pages: Sequence[Tuple[str, Any]],
+                                  maximum: int) -> List[str]:
+    """多页模式下的描述集：把**每一页**派生出的描述并起来（去重、按页序保序）。
+
+    ★ 为什么需要它（B8 样本量的直接原因）：入口页（`com.example.myapplication`
+    的 Index）只有 1 个「可交互且带文案/id」的控件 —— 实测派生出的正样本就
+    **只有 1 条**，加 2 条固定负样本总共 3 条。规划原文要的是「**20 条**描述生成后
+    逐条执行」：样本量上不去，`executable_rate` 的分母就不是 20，报出来的百分比
+    既不可比、也容易被读成「已经按规划验过」。
+
+    多页模式已经把 Index/Second/Third 三页的控件清单都喂给了模型，描述集同样
+    应当覆盖这三页（实测三页合计可派生 6 条：1 + 3 + 2）。
+    仍然不够 20 条时，用 `--prompts` 补（每行一条），并在报告里如实标出样本量。
+    """
+    out: List[str] = []
+    seen = set()
+    for _name, root in pages or ():
+        for d in build_descriptions(root, maximum):
+            if d in seen:
+                continue
+            seen.add(d)
+            out.append(d)
+            if len(out) >= maximum:
+                return out
+    return out
+
+
 # ----------------------------------------------------------------- 报告
 
 def _mask(s: str) -> str:
@@ -375,6 +439,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                     help='多页采集：沿 PAGE_HOPS 走一遍，把每一页的控件清单'
                          '都喂给生成器（B8 路线①）；不加则与旧口径一致')
     ap.add_argument('--prompts', default='', help='额外追加的描述文件（每行一条）')
+    ap.add_argument('--require-samples', type=int, default=0,
+                    help='正样本描述条数的下限（规划原文要求 20）。不足时打印醒目'
+                         '警告并以退出码 2 停止 —— 防止「3 条样本算出的百分比」'
+                         '被当成「已按规划验过」。0 = 不设下限（旧行为）')
     ap.add_argument('--execute', action='store_true',
                     help='对 L2 通过的用例在真机上跑一遍，给 L3 执行口径')
     ap.add_argument('--out', default=OUT)
@@ -430,18 +498,34 @@ def main(argv: Optional[List[str]] = None) -> int:
             nodes = flatten(root)
             print(f'    翻页后控件树 {len(nodes)} 个节点')
 
-    descs = build_descriptions(root, args.max)
+    # 描述集：多页模式下**按页并集**派生（入口页实测只出得来 1 条，
+    # 而规划要的是 20 条 —— 见 build_descriptions_from_pages 的说明）。
+    if args.multi_page and pages:
+        derived = build_descriptions_from_pages(pages, args.max)
+        print(f'  描述派生：{len(pages)} 页并集 → {len(derived)} 条正样本')
+    else:
+        derived = build_descriptions(root, args.max)
+    descs = list(derived)
     if args.prompts and os.path.isfile(args.prompts):
-        with open(args.prompts, encoding='utf-8') as f:
-            descs += [ln.strip() for ln in f if ln.strip()]
+        extra_prompts = load_prompts_file(args.prompts)
+        descs += extra_prompts
+        print(f'  描述补充：--prompts 追加 {len(extra_prompts)} 条')
+    positive = len(descs)
     descs += NEGATIVE_CONTROLS
     if not descs:
         print('没有可用的描述（控件树里找不到可交互且带文案的控件）')
         return 2
 
-    print(f'描述 {len(descs)} 条（含 {len(NEGATIVE_CONTROLS)} 条负样本）：')
+    print(f'描述 {len(descs)} 条（正样本 {positive} + '
+          f'负样本 {len(NEGATIVE_CONTROLS)}）：')
     for i, d in enumerate(descs, 1):
         print(f'  {i:2d}. {d}')
+
+    if args.require_samples:
+        stop = sample_gate(positive, args.require_samples)
+        if stop:
+            print('\n' + stop)
+            return 2
 
     # ---- 生成（真模型）
     t0 = time.time()

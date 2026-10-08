@@ -656,6 +656,104 @@ class TestResultModel(unittest.TestCase):
         self.assertIn('ASSERT', s.failures_by_kind())
 
 
+# ================================================================ 取树账
+
+class TestTreeAccounting(unittest.TestCase):
+    """取树账（`tree_dumps` / `tree_reuses`）必须**自动落进报告**。
+
+    背景：这两个计数器早就加在 `Driver` 上了，但只有 Driver 自己看得见 ——
+    对外报「12 → 9 次 dump、墙钟 −26%、−33% 预估为何没到」时，只能回会话记录里
+    **手工数**（阶段性总结的「未完成 / 未落实」里挂的就是这笔账）。
+
+    这一组钉子把它接到 `CaseResult` / `SuiteResult` 上，并钉住两条容易错的语义：
+
+      ① **按增量记，不是累计值** —— 同一个 driver 跑多条用例时，直接读累计
+         计数会把上一条用例的账算到这一条头上；
+      ② **复用只发生在只读步骤之间** —— 动作步骤前必须重取（红线，
+         `_mark_mutated` 的全部意义所在）。
+    """
+
+    READONLY = {'name': '只读两步', 'steps': [
+        {'assert': {'exists': {'id': 'btn_login'}}},
+        {'assert': {'exists': {'id': 'btn_forget'}}},
+    ]}
+
+    def test_readonly_steps_reuse_the_same_tree(self):
+        """连续两个断言：第一次真取，第二次复用（共 1 次取树）。"""
+        _, d = make_driver()
+        res = make_runner().run_case(d, self.READONLY)
+        self.assertTrue(res.ok, res.to_dict())
+        self.assertEqual(res.tree_dumps, 1, '首次取树应当是真取')
+        self.assertEqual(res.tree_reuses, 1, '第二次断言应当复用同一张树')
+        self.assertEqual(res.tree_reuse_rate, 0.5)
+
+    def test_action_steps_still_force_a_fresh_dump(self):
+        """红线：动作步骤前必须重取 —— 复用率再高也不许省这一步。"""
+        _, d = make_driver()
+        res = make_runner().run_case(d, {'name': '动作两步', 'steps': [
+            {'tap': {'id': 'btn_forget'}},
+            {'tap': {'id': 'btn_login'}},
+        ]})
+        self.assertTrue(res.ok, res.to_dict())
+        self.assertGreaterEqual(res.tree_dumps, 2,
+                                '两个动作步骤至少各取一次树，不许复用旧树点击')
+
+    def test_accounting_is_a_delta_not_a_cumulative_read(self):
+        """同一条用例跑两遍（同一个 driver）：每条只记自己的那 2 次取树。
+
+        第一遍：断言①真取 1 次、断言②复用 1 次 → 本用例 2 次取树；
+        第二遍：页面确实没变（driver 里那张树还是干净的）→ 两处都复用。
+        **累计值到第二遍结束时已经是 4** —— 实现若读累计值，第二条用例的账
+        就会变成 4 而不是 2，最后那条 assertNotEqual 就是钉这个的。
+        """
+        _, d = make_driver()
+        r = make_runner()
+        first = r.run_case(d, self.READONLY)
+        second = r.run_case(d, self.READONLY)
+        self.assertEqual(first.tree_dumps, 1)
+        self.assertEqual(first.tree_reuses, 1)
+        self.assertEqual(second.tree_dumps + second.tree_reuses, 2,
+                         '第二条用例的账被上一条带跑了 —— 记账必须是增量')
+        self.assertEqual(d.tree_dumps + d.tree_reuses, 4)
+        self.assertNotEqual(second.tree_dumps + second.tree_reuses,
+                            d.tree_dumps + d.tree_reuses,
+                            '第二条用例报出了 driver 的累计值')
+
+    def test_suite_and_report_carry_the_accounting(self):
+        """整批汇总 + `to_dict()` 三个 key 齐备且可 JSON 化。"""
+        items = [(make_driver()[1], self.READONLY) for _ in range(2)]
+        suite = make_runner().run_suite(items)
+        self.assertEqual(suite.tree_dumps, 2, '每条用例各真取一次')
+        self.assertEqual(suite.tree_reuses, 2)
+        self.assertEqual(suite.tree_reuse_rate, 0.5)
+        self.assertEqual(suite.tree_dumps_per_step(), 0.5)   # 2 次 / 4 步
+
+        data = suite.to_dict()
+        for k in ('tree_dumps', 'tree_reuses', 'tree_reuse_rate',
+                  'tree_dumps_per_step'):
+            self.assertIn(k, data)
+        self.assertEqual(data['case_results'][0]['tree_dumps'], 1)
+        json.dumps(data, ensure_ascii=False)                 # 不抛异常即可
+
+    def test_driver_summary_carries_the_accounting(self):
+        """单用例报告（`driver.summary()`）里也要有 —— 出报告就能看到。"""
+        _, d = make_driver()
+        make_runner().run_case(d, self.READONLY)
+        s = d.summary()
+        self.assertEqual(s['tree_dumps'], 1)
+        self.assertEqual(s['tree_reuses'], 1)
+        self.assertEqual(s['tree_reuse_rate'], 0.5)
+
+    def test_zero_tree_access_reports_zero_not_an_exception(self):
+        """一次树都没取时返回 0.0，不能 ZeroDivision —— 空用例照样要出报告。"""
+        empty = R.SuiteResult()
+        self.assertEqual(empty.tree_reuse_rate, 0.0)
+        self.assertEqual(empty.tree_dumps_per_step(), 0.0)
+        self.assertEqual(R.CaseResult(name='t', bundle='b').tree_reuse_rate, 0.0)
+        _, d = make_driver()
+        self.assertEqual(d.tree_reuse_rate, 0.0)
+
+
 # ================================================================ 执行引擎 验收
 
 class TestFiftyStepKpi(unittest.TestCase):

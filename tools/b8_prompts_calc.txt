@@ -1,0 +1,24 @@
+# B8「20 条描述」样本集的补充描述（每行一条，供 --prompts 使用）
+#
+# 用法：
+#   python tools/eval_nl_generation_real.py --bundle ohos.samples.distributedcalc \
+#       --ability MainAbility --max 20 --require-samples 20 --execute \
+#       --prompts tools/b8_prompts_calc.txt --out tools/_out/nl_eval_20
+#
+# 为什么需要这个文件：
+#   规划原文要求「20 条描述生成后逐条执行」，而工具从真机树**自动派生**出的正样本
+#   数量取决于应用可交互且带文案/id 的控件数。计算器一页实测派生 19 条，差 1 条；
+#   且那 19 条清一色是「点击 id 为 X 的控件」——**全是单击**，量不出多步能力。
+#
+# 出处：真机树 datasets/gallery_13app/sample_calc.json
+#       （bundle ohos.samples.distributedcalc / MainAbility，144 节点 / 20 可交互）
+#   下面 5 条只用该树里真实存在的控件 id：0-9 . + - * / C D = result
+#   断言目标沿用 examples/cases/calculator.yaml 已真机验证过的 id=result。
+#
+# 口径：这 5 条是**人工补充**样本，报告里与自动派生的 19 条同等计入分母；
+#       引用 B8 数字时必须说明这一点（19 自动 + 5 人工）。
+依次点击 7、+、8、=，然后断言结果控件存在
+依次点击 9、*、3、=，然后断言结果控件存在
+点击 C 清零，然后断言显示为 0
+依次点击 1、2、.、5，然后断言结果控件存在
+连续点击 5、+、5、=、+、5、=，然后断言结果控件存在
