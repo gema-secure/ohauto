@@ -53,7 +53,7 @@ import os
 import re
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -151,6 +151,46 @@ def _tap_text(hdc: Hdc, root: Any, text: str) -> bool:
         time.sleep(1.8)
         return True
     return False
+
+
+def _tap_id(hdc: Hdc, root: Any, cid: str) -> bool:
+    """按 id 找节点并点中心。坐标从控件树现取，不写死像素。"""
+    for n in flatten(root):
+        if getattr(n, 'id', '') != cid:
+            continue
+        cx, cy = n.center
+        if cx <= 0 and cy <= 0:
+            continue
+        hdc.shell('uitest uiInput click %d %d' % (cx, cy))
+        time.sleep(2.0)
+        return True
+    return False
+
+
+#: 多页采集的跳转链：`(从哪页出发, 点哪个 id, 到达页名)`。
+#: 硬编码的是**我们自己的样本应用**（`ohauto-hypium-test`）的控件 id，见
+#: `entry/src/main/ets/pages/Index.ets:49` 与 `Second.ets:35`。
+PAGE_HOPS = (('Index', 'btn_go_second', 'Second'),
+             ('Second', 'btn_go_third', 'Third'))
+
+
+def _collect_pages(hdc: Hdc, first: Any, out_dir: str) -> List[Tuple[str, Any]]:
+    """沿 `PAGE_HOPS` 走一遍，收集**每一页**的控件树。
+
+    ★ 为什么必须多页（B8 实测）：只喂一张树时，模型拿第一页的控件去写
+    「导航之后」的断言 —— 两条真机用例都在 `tap btn_go_second` 之后断言
+    `tv_probe_always`，而该 id 只在 Index 页定义，真机必然失败（用例级 0/2）。
+    """
+    pages: List[Tuple[str, Any]] = [('Index', first)]
+    cur = first
+    for _src, cid, dest in PAGE_HOPS:
+        if not _tap_id(hdc, cur, cid):
+            print(f'  多页采集：当前页没有 {cid}，停在 {pages[-1][0]}')
+            break
+        cur = _redump(hdc, os.path.join(out_dir, f'live_tree_{dest}.json'))
+        pages.append((dest, cur))
+        print(f'  多页采集：{dest} 拿到 {len(flatten(cur))} 个节点')
+    return pages
 
 
 def _has_control_ref(case: Any) -> bool:
@@ -331,6 +371,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument('--pre-tap', action='append', default=[],
                     help='采集前先点这个文案的控件（可重复，用于翻到目标页）')
     ap.add_argument('--label', default='', help='本次运行的页面标签（写进报告）')
+    ap.add_argument('--multi-page', action='store_true',
+                    help='多页采集：沿 PAGE_HOPS 走一遍，把每一页的控件清单'
+                         '都喂给生成器（B8 路线①）；不加则与旧口径一致')
     ap.add_argument('--prompts', default='', help='额外追加的描述文件（每行一条）')
     ap.add_argument('--execute', action='store_true',
                     help='对 L2 通过的用例在真机上跑一遍，给 L3 执行口径')
@@ -364,6 +407,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     nodes = flatten(root)
     print(f'  控件树 {len(nodes)} 个节点')
 
+    pages: List[Tuple[str, Any]] = []
+    if args.multi_page:
+        print('多页采集（B8 路线①：把每一页的控件清单都给模型）…')
+        pages = _collect_pages(hdc, root, args.out)
+        # 采完回到入口页重来一遍：描述派生与 L3 执行都从入口页开始
+        root = _launch_and_capture(hdc, args.bundle, args.ability)
+        nodes = flatten(root)
+        print(f'  已回到入口页，控件树 {len(nodes)} 个节点；'
+              f'共采集 {len(pages)} 页')
+
     if args.pre_tap:
         dest = os.path.join(args.out, 'live_tree_%s.json'
                             % re.sub(r'\W+', '_', args.label or 'page'))
@@ -394,7 +447,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     t0 = time.time()
     gen = Generator(provider=provider, bundle=args.bundle,
                     ability=args.ability, page=root)
-    report = gen.generate_many(descs, page=root)
+    report = gen.generate_many(descs, page=root,
+                               pages=pages or None)
     elapsed = time.time() - t0
 
     print('\n' + '=' * 66)

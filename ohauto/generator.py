@@ -567,6 +567,45 @@ def control_catalog(page: Any, limit: int = 60) -> str:
     return '\n'.join(lines) or '(控件树里没有可用控件)'
 
 
+def _page_name(root: LayoutNode) -> str:
+    """页面名：优先设备自报的路由，其次 ability / bundle。取不到就给空串。"""
+    for key in ('pagePath', 'abilityName', 'bundleName'):
+        v = root.attributes.get(key)
+        if v:
+            return str(v)
+    return ''
+
+
+def control_catalog_pages(pages: Sequence[Any], limit: int = 40) -> str:
+    """**多页**控件清单：按页分块，每块标出这是哪一页。
+
+    为什么需要它（B8 实测）：生成期只喂一张树时，模型会拿第一页的控件去写
+    「导航之后」的断言 —— 实测两条真机用例都在 `tap btn_go_second` 之后断言
+    `tv_probe_always`，而该 id **只在 Index 页定义**（`Index.ets:56`），
+    真机上必然失败，用例级因此 0/2。
+    **信息不在，模型只能按手里的写** —— 把每一页的清单都给出来，它才有得选。
+
+    `pages` 的每项可以是 `(页名, 控件树)`，也可以只给控件树（页名从树上取）。
+    """
+    blocks = []
+    for i, item in enumerate(pages, 1):
+        label, tree = item if isinstance(item, tuple) else ('', item)
+        root = tree if isinstance(tree, LayoutNode) else parse_layout(tree)
+        blocks.append(f'【页面 {i}｜{label or _page_name(root) or "未命名"}】\n'
+                      f'{control_catalog(root, limit=limit)}')
+    return '\n\n'.join(blocks) or '(未提供控件树)'
+
+
+#: 只在**给了多页清单**时追加。单页路径一个字都不变（零回归是验收第一条）。
+_MULTI_PAGE_RULE = """
+⚠️ 多页约束：上面按页给出了**每一页**的控件清单。用例里出现导航动作
+（点击跳转控件、back 等）之后，**断言只能引用目标页面上的控件** ——
+拿导航前页面的控件去断言，真机上必然失败（这不是模型"想错了"，是信息没给）。
+若无法确定目标页面有什么，就**不要写断言**，改写为 `{"waitFor": {...}}`
+等待目标页面上的元素出现。
+"""
+
+
 # ================================================================ 外部内容隔离
 #
 # C 复核缺陷（2026-09-23）：`build_case_prompt` 把 `catalog`（**来自被测应用的
@@ -687,7 +726,8 @@ def build_testpoint_prompt(description: str) -> str:
 
 
 def build_case_prompt(description: str, point: TestPoint, catalog: str,
-                      bundle: str, ability: str) -> str:
+                      bundle: str, ability: str,
+                      multi_page: bool = False) -> str:
     return f"""你是 UI 自动化用例工程师。请把一条测试点转成 Action DSL 用例。
 
 原始需求：{description}
@@ -699,7 +739,7 @@ def build_case_prompt(description: str, point: TestPoint, catalog: str,
 
 控件清单（**只能从这里引用控件**）：
 {wrap_app_content(catalog)}
-
+{_MULTI_PAGE_RULE if multi_page else ''}
 {_APP_CONTENT_NOTICE}
 
 {_RULES}
@@ -710,7 +750,7 @@ def build_case_prompt(description: str, point: TestPoint, catalog: str,
 
 
 def build_repair_prompt(case: Case, issues: Sequence[ValidationIssue],
-                        catalog: str) -> str:
+                        catalog: str, multi_page: bool = False) -> str:
     problems = '\n'.join(f'- 步骤{i.step_index if i.step_index is not None else "?"}'
                          f' {i.reason.cn}：{i.detail}' for i in issues)
     return f"""下面这条用例校验没通过，请做**最小改动**修好它。
@@ -723,7 +763,7 @@ def build_repair_prompt(case: Case, issues: Sequence[ValidationIssue],
 
 可用控件清单：
 {wrap_app_content(catalog)}
-
+{_MULTI_PAGE_RULE if multi_page else ''}
 {_APP_CONTENT_NOTICE}
 
 {_RULES}
@@ -769,18 +809,36 @@ def _specs_of(action: str, arg: Any) -> List[Any]:
 
 
 def validate_case(case: Case, page: Any = None, *,
-                  allow_missing_controls: bool = False) -> List[ValidationIssue]:
+                  allow_missing_controls: bool = False,
+                  pages: Optional[Sequence[Any]] = None) -> List[ValidationIssue]:
     """静态校验：红线扫描 + DSL 合法性 + 引用的控件是否存在。
 
     `page` 是**当前**控件树。跨页面用例里，后面的步骤可能引用尚未出现的控件，
     所以调用方可以让 `allow_missing_controls=True` 只做红线与 DSL 校验
     （干跑那一关会再看实际情况）。
+
+    `pages`（可选）是**已采集的全部页面**：给了它就按「控件在任一页上出现即算存在」
+    校验（控件池取**并集**）。为什么需要这条 —— B8 多页上下文实测（10-08）：
+    把每一页的清单喂给模型后，它开始正确引用**第二页**的控件
+    （`tv_second_title` / `input_second`），而只对照入口页的校验器把它们一律判成
+    CONTROL_MISSING，于是 L2 从 2/3 掉到 **0/3** ——
+    **信息给对了，判据却还在按单页判**。
     """
     issues: List[ValidationIssue] = []
     nodes = None
-    if page is not None:
-        root = page if isinstance(page, LayoutNode) else parse_layout(page)
-        nodes = flatten(root, only_visible=False)
+    if page is not None or pages:
+        roots = [page] if page is not None else []
+        roots += [p for p in (pages or []) if p is not None]
+        pool: List[Any] = []
+        seen: set = set()
+        for item in roots:
+            tree = item[1] if isinstance(item, tuple) else item
+            root = tree if isinstance(tree, LayoutNode) else parse_layout(tree)
+            for n in flatten(root, only_visible=False):
+                if id(n) not in seen:
+                    seen.add(id(n))
+                    pool.append(n)
+        nodes = pool
 
     if not case.steps:
         issues.append(ValidationIssue(RejectReason.EMPTY, '步骤序列为空'))
@@ -838,9 +896,11 @@ def validate_case(case: Case, page: Any = None, *,
             # ---- 控件是否存在
             if nodes is not None and not allow_missing_controls:
                 if not m.filter(nodes):
+                    where = (f'已采集的 {len(pages)} 页里都没有' if pages
+                             else '不在当前控件树里')
                     issues.append(ValidationIssue(
                         RejectReason.CONTROL_MISSING,
-                        f'第 {idx} 步引用的控件 {spec} 不在当前控件树里',
+                        f'第 {idx} 步引用的控件 {spec} {where}',
                         step_index=idx))
 
     # ---- ★ 用例级总闸：「必须至少做一件会失败的事」（C 派活 B-0）
@@ -1150,12 +1210,24 @@ class Generator:
         text = self.provider.complete(build_testpoint_prompt(description))
         return parse_test_points_lenient(text)
 
+    def _catalog_for(self, page: Any,
+                     pages: Optional[Sequence[Any]] = None) -> str:
+        """提示词里的控件清单来源。
+
+        给了多页清单就用它（生成与**修复**两处都要用同一份 —— 只改生成不改修复，
+        修复轮会把错页的控件又写回去）；否则与原来逐字节一致。
+        """
+        if pages:
+            return control_catalog_pages(pages)
+        return self.catalog_fn(page if page is not None else self.page)
+
     def draft(self, description: str, point: TestPoint,
-              page: Any = None) -> Case:
+              page: Any = None, pages: Optional[Sequence[Any]] = None) -> Case:
         """阶段②：测试点 → DSL 草案。"""
-        catalog = self.catalog_fn(page if page is not None else self.page)
+        catalog = self._catalog_for(page, pages)
         prompt = build_case_prompt(description, point, catalog,
-                                   self.bundle, self.ability)
+                                   self.bundle, self.ability,
+                                   multi_page=bool(pages))
         payload = parse_json_payload(self.provider.complete(prompt))
         return self._case_from_payload(payload, description, point)
 
@@ -1179,6 +1251,7 @@ class Generator:
     # ------------------------------------------------------------ 主流程
 
     def generate(self, description: str, *, page: Any = None,
+                 pages: Optional[Sequence[Any]] = None,
                  point: Optional[TestPoint] = None,
                  driver: Any = None) -> GenerationOutcome:
         """契约 `generate(description) -> Case` 的富版本：返回带原因的 Outcome。
@@ -1210,7 +1283,7 @@ class Generator:
 
         # ---- 阶段②：DSL 草案
         try:
-            case = self.draft(description, point, page)
+            case = self.draft(description, point, page, pages)
             out.attempts += 1
         except SchemaError as e:
             out.reason = RejectReason.SCHEMA
@@ -1223,7 +1296,7 @@ class Generator:
 
         # ---- 阶段③④⑤：校验 → 修复 → 再校验 → 干跑
         case, issues, reason, detail = self._validate_and_repair(
-            case, description, point, page, driver)
+            case, description, point, page, driver, pages)
         out.issues = issues
         out.case = case
         if reason is not None:
@@ -1241,11 +1314,12 @@ class Generator:
         return out.case
 
     def _validate_and_repair(self, case: Case, description: str, point: TestPoint,
-                             page: Any, driver: Any
+                             page: Any, driver: Any,
+                             pages: Optional[Sequence[Any]] = None,
                              ) -> Tuple[Case, List[ValidationIssue],
                                         Optional[RejectReason], str]:
         """校验 → 本地修 → 必要时回 LLM 修 → 干跑。返回 (用例, 未解决问题, 原因, 说明)。"""
-        issues = validate_case(case, page)
+        issues = validate_case(case, page, pages=pages)
         rounds = 0
         while issues and rounds < self.max_repair:
             rounds += 1
@@ -1253,20 +1327,21 @@ class Generator:
             fixed, notes = repair_locally(case, issues, page)
             if notes:
                 case = fixed
-                issues = validate_case(case, page)
+                issues = validate_case(case, page, pages=pages)
                 if not issues:
                     break
             # 再回一次 LLM（只在还有"能靠改 DSL 解决"的问题时才值得花这次调用）
             if any(i.reason in (RejectReason.CONTROL_MISSING, RejectReason.DSL_INVALID)
                    for i in issues):
                 try:
-                    catalog = self.catalog_fn(page if page is not None else self.page)
+                    catalog = self._catalog_for(page, pages)
                     payload = parse_json_payload(self.provider.complete(
-                        build_repair_prompt(case, issues, catalog)))
+                        build_repair_prompt(case, issues, catalog,
+                                            multi_page=bool(pages))))
                     case = self._case_from_payload(payload, description, point)
                     case.repaired = True
                     case.repair_notes.append(f'第 {rounds} 轮：按校验问题回 LLM 重写')
-                    issues = validate_case(case, page)
+                    issues = validate_case(case, page, pages=pages)
                     continue
                 except (SchemaError, ProviderError):
                     break
@@ -1345,6 +1420,7 @@ class Generator:
 
     def generate_many(self, descriptions: Sequence[str], *,
                       page: Any = None, driver: Any = None,
+                      pages: Optional[Sequence[Any]] = None,
                       prefetch: bool = True,
                       executor_factory: Optional[Callable[[], Any]] = None
                       ) -> GenerationReport:
@@ -1357,7 +1433,7 @@ class Generator:
         if not prefetch:
             failures = 0
             for d in descriptions:
-                out = self.generate(d, page=page, driver=driver)
+                out = self.generate(d, page=page, pages=pages, driver=driver)
                 rep.outcomes.append(out)
                 failures = 0 if out.ok else failures + 1
                 if failures >= self.max_consecutive_failures:
@@ -1368,7 +1444,8 @@ class Generator:
         failures = 0
         for desc, first_reply in _prefetch(descriptions, fetch, executor_factory):
             try:
-                out = self._generate_with_reply(desc, first_reply, page, driver)
+                out = self._generate_with_reply(desc, first_reply, page, driver,
+                                                pages)
             except Exception as e:                                  # ★ 兜底，见类头第 2 条
                 out = GenerationOutcome(description=desc)
                 out.reason = RejectReason.UNEXPECTED
@@ -1381,7 +1458,9 @@ class Generator:
         return rep
 
     def _generate_with_reply(self, description: str, first_reply: Any,
-                             page: Any, driver: Any) -> GenerationOutcome:
+                             page: Any, driver: Any,
+                             pages: Optional[Sequence[Any]] = None
+                             ) -> GenerationOutcome:
         """用预取到的第一阶段回复继续走流程（省掉一次重复调用）。
 
         `first_reply` 可能是**异常对象** —— `_prefetch` 会把 provider 的异常
@@ -1414,7 +1493,7 @@ class Generator:
         point = points[0]
         out.test_points = [point]
         try:
-            case = self.draft(description, point, page)
+            case = self.draft(description, point, page, pages)
             out.attempts += 1
         except SchemaError as e:
             out.reason = RejectReason.SCHEMA
@@ -1426,7 +1505,7 @@ class Generator:
             return out
 
         case, issues, reason, detail = self._validate_and_repair(
-            case, description, point, page, driver)
+            case, description, point, page, driver, pages)
         out.issues = issues
         out.case = case
         if reason is not None:
