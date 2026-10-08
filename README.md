@@ -42,7 +42,6 @@
 | **长稳测试指南** | [`docs/指南-长稳测试.md`](docs/指南-长稳测试.md) |
 | **结果信号采集说明**（崩溃 / 白屏 / 无响应） | [`docs/信号采集-说明.md`](docs/信号采集-说明.md) |
 | **NL→用例生成说明**（六阶段 / 原因分类 / 真机评测口径） | [`docs/用例生成说明.md`](docs/用例生成说明.md) |
-| **业界方案与技术栈调研** | [`docs/调研-业界方案与技术栈-扩展版-2026-09-27.md`](docs/调研-业界方案与技术栈-扩展版-2026-09-27.md) |
 | **退出码约定**（CI 集成用） | [`docs/约定-退出码.md`](docs/约定-退出码.md) |
 | **在线演示页**（一键整链 / 13 应用画廊） | [`docs/demo/onepager.html`](docs/demo/onepager.html) · [`docs/demo/gallery.html`](docs/demo/gallery.html) |
 | **离线 KPI 评测**（归因 / 自愈 / 探索冒烟） | `python tools/eval_kpi_offline.py` |
