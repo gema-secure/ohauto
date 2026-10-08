@@ -1,7 +1,7 @@
 # API 手册
 
 > 面向使用者与 CI 集成：`ohauto` 包的公共 API、命令行工具、退出码约定与结果信号格式。
-> 快速上手见 [README](../README.md)；NL→用例的详细用法见[用例生成说明](用例生成说明.md)。
+> 快速上手见 [README](../README.md)。
 
 ---
 
@@ -83,9 +83,9 @@
 | `python tools/measure_locate_latency.py --rounds 20 --label <场景>` | 定位延迟分段测量（设备侧/宿主侧） |
 | `python tools/case_health.py` | 用例健康度（可失败性校验） |
 | `python tools/crossform_run.py --device <实例> --baseline open --target close` | 跨形态差异比对（退出码见 §三） |
-| `python tools/stability_telemetry.py` / `stability_trend.py` / `b15_app_stability.py` | 长稳遥测与趋势（用法见[指南-长稳测试](指南-长稳测试.md)） |
+| `python tools/stability_telemetry.py` / `stability_trend.py` / `b15_app_stability.py` | 长稳遥测与趋势（用法见 §六） |
 | `python tools/export_hypium.py` / `sign_hap.py` | hypium 脚本导出与 HAP 签名 |
-| `python tools/emulator_cli.py start --skip-check` | DevEco 模拟器管理（用法见[指南-折叠屏模拟器](指南-折叠屏模拟器.md)） |
+| `python tools/emulator_cli.py start --skip-check` | DevEco 模拟器管理（用法见 §六） |
 | `python examples/collect_signals.py --bundle <包名> [--sim]` | 信号采集 CLI（`--sim` 无真机走通） |
 
 ---
@@ -136,3 +136,43 @@ sig: Signals = collect_signals(hdc, bundle='com.ohos.note')
 | `OHAUTO_SDK_ROOT` | SDK 脚本的根目录覆写 |
 
 > key 只走环境变量，不落盘、不入库。
+
+## 六、常见操作要点
+
+### 长稳测试
+
+```bash
+python -u examples/run_suite.py examples/cases/calculator.yaml \
+    --repeat 220 --out tools/_out/stability_2h \
+    --artifact-budget 60 --quiet > tools/_out/stability.log 2>&1
+```
+
+- `-u` 禁用输出缓冲，`--out` 每轮增量落盘 `suite_report_partial.json`，
+  异常终止只损失正在执行的一轮；
+- 验收：`python tools/stability_trend.py --report <report> --strict`，
+  判据为退出码 0、全部步骤通过、半程中位漂移小于 ±15%
+  （逐轮中位存在约 8% 的自然振荡，阈值必须高于该幅度）；
+- 执行期间不关闭终端、不手动操作设备；息屏无影响（引擎每轮重设息屏超时）。
+
+### 模拟器与折叠形态
+
+模拟器实例由 `tools/emulator_cli.py` 管理（DevEco Emulator 26.0.0.400）：
+
+- 启动必须由常驻后台任务持有 `Emulator.exe -start` 进程：
+  等待超时会连同模拟器一起终止，分离启动会无报错退出；
+- 折叠设备的镜像归 `phone` 类目（以实例 `imageDir` 字段为准，非 `deviceType`）；
+  `install` 默认策略为最小版，已有实例应显式传 `--os-version`；
+- 折叠态是否生效以 `hidumper -s RenderService -a screen` 的电源状态为准
+  （内屏/外屏分辨率恒定，分辨率不变不代表切换失败）；
+- `-foldedState` 返回成功后界面尚未完成重绘，立即采集有较大概率得到空树；
+  采集必须重试并校验元素数下限（`crossform_run.py` 已内置）；
+- 单实例约占 4 GB 内存，同时只运行一个；用完执行 `stop` 释放。
+
+### 连接新设备
+
+- 首次连接先执行 `python examples/dump_tree.py --bundle <包名>` 核对控件树
+  字段覆盖度；发现未识别字段时补充 `ohauto/layout.py` 的 `ATTR_ALIASES`；
+- `aa start` 会复用既有实例，启动前先 force-stop 保证回到入口页；
+- 设备息屏时 `dumpLayout` 返回近乎空白的树且不报错，长用例使用
+  `DeviceGuard.ensure_awake()` 维持亮屏；
+- 设备 RTC 可能不准确，信号采集窗口一律锚定设备时钟域。

@@ -317,7 +317,7 @@ def capture_offline(folded_state: str, name: str,
     """
     from ohauto.sim import FakeHdc
 
-    # Mate X7 实测双屏参数（见 docs/指南-折叠屏模拟器.md）
+    # Mate X7 实测双屏参数（见 docs/API手册.md §六）
     screens = [
         {'index': 0, 'power_status': 'POWER_STATUS_OFF', 'backlight': 1,
          'width': 2416, 'height': 2210},       # 内屏

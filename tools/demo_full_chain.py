@@ -79,7 +79,7 @@ def pick_provider():
 
 
 def generate_case(driver, page, out_dir: str, use_page: bool = True):
-    """阶段：自然语言 → 用例（六阶段，见 docs/用例生成说明.md）。
+    """阶段：自然语言 → 用例（六阶段，见 ohauto/generator.py）。
 
     `use_page=False` 时**不做控件存在性校验** —— 跨页面用例在生成阶段拿不到
     后续页面（本例的用例最后要断言「首页」，而生成时手上只有登录页），
@@ -104,7 +104,7 @@ def generate_case(driver, page, out_dir: str, use_page: bool = True):
         return out.case, note
     print('  ⚠️ 未生成可执行用例：[%s] %s' % (out.reason, out.detail))
     print('    这本身也是一项能力：不可执行的用例会被校验拦下并**给出原因分类**，'
-          '而不是拿去执行。原因分类见 docs/用例生成说明.md §八。')
+          '而不是拿去执行。原因分类见 generator.RejectReason。')
     return None, note
 
 
@@ -112,7 +112,7 @@ def execute_generated(case, driver) -> None:
     """执行刚生成的用例 —— 「生成」和「执行」之间必须真的能跑通。
 
     光生成不执行，等于只演示了一半；而生成物直接喂给执行器、中间不发明
-    新格式，是 `generator.Case.to_dict()` 的设计前提（见 docs/用例生成说明.md）。
+    新格式，是 `generator.Case.to_dict()` 的设计前提。
     """
     from ohauto.runner import Runner
 

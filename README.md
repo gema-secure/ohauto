@@ -26,10 +26,7 @@ ohauto（OpenHarmony + Automation）是 OpenHarmony 应用 UI 自动化能力层
 | 内容 | 位置 |
 |---|---|
 | 快速上手（本页） | 安装 → 快速开始 |
-| API 手册（公共 API / 命令行工具 / 退出码约定 / 结果信号格式） | [`docs/API手册.md`](docs/API手册.md) |
-| 自然语言生成用例（流程 / 校验 / 评测口径） | [`docs/用例生成说明.md`](docs/用例生成说明.md) |
-| 折叠屏模拟器操作指南 | [`docs/指南-折叠屏模拟器.md`](docs/指南-折叠屏模拟器.md) |
-| 长稳测试指南 | [`docs/指南-长稳测试.md`](docs/指南-长稳测试.md) |
+| API 手册（公共 API / 命令行工具 / 退出码约定 / 结果信号格式 / 常见操作要点） | [`docs/API手册.md`](docs/API手册.md) |
 | 在线演示页（整链演示 / 应用画廊） | [`docs/demo/onepager.html`](docs/demo/onepager.html) · [`docs/demo/gallery.html`](docs/demo/gallery.html) |
 
 ## 核心特性
