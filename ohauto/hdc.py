@@ -40,7 +40,8 @@ class DeviceNotFound(HdcError):
 #: established. Please wait for several seconds and try again` —— 同一条命令隔两秒
 #: 重发就成功，而且这段文本会出现在 **stdout**（`cat` 的输出）里，不只是 stderr。
 #: 这类失败重试是**正确处置**而不是掩盖问题：它不是"命令写错了"，是"通道还没建好"。
-TRANSIENT_MARKERS = ('E000004', 'communication channel is being established')
+TRANSIENT_MARKERS = ('E000004', 'communication channel is being established',
+                     'need connect-key')   # 同一场竞态的另一句台词，实测会单独出现
 
 
 # ---------------------------------------------------------------- 结果

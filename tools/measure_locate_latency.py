@@ -30,7 +30,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 DEFAULT_TREE = '/data/local/tmp/ohauto_layout.json'
-SEGMENTS = ('device', 'cat', 'host')
+SEGMENTS = ('device', 'host')   # cat 已合并进 device（10-08 起引擎一次往返拿树）
 
 
 # ---------------------------------------------------------------- 统计（离线）
@@ -77,6 +77,17 @@ def summarize(samples: Sequence[Dict[str, Any]], label: str = '') -> Dict[str, A
     return out
 
 
+def _json_tail(text: str) -> str:
+    """合并命令的输出前面带一行 `DumpLayout saved to:...`，切出 JSON 部分。
+
+    找不到 `{` / `[` 就原样返回，交给 `parse_layout` 去报那条更清楚的错。
+    """
+    for i, ch in enumerate(text or ''):
+        if ch in '{[':
+            return text[i:]
+    return text or ''
+
+
 def load_jsonl(path: str) -> List[Dict[str, Any]]:
     """读逐轮 JSONL。空行与坏行跳过（现场采集中断过要能继续分析）。"""
     rows: List[Dict[str, Any]] = []
@@ -112,11 +123,8 @@ def render(summary: Dict[str, Any]) -> str:
         '',
         '| 段 | 它在干什么 | P50 | P95 | 占端到端 |',
         '|---|---|---|---|---|',
-        f'| device | 设备侧导出控件树（含 hdc 往返） | {summary["device_p50"]:.0f}ms | '
+        f'| device | 设备侧导出 + 拉回（**一次往返**，cat 已合并） | {summary["device_p50"]:.0f}ms | '
         f'{summary["device_p95"]:.0f}ms | {summary["device_share"] * 100:.0f}% |',
-        f'| cat | 把导出内容拉回宿主 | {summary["cat_p50"]:.0f}ms | '
-        f'{summary["cat_p95"]:.0f}ms | '
-        f'{share(summary["cat_p50"], summary["total_p50"]) * 100:.0f}% |',
         f'| host | 宿主解析 + 匹配（**我们自己的代码**） | {summary["host_p50"]:.0f}ms | '
         f'{summary["host_p95"]:.0f}ms | {summary["host_share"] * 100:.1f}% |',
         '',
@@ -133,7 +141,11 @@ def render(summary: Dict[str, Any]) -> str:
 # ---------------------------------------------------------------- 采集（需真机）
 
 def measure_round(hdc: Any, tree: str, matcher: Any = None) -> Dict[str, Any]:
-    """测一轮三段耗时。需要真机在线，本函数不在此做设备预检（由调用方负责）。
+    """测一轮两段耗时。需要真机在线，设备预检由调用方负责。
+
+    **两段不是三段**：引擎自 10-08 起把 `dumpLayout` 与 `cat` 合并成一次往返
+    （`driver.refresh` 非留痕分支，实测省约 150ms/次），**测量必须与引擎同一条路径**，
+    否则量出来的是一条已经不存在的旧路径。
 
     顺带记下**这一轮的页面与规模** —— 延迟与控件树大小强相关，不记规模的话
     「P50 多少毫秒」这句话没法跟另一次测量比（旧口径就是栽在这：只留了数字，
@@ -142,20 +154,17 @@ def measure_round(hdc: Any, tree: str, matcher: Any = None) -> Dict[str, Any]:
     from ohauto.layout import flatten, parse_layout
 
     t0 = time.perf_counter()
-    hdc.dump_layout(tree)
+    res = hdc.shell(f'uitest dumpLayout -p {tree} && cat {tree}', check=True)
     t1 = time.perf_counter()
-    text = hdc.shell(f'cat {tree}', check=True).stdout
-    t2 = time.perf_counter()
-    root = parse_layout(text)
+    root = parse_layout(_json_tail(res.stdout))
     if matcher is not None:
         matcher.filter(flatten(root))
-    t3 = time.perf_counter()
+    t2 = time.perf_counter()
     page = (root.attributes.get('pagePath')
             or root.attributes.get('abilityName')
             or root.attributes.get('bundleName') or '')
     return {'device_ms': round((t1 - t0) * 1000, 1),
-            'cat_ms': round((t2 - t1) * 1000, 1),
-            'host_ms': round((t3 - t2) * 1000, 1),
+            'host_ms': round((t2 - t1) * 1000, 1),
             'nodes': len(list(root.walk())),
             'page': str(page)}
 
@@ -196,7 +205,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             f.write(json.dumps(row, ensure_ascii=False) + '\n')
             f.flush()                                   # 中断也留已采到的
             print(f'  [{i}/{args.rounds}] device={row["device_ms"]}ms '
-                  f'cat={row["cat_ms"]}ms host={row["host_ms"]}ms', flush=True)
+                  f'host={row["host_ms"]}ms nodes={row["nodes"]}', flush=True)
     print()
     print(render(summarize(samples, label=args.label)))
     print(f'\n逐轮样本：{out}')

@@ -56,24 +56,25 @@ class TestShare(unittest.TestCase):
 
 class TestSummarize(unittest.TestCase):
 
-    def _samples(self, n=20, device=1091.0, cat=67.0, host=1.0):
-        return [{'device_ms': device, 'cat_ms': cat, 'host_ms': host}] * n
+    def _samples(self, n=20, device=1091.0, host=1.0):
+        # 两段口径：cat 已合并进 device（引擎一次往返拿树）
+        return [{'device_ms': device, 'host_ms': host}] * n
 
     def test_p50_p95_and_total(self):
         s = ml.summarize(self._samples())
         self.assertEqual(s['n'], 20)
         self.assertEqual(s['device_p50'], 1091.0)
-        self.assertEqual(s['total_p50'], 1159.0)
-        self.assertEqual(s['total_p95'], 1159.0)
+        self.assertEqual(s['total_p50'], 1092.0)      # device + host
+        self.assertEqual(s['total_p95'], 1092.0)
 
-    def test_device_share_matches_the_headline_94_percent(self):
-        """「94% 来自设备侧」这句对外口径，从这条式子来。"""
+    def test_device_share_matches_the_headline_share(self):
+        """设备侧占比从这条式子来（两段口径后 cat 已并入 device）。"""
         s = ml.summarize(self._samples())
-        self.assertAlmostEqual(s['device_share'], 0.9413, places=3)
+        self.assertGreater(s['device_share'], 0.99)
         self.assertLess(s['host_share'], 0.01)       # 宿主侧 < 1%
 
     def test_missing_segment_counts_as_zero(self):
-        s = ml.summarize([{'device_ms': 100.0}, {'cat_ms': 20.0}])
+        s = ml.summarize([{'device_ms': 100.0}, {'host_ms': 20.0}])
         self.assertEqual(s['n'], 2)
         self.assertGreater(s['total_p50'], 0)
 
@@ -121,7 +122,7 @@ class TestRender(unittest.TestCase):
         text = ml.render(ml.summarize(
             [{'device_ms': 1091.0, 'cat_ms': 67.0, 'host_ms': 1.0}] * 20))
         self.assertIn('未达标', text)          # 端到端确实超阈值
-        self.assertIn('94%', text)             # 但归因写在报告里
+        self.assertIn('host', text)             # 归因写在报告里
         self.assertIn('少 dump', text)          # 优化方向
         self.assertIn('不混用', text)           # 口径
 
