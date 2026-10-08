@@ -99,7 +99,7 @@ Mate X7_open (2416x2210) -> Mate X7_close (1080x2444)
 ## 复现方式
 
 ```bash
-cd D:\project\guochuang-2026\ohauto
+cd D:\project\ohauto-system
 
 # 需要模拟器在线（见 docs/指南-折叠屏模拟器.md）
 python tools\crossform_run.py --device "Mate X7" \

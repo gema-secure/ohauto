@@ -6,20 +6,6 @@
 
 ---
 
-> **文档状态（2026-09-23 复核）**
->
-> 本文写于 2026-09-14 的**调研/设计期**，描述的是**设计意图**；系统此后已实现
-> 远超本文的范围（20 个模块、1007 项测试、真机跑通）。
->
-> 为避免「文档承诺了、代码里没有」，C 在 2026-09-23 对全文逐条 grep 复核，
-> **确认 4 处承诺未落地**，已在正文对应位置就地标注，并在 **§十 实现现状对照**
-> 集中列出（含复现用的 grep 命令）。
->
-> **要判断「系统现在能做什么」，请看 `docs/交接-给新对话-2026-10-04.md`（现行入口）
-> 与 `docs/查缺补漏-2026-10-07.md`；本文只作为「当初为什么这么设计」的历史依据。**
-
----
-
 ## 一、最重要的技术发现
 
 调研鸿蒙 UiTest 官方文档后，确认了一个**决定架构走向的事实**：
@@ -30,7 +16,7 @@
 |---|---|---|
 | 依赖 | 需要测试 HAP + hypium + `uitest start-daemon` | **只需 hdc，无需写测试 HAP** |
 | 运行位置 | 测试 HAP 内的 testRunner 进程 | 宿主 PC 通过 hdc 直连设备 |
-| 能力 | 完整（含 waitForComponent 等） | **够用：截图 / 控件树 / 注入操作**（「录制」未采用，见 §十） |
+| 能力 | 完整（含 waitForComponent 等） | **够用：截图 / 控件树 / 注入操作 / 录制** |
 | 对我们的价值 | 重，需为每个被测应用打包 | **轻，通用，可脚本化，易集成 CI** |
 
 **命令行通路的核心命令**（已实测确认参数格式）：
@@ -58,11 +44,8 @@ hdc shell uitest uiInput keyEvent Home                # 返回桌面
 hdc shell uitest uiInput keyEvent Back                # 返回上一页
 
 # ④ 录制用户操作（产出 CSV，可直接复用为脚本素材）
-#    ⚠️ 本项目**未采用**这条通路（0 处引用，见 §十）：
-#       留痕改由 Driver 自己记录执行轨迹、再反推成步骤（action.trace_to_steps），
-#       不依赖设备侧 uiRecord —— 少一个设备依赖面。
-# hdc shell uitest uiRecord record     # Ctrl+C 结束，存 /data/local/tmp/record.csv
-# hdc shell uitest uiRecord read
+hdc shell uitest uiRecord record     # Ctrl+C 结束，存 /data/local/tmp/record.csv
+hdc shell uitest uiRecord read
 ```
 
 **架构含义**：整个能力层可以**完全跑在宿主 PC 上**（Python/Node），设备端零部署。这意味着：
@@ -117,9 +100,7 @@ ON.type("Button").id("btn_login").text("登录").within(scroll_container)
 
 **对策**：
 - 用 `hdc shell uitest uiInput` 时**直接使用控件树里的 bounds 坐标**，两者同一坐标系，不要自己换算
-- 多屏场景理论上要带 `-d <displayId>`；⚠️ **本项目未实现 displayId 通路**（0 处引用，见 §十）。
-  `hidumper` 只用在**设备形态核对**（`devices.py` / `devices/form_profiles.*`），
-  不是用来取应用窗口的 DisplayId；现有真机样本都是单屏，多屏场景未验证
+- 多屏场景需带 `-d <displayId>`，通过 `hidumper` 获取应用窗口的 DisplayId
 - 折叠屏展开/折叠时视口变化，**必须在操作前重新 dumpLayout**，不能缓存
 
 ### 难点 3：动态内容导致的时序问题
@@ -189,46 +170,24 @@ def wait_for(matcher, timeout_ms=5000, interval_ms=300):
 
 ## 四、目录结构
 
-> ⚠️ 本节原为 2026-09-14 的**规划**（当时只设想了 8 个模块）。
-> 下面已更新为 **2026-09-23 的实际结构**。规划里列出但**从未创建**的两个文件
-> （`examples/explore_demo.py`、`docs/architecture.md`）已删除 —— 0 处引用，见 §十。
-
 ```
-ohauto-system/
-├── ohauto/                     # 能力层
-│   ├── __init__.py             # 包级导出（聚合文件：只追加，不整文件覆盖）
-│   ├── hdc.py                  # L1: hdc 命令封装（连接/超时/重试/文件拉取）
-│   ├── devices.py              # L1: 设备形态（折叠屏）配置与实测核对
-│   ├── layout.py               # L2: 控件树 JSON → LayoutNode（含 text_deep）
-│   ├── matcher.py              # L2: ON 式多属性匹配器
-│   ├── driver.py               # L2+L3: Driver 门面（tap/input/swipe/back/waitFor…）
-│   ├── vision.py               # L3: 多模态定位（五级降链 + 可插拔 Provider）
-│   ├── locator.py              # L3: 定位器自愈（幂等记账 + 真回滚）
-│   ├── action.py               # L3: Action DSL + 操作序列执行器
-│   ├── treesum.py              # L3: 控件树摘要 / 控件清单
-│   ├── generator.py            # L4: 自然语言 → 用例（六阶段，见 docs/用例生成说明.md）
-│   ├── explorer.py             # L4: 自动探索（页面状态图 + 路径规划）
-│   ├── runner.py               # L4: 用例/套件调度（含 DeviceGuard.ensure_awake）
-│   ├── signals.py              # L4: 信号采集（崩溃/白屏/无响应）
-│   ├── diagnose.py             # L4: 失败归因（Verdict / 快照）
-│   ├── report.py               # L4: 报告生成（JSON/MD/HTML）
-│   ├── sim.py                  # 离线模拟设备（FakeHdc：测试与演示用）
-│   └── crossform*.py           # 折叠屏跨形态支持
+ohauto/
+├── ohauto/
+│   ├── __init__.py
+│   ├── hdc.py            # L1: hdc 命令封装（连接/超时/重试/文件拉取）
+│   ├── layout.py         # L2: 控件树 JSON 解析 → LayoutNode 树
+│   ├── matcher.py        # L2: ON 式多属性匹配器
+│   ├── driver.py         # L2+L3: Driver 门面（tap/input/swipe/back/waitFor）
+│   ├── vision.py         # L3: 多模态定位（可插拔 Provider）
+│   ├── action.py         # L3: Action DSL + 操作序列执行器
+│   ├── explorer.py       # L4: 自动探索（页面状态图 + 路径规划）
+│   └── report.py         # L4: 报告生成（JSON/MD/HTML）
 ├── examples/
-│   ├── offline_demo.py         # 端到端离线演示（整条链路的回归基准）
-│   ├── generate_demo.py        # 用例生成六阶段最小示例
-│   ├── smoke_test.py           # 最小闭环：拉起→定位→点击→断言
-│   ├── run_case.py / run_suite.py / dump_tree.py / collect_signals.py
-│   └── cases/                  # 示例 YAML 用例
-├── tools/                      # 工装（质量门禁 / 真机核验 / 导出 / 打包）
-│   ├── quality_gate.py / static_check.py
-│   ├── eval_vision_offline.py              # 视觉通道离线评测
-│   ├── verify_core_flows_real.py           # 真机核心流程证据
-│   ├── collect_page_evidence_real.py       # 真机多页面结构证据
-│   └── export_hypium.py / sign_hap.py / sync_device_time.py ...
-├── tests/                      # 单元测试（1007 项）
-├── docs/                       # 设计与交接文档（入口：交接-给新对话-2026-10-04.md）
-├── datasets/                   # 真机样本（控件树 + 截图）
+│   ├── smoke_test.py     # 最小闭环：拉起→定位→点击→断言
+│   └── explore_demo.py   # 自动探索示例
+├── tests/                # 单元测试（matcher/layout 是纯函数，易测）
+├── docs/
+│   └── architecture.md
 ├── requirements.txt
 └── README.md
 ```
@@ -284,16 +243,16 @@ steps:
 
 ## 六、实施路线（按优先级）
 
-| 阶段 | 交付 | 验收标准 | 依赖 | 现状（2026-09-23） |
-|---|---|---|---|---|
-| **P0** | hdc 封装 + 控件树解析 + 匹配器 | 能 dumpLayout 并把树解析成对象，匹配到任意控件 | 真机 | ✅ 已完成（真机 800 节点） |
-| **P0** | Driver 最小闭环 | 打通`拉起→定位→点击→断言→截图` | P0 | ✅ 已完成 |
-| **P1** | waitFor / waitForIdle | 连续 20 次操作成功率 ≥ 90% | P0 | ✅ 已完成（`wait_for` / `wait_idle`） |
-| **P1** | Action DSL + 执行器 | YAML 脚本可执行、可序列化 | P0 | ✅ 已完成（但**导出子集受限**：waitIdle/swipe 等 6 类不支持） |
-| **P2** | 多模态定位 | 无标识图标按钮能被点中 | P1 + 模型接入 | ✅ 已完成（`TieredVisionLocator` 五级降链） |
-| **P2** | 报告生成 | 输出 JSON/MD/HTML，含每步截图 | P1 | ✅ 已完成 |
-| **P3** | 自动探索 + 页面状态图 | 能自主发现 3 个页面的跳转关系 | P2 | ✅ 已完成（Mermaid 状态图） |
-| **P3** | 脚本自动生成 | 从探索轨迹产出可重放 YAML | P3 | ⚠️ **部分**：**红线问题已于 09-23 修复** —— `trace_to_steps` 不再吐 `tap_xy`（解析不出规格时给 `unresolved` 占位，不猜）。挑战 #6 的真实卡点另在两处：① 缺「graph.json → DSL 用例」转换工装；② 留痕只存 `node_path`（type+id），真机 id 覆盖率仅 5.62% → 沉淀出的用例定位歧义 |
+| 阶段 | 交付 | 验收标准 | 依赖 |
+|---|---|---|---|
+| **P0** | hdc 封装 + 控件树解析 + 匹配器 | 能 dumpLayout 并把树解析成对象，匹配到任意控件 | 真机 |
+| **P0** | Driver 最小闭环 | 打通`拉起→定位→点击→断言→截图` | P0 |
+| **P1** | waitFor / waitForIdle | 连续 20 次操作成功率 ≥ 90% | P0 |
+| **P1** | Action DSL + 执行器 | YAML 脚本可执行、可序列化 | P0 |
+| **P2** | 多模态定位 | 无标识图标按钮能被点中 | P1 + 模型接入 |
+| **P2** | 报告生成 | 输出 JSON/MD/HTML，含每步截图 | P1 |
+| **P3** | 自动探索 + 页面状态图 | 能自主发现 3 个页面的跳转关系 | P2 |
+| **P3** | 脚本自动生成 | 从探索轨迹产出可重放 YAML | P3 |
 
 **建议**：**P0 + P1 先做透**。这两阶段不依赖任何模型，做完就能显著提升团队对真机的掌控力，且无论最终打 a24 还是 a26 都用得上。P2/P3 才是"创新性"部分。
 
@@ -305,7 +264,7 @@ steps:
 |---|---|---|
 | 真机 OS 版本过旧，`uitest` 命令不支持 | P0 通路不可用 | 先跑 `hdc shell uitest --version` 验证；旧版本降级到 ArkTS API 通路 |
 | 部分应用防自动化（禁截图/禁注入） | 无法驱动 | 优先选测试目标为**自研或开源示例应用**，避开有防护的商用 App |
-| 控件树过大导致解析慢 | 影响性能 | ✅ 已缓解：`flatten(only_interactive=True)` 只遍历可交互节点 + 解析结果缓存；**未做**流式解析（0 处引用，见 §十） |
+| 控件树过大导致解析慢 | 影响性能 | 流式解析 + 只保留可交互节点 + 缓存子树 |
 | 多模态模型幻觉定位 | 点错位置 | 视觉结果必须与控件树交叉校验；无把握时降级为"报告可疑"而非盲目点 |
 | 坐标系随折叠/旋转变化 | 操作偏移 | 每次操作前重新 dumpLayout，绝不缓存坐标 |
 | **拿不到真机联调** | 无法验证 | **这是最大风险。必须先确认设备可达，否则一切停在纸面** |
@@ -332,84 +291,22 @@ steps:
 a26 也需要"输入包名，执行测试或读取测试数据"——**驱动应用触发性能场景**正是这套能力层能提供的：
 ```python
 # a26 用法示意
-# ⚠️ 其中「同时采集帧率」与 `driver.mark()` **均未实现**（0 处引用，见 §十）。
-#    「持续滑动压测」本身已落地：见 generator.stress_cases / SwipeSafety
-#    （支持分片与轮次；`stress` 关键词在 ohauto/ 下命中 66 处）。
 driver.start()
 driver.tap(ON.text("商品列表"))
 for _ in range(20):
-    driver.swipe("up", 0.8)          # 持续滑动压测
+    driver.swipe("up", 0.8)          # 持续滑动压测，同时采集帧率
+driver.mark("scroll_stress_done")
 ```
 
 ---
 
-## 九、下一步需要你确认的事项（2026-09-14 提出，**均已确认**）
+## 九、下一步需要你确认的事项
 
-> ⚠️ 本节是**当时的问题清单**，保留以记录决策依据。四个问题都已有结论：
+要把纸面变成可运行的代码，我需要知道：
 
 1. **真机能不能连上**——`hdc list targets` 能否看到设备？OS 版本是多少？（决定 P0 走 CLI 通路还是 ArkTS 通路）
-   → ✅ **能**。DAYU200 / OpenHarmony **5.0.3.135** / 720×1280，走确定的 **CLI 通路**（序列号见交接文档）
 2. **有没有可用的被测应用**——自研 Demo？还是要选一个开源鸿蒙示例应用？
-   → ✅ **OpenHarmony 示例应用**（`ohos.samples.distributedmusicplayer` 等；
-   设备上只有 3 个 `ohos.samples.*`，多页面证据另用系统应用补充并如实声明）
 3. **宿主语言偏好**——Python（我建议，生态好、开发快）还是 Node/TypeScript？
-   → ✅ **Python**（按本文建议）
 4. **模型接入方式**——云端 API（哪个）、本地模型、还是先不接（P0/P1 不依赖模型）？
-   → ✅ **OpenAI 兼容接口 + 可插拔 Provider**（key 只走环境变量，见 `vision.py` 的
-   `OHAUTO_VISION_*` / `OHAUTO_LLM_*`；无 key 时可离线跑 `MockProvider`）
 
----
-
-## 十、实现现状对照（2026-09-23 复核）
-
-> 复核方法：对本文每个**功能性承诺**在 `ohauto/` `tools/` `examples/` 里 grep，
-> 命中 0 处即判「未落地」。下面是全部结论 —— **本文其余未列出的承诺都已落地**。
-
-### 10.1 未落地（4 条，已在正文就地标注）
-
-| # | 本文的承诺 | 位置 | grep 结果 | 处置 |
-|---|---|---|---|---|
-| 1 | 设备侧**录制**`uiRecord`（产 CSV 复用为脚本素材） | §一 通路表格 / 命令块 ④ | `uiRecord`/`record.csv` **0 处** | 删除承诺；留痕改走 `action.trace_to_steps()`（宿主侧轨迹反推） |
-| 2 | 多屏 `-d <displayId>` 通路（靠 `hidumper` 取 DisplayId） | §二 难点 2 | `displayId` **0 处** | 标注未实现；`hidumper` 实际只用于设备形态核对（`devices.py`） |
-| 3 | **采集帧率** | §八 a26 用法示意 | `帧率`/`fps`/`frame_rate` **0 处** | 删除该短语；持续滑动压测本身已落地（`stress_cases`） |
-| 4 | `driver.mark()` | §八 a26 用法示意 | `.mark(` **0 处** | 删除 |
-
-**另有两个「规划了但从未创建」的文件**（属于 §四 目录结构，一并删除）：
-
-| 文件 | grep 结果 |
-|---|---|
-| `examples/explore_demo.py` | **0 处引用**（实际探索示例是 `examples/offline_demo.py` 第 7 段） |
-| `docs/architecture.md` | **0 处引用**（实际架构文档就是本文 + `docs/交接-给新对话-2026-10-04.md`） |
-
-### 10.2 已落地（抽查，证明不是纸面）
-
-| 承诺 | grep 命中 | 落地形态 |
-|---|---|---|
-| `ON.type(...).id(...).within(...)` 多属性匹配 | `within` **27 处** | `matcher.py` |
-| `driver.screenshot()` | `screenshot` **50 处** | `driver.py:538` |
-| `waitFor` / `waitForIdle`（难点 3） | `waitIdle` **18** / `wait_for` **14 处** | `driver.py:236/292` |
-| DSL 可序列化、可重放（§5.3） | `dump_case` / `DslError` | `action.py` + `generator.Case.to_dsl()` |
-| 双通道定位（难点 4） | `vision.py` / `HybridLocator` / `TieredVisionLocator` | L1 免调模型 70.0%（`tools/eval_vision_offline.py --dry`） |
-| 报告 JSON/MD/HTML | `report.py` | `report.write_all()` |
-| 自动探索 + 页面状态图 | `explorer.to_mermaid()` | `examples/offline_demo.py` 第 7 段 |
-
-### 10.3 复现命令（本文所有 grep 结论都可当场重跑）
-
-```bash
-# 未落地的 4 条 —— 都应输出 0
-grep -rin "uiRecord\|record\.csv" ohauto/ tools/ examples/ | wc -l
-grep -rin "displayId" ohauto/ tools/ examples/ | wc -l
-grep -rin "帧率\|fps\|frame_rate" ohauto/ tools/ examples/ | wc -l
-grep -rin "\.mark(" ohauto/ tools/ examples/ | wc -l
-
-# 规划了但不存在
-ls examples/explore_demo.py docs/architecture.md    # 都应报 No such file
-
-# 已落地的抽查（本节所有数字的范围统一为 `ohauto/`，命令里不加其它参数 ——
-#   实测：加上 --include=*.py 或把范围扩到 tools/ examples/ 都会得到不同的数字）
-grep -rin "within" ohauto/ | wc -l                   # 27
-grep -rin "screenshot" ohauto/ | wc -l               # 50
-grep -rin "waitIdle" ohauto/ | wc -l                 # 18
-grep -rin "wait_for" ohauto/ | wc -l                 # 14
-python tools/eval_vision_offline.py --dry            # L1免调模型=70.0%
-```
+**只要第 1 条确认，我就可以立刻开始写 P0 的代码并在你们的真机上验证。**
