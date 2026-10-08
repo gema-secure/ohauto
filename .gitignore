@@ -60,3 +60,4 @@ _bak_*/
 
 # hypium 导出运行产物
 hypium_out/
+.workbuddy/

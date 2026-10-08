@@ -41,7 +41,7 @@ code{background:#f6f8fa;border:1px solid #eaeef2;border-radius:4px;padding:0 4px
 <h2>复现入口</h2>
 <table><tr><td>全量门禁</td><td><code>python -m unittest discover -s tests -t tests -q && python tools/static_check.py</code></td></tr><tr><td>一键整链</td><td><code>python tools/demo_full_chain.py          # 离线；--real 跑真机</code></td></tr><tr><td>真机画廊</td><td><code>python tools/demo_gallery.py</code></td></tr><tr><td>视觉评测</td><td><code>python tools/eval_vision_offline.py --dry</code></td></tr><tr><td>异常注入</td><td><code>python tools/verify_signals_injection_real.py</code></td></tr><tr><td>降级链验证</td><td><code>python tools/verify_locator_degrade.py          # 真机树 A/B/C/D</code></td></tr><tr><td>用例生成评测</td><td><code>python tools/eval_nl_generation_real.py --bundle ohos.samples.distributedcalc --max 20 --require-samples 20 --execute --prompts tools/b8_prompts_calc.txt   # 需 key + 真机；本轮 24 正 + 2 负 = 92.3%</code></td></tr></table>
 
-<div class="foot">数字权威出处：<code>docs/指标汇总-2026-09-24.md</code>（每条带复现命令，10-08 更新；09-23 版已过期）｜
+<div class="foot">数字权威出处：<code>项目内部指标档案（仓库外）</code>（每条带复现命令，10-08 更新；09-23 版已过期）｜
 真机样本：<code>datasets/real_samples_20260919/</code>｜
 ⚠️ <b>口径声明</b>：本页「视觉一致性」是<b>与控件树标注的一致性</b>（非绝对准确率，项目无人工真值标注集）；
 「取树提效」是<b>宿主侧调用口径</b>（dumpLayout+cat 已合并为一次设备往返）；

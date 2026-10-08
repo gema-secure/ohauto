@@ -36,7 +36,7 @@
     python tools/record_emulator.py --mode guest --out D:/x/demo.mp4
 
 依赖：workbuddy python（cv2 / numpy / pillow 均已装）。
-素材口径提醒：**模拟器素材必须标注「模拟器 Mate X7」，不得与真机素材混用**（见 docs/指标汇总）。
+素材口径提醒：**模拟器素材必须标注「模拟器 Mate X7」，不得与真机素材混用**（素材口径见项目内部指标档案，仓库外）。
 """
 import argparse
 import ctypes

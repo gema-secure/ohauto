@@ -20,7 +20,7 @@ v2 的每周期流程（约 2 分钟）::
         --cycles 90 --out tools/_out/b15_run \\
         --fold-instance "Mate X7" --fold-every 10
 
-先 --cycles 1 自测，再上 2 小时全量。判据见 docs/ 的 B15 执行设计。
+先 --cycles 1 自测，再上 2 小时全量。判据见项目内部 B15 执行设计（仓库外）。
 """
 from __future__ import annotations
 
