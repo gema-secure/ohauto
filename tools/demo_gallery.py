@@ -1,11 +1,10 @@
 """演示材料：真机截图 + 控件树叠加的交互式画廊（**自包含 HTML**）。
 
-为什么做这个
-------------
-命题基础 #6 要「演示材料」，而**真机录屏在本设备上不成立**：
-`uitest screenCap` 单次约 1.26 秒（≈0.8 fps），帧率太低；且 OpenHarmony
-**没有** `screenrecorder`（那是 HarmonyOS 商业版的系统应用）。
-所以演示材料走「**真实截图 + 叠加标注**」这条路。
+为什么采用截图 + 叠加标注
+--------------------------
+本设备的 `uitest screenCap` 单次约 1.26 秒（约 0.8 fps），无法构成录屏；
+OpenHarmony 开源版不含 screenrecorder 系统应用。因此演示材料采用
+真实截图叠加标注的形式。
 
 为什么这条比单纯放截图强得多
 ----------------------------
@@ -115,8 +114,8 @@ def build(samples: list) -> str:
         <tr><td>带文案</td><td><b>{withtext}</b></td></tr>
         <tr class="{'bad' if withid == 0 else ''}"><td>带 id</td><td><b>{withid}</b></td></tr>
       </table>
-      {('<p class="warn">⚠️ <b>id 数为 0</b>：纯控件树无法稳定定位这 '
-        f'{inter} 个可交互控件，必须靠视觉/文案通道补 —— 这正是「多模态」的必要性。</p>')
+      {('<p class="warn"><b>id 数为 0</b>：纯控件树无法稳定定位这 '
+        f'{inter} 个可交互控件，需要视觉与文案通道补位 —— 多模态定位的必要性所在。</p>')
        if (withid == 0 and inter > 0) else ''}
       <div class="detail">点控件框看属性</div>
     </div>

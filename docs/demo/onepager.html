@@ -27,7 +27,7 @@ code{background:#f6f8fa;border:1px solid #eaeef2;border-radius:4px;padding:0 4px
 <div class="lead">截图（视觉）+ 控件树（布局）<b>双通道驱动</b>的 UI 自动化能力层
 （静态源码 / OCR 作为可插拔补充源，按 <code>Claim</code> 契约融合，源不可用必须显式降级）：
 自然语言直通用例 → 执行 → 失败归因 → 定位器自愈 → 跨形态比对，<b>设备侧零部署</b>。</div>
-<div class="kpi"><div class="k"><b>1383</b><span>单元测试 OK</span></div><div class="k"><b>91%</b><span>覆盖率</span></div><div class="k"><b>95.0%</b><span>视觉一致性</span></div><div class="k"><b>92.3%</b><span>NL→用例可执行</span></div><div class="k"><b>220 轮</b><span>长稳 0 失败</span></div><div class="k"><b>7</b><span>真机应用样本</span></div><div class="k"><b>13</b><span>命题条目</span></div></div>
+<div class="kpi"><div class="k"><b>1384</b><span>单元测试 OK</span></div><div class="k"><b>91%</b><span>覆盖率</span></div><div class="k"><b>95.0%</b><span>视觉一致性</span></div><div class="k"><b>92.3%</b><span>NL→用例可执行</span></div><div class="k"><b>220 轮</b><span>长稳 0 失败</span></div><div class="k"><b>7</b><span>真机应用样本</span></div></div>
 
 <h2>真机证据（DAYU200 / OpenHarmony 5.0.3.135 / 720×1280）</h2>
 <table><tr><td class="n">744</td><td class="l">个可见节点</td><td>7 个应用样本合计，截图与控件树同坐标系</td></tr><tr><td class="n">12 / 0</td><td class="l">可交互 / id</td><td>com.ohos.settings：12 个可交互控件，<b>id 数为 0</b> —— 纯控件树无法稳定定位，必须靠视觉与文案通道</td></tr><tr><td class="n">0</td><td class="l">个可交互节点</td><td>etsclock：纯 Canvas 应用，控件树里<b>一个可交互控件都没有</b> —— 视觉通道是唯一出路</td></tr><tr><td class="n">1.0 / 0.95</td><td class="l">崩溃 / 无窗口 判据置信度</td><td>kill -11 受控注入与息屏注入，真机实测</td></tr><tr><td class="n">92.3%</td><td class="l">NL→用例 L2 可执行（26 条）</td><td>规划要求的 <b>20 条样本口径</b>已补齐：24 条正样本 + 2 条固定负样本；可执行的 24 条<b>全部真引用控件/断言（空壳 0 条）</b>，两条负样本被两道闸正确拦下</td></tr><tr><td class="n">23/24 · 22/24</td><td class="l">NL→用例 L3 真机用例级（两轮）</td><td>步骤级 <b>176/177 与 170/172</b>；两轮挂掉的两条<b>同属「断言/期望落在控件树之外」</b>：① 计算器<b>没把「0」写进控件树</b>（视觉是 0、树里是空串，应用侧可访问性缺口）② 模型自己加了「前导运算符进表达式」的断言（计算器本就忽略）—— 都不是机制问题</td></tr><tr><td class="n">A/B/C/D</td><td class="l">自愈降级链真机 PASS</td><td>五档线索全灭时<b>自动换视觉通道定人</b>（非 uncertain / conf≥0.4 / 唯一映射 IoU≥0.3 三道闸），自愈后直连命中 id_exact</td></tr><tr><td class="n">−26%</td><td class="l">同一用例墙钟（取树提效）</td><td>dumpLayout 与 cat <b>合并成一次设备往返</b> + 只读步骤间复用同一张树（动作步骤前仍必重取）：21488→15913ms，取树 12→9 次</td></tr></table>
@@ -35,20 +35,11 @@ code{background:#f6f8fa;border:1px solid #eaeef2;border-radius:4px;padding:0 4px
 <h2>技术亮点</h2>
 <ul><li><b>双通道定位</b><span>截图（视觉）+ 控件树（布局）融合；控件树拿不到的靠视觉补，视觉拿不准的用控件树交叉验证。</span></li><li><b>差异即缺陷</b><span>真实样本<b>三类成因全齐</b>：条件渲染 / 显式隐藏 / 越出屏幕，装机后 4 次采集确定性复现，融合报告全部落 🔴 missing；正常对照全部 confirmed（置信度 1.00）。</span></li><li><b>失败归因闭环</b><span>失败步自动归因（类别 + 置信度 + 证据 + 建议），归因结论<b>带 locator_id</b>，回写定位器健康度，驱动自愈换代。</span></li><li><b>自愈会自己变好</b><span>连续失败触发重探索换代，五档线索（control_key / 子树文案 / 自带文案 / 池剩一 / <b>视觉换通道</b>）逐级尝试，验证不过则<b>真回滚</b>（快照含全部线索字段）。</span></li><li><b>可信用例生成</b><span>自然语言 → 用例两阶段生成：模型只写草案，红线（硬编码坐标 / 固定等待）由确定性校验拦下并自动修复，控件存在性按<b>页并集</b>校验，再经干跑把关可执行性。</span></li><li><b>树复用提效</b><span>只读步骤之间复用同一张控件树（动作步骤前必重取，红线不破），并把 dumpLayout+cat 合并为一次往返 —— 同一条 10 步用例墙钟 <b>−26%</b>。</span></li><li><b>懂鸿蒙多形态</b><span>折叠屏 / 平板 / 2in1 形态档案（68 台设备、11 类型），双态四形态差异比对 + 四类判据（缺失/溢出/…）+ 根因聚类。</span></li><li><b>零部署</b><span>宿主侧 Python + hdc 直连，<b>不需要为被测应用打包测试 HAP</b>。</span></li></ul>
 
-<h2>命题覆盖</h2>
-<table><tr><td>基础 1~5</td><td class="s">✅</td><td>截图+布局识别 · ≥3 类控件 · 脚本+断言 · ≥2 场景 · 覆盖 4/4 与 5/3 双口径</td></tr><tr><td>基础 6</td><td class="s">⚠️</td><td>材料齐备（架构/执行结果/验证报告/用例生成说明）；<b>演示材料本页即其一</b></td></tr><tr><td>挑战 1~4</td><td class="s">✅</td><td>多模态理解 · NL 生成脚本 · 自动探索+状态图 · 压测脚本</td></tr><tr><td>挑战 5</td><td class="s">✅</td><td>五类异常判据齐备 + 归因闭环（结论带 locator_id）+ 两类真机正例；<b>自愈已收口</b>：降级链真机树场景 A/B/C/D 全 PASS（含视觉换通道）</td></tr><tr><td>挑战 6</td><td class="s">✅</td><td>沉淀工装真机跑通（trace_to_case.py：采集→沉淀→冷启动重放 4/4，产物零坐标、id 精准命中）；探索轨迹入图已按 <b>page_path 新口径</b>验证（页面覆盖 3/3=100%）</td></tr><tr><td>挑战 7</td><td class="s">✅</td><td>已孵化为可复用工具链（tools/ + 一键整链演示）</td></tr></table>
-
 <h2>复现入口</h2>
 <table><tr><td>全量门禁</td><td><code>python -m unittest discover -s tests -t tests -q && python tools/static_check.py</code></td></tr><tr><td>一键整链</td><td><code>python tools/demo_full_chain.py          # 离线；--real 跑真机</code></td></tr><tr><td>真机画廊</td><td><code>python tools/demo_gallery.py</code></td></tr><tr><td>视觉评测</td><td><code>python tools/eval_vision_offline.py --dry</code></td></tr><tr><td>异常注入</td><td><code>python tools/verify_signals_injection_real.py</code></td></tr><tr><td>降级链验证</td><td><code>python tools/verify_locator_degrade.py          # 真机树 A/B/C/D</code></td></tr><tr><td>用例生成评测</td><td><code>python tools/eval_nl_generation_real.py --bundle ohos.samples.distributedcalc --max 20 --require-samples 20 --execute --prompts tools/b8_prompts_calc.txt   # 需 key + 真机；本轮 24 正 + 2 负 = 92.3%</code></td></tr></table>
 
-<div class="foot">数字权威出处：<code>项目内部指标档案（仓库外）</code>（每条带复现命令，10-08 更新；09-23 版已过期）｜
-真机样本：<code>datasets/real_samples_20260919/</code>｜
-⚠️ <b>口径声明</b>：本页「视觉一致性」是<b>与控件树标注的一致性</b>（非绝对准确率，项目无人工真值标注集）；
-「取树提效」是<b>宿主侧调用口径</b>（dumpLayout+cat 已合并为一次设备往返）；
-端到端单次取树约 1s 是<b>平台常数</b>，故 KPI 只对宿主侧提阈值；
-B8 的 92.3% <b>分母是 26</b>（24 条正样本 + 2 条固定负样本，负样本被拦下才算对），
-且正样本 = <b>19 条真机树自动派生 + 5 条人工补充</b>（多步描述，出处见
-<code>tools/b8_prompts_calc.txt</code>）；L2 <b>两轮一致</b>、L3 两轮并列（23/24 与 22/24），
-单应用单设备、未做更多轮取稳定值。｜
-上方所有数字均可在本机当场复跑，未使用任何模拟数据冒充实测。</div>
+<div class="foot">口径说明：视觉一致性为与控件树标注的一致性（IoU@0.5），非绝对准确率；
+NL→用例可执行率分母为 26（24 条正样本 + 2 条固定负样本，负样本被校验闸拦截），
+两轮复跑结果一致；用例生成真机执行两轮并列（用例级 23/24 与 22/24）。
+全部数字均可在本机以仓库内命令复现，复现方式见 README。</div>
 </body></html>
