@@ -122,7 +122,7 @@ def main() -> int:
         print('[PASS] C-2 生效：失败现场已留存，归因置信度提升'
               if ok else
               '[WARN] 快照有了，但置信度没提升 —— 看上面的 evidence 判断是否正常')
-        return 0 if ok else 1   # 约定见 docs/约定-退出码.md：1=未达标，不造 3
+        return 0 if ok else 1   # 约定见 docs/API手册.md §三：1=未达标，不造 3
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

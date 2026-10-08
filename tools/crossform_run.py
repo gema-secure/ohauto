@@ -468,7 +468,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     # 于是报告标红、退出码却是 0 —— 门禁直接失效。修好后以引擎为准。
     #
     # 退出码用 **1**（未达标），不是 2 —— 2 是「设备不在场」专用
-    # （见 docs/约定-退出码.md），CI 拿到 2 会按「跳过」处理而不是门禁红。
+    # （见 docs/API手册.md §三），CI 拿到 2 会按「跳过」处理而不是门禁红。
     return 1 if rec['has_high'] else 0
 
 

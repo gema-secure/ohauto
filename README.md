@@ -37,12 +37,10 @@
 
 | 想了解什么 | 看哪 |
 |---|---|
-| **系统设计**（技术路线、分层架构、实现现状对照） | [`docs/系统设计.md`](docs/系统设计.md) |
 | **折叠屏模拟器操作指南** | [`docs/指南-折叠屏模拟器.md`](docs/指南-折叠屏模拟器.md) |
 | **长稳测试指南** | [`docs/指南-长稳测试.md`](docs/指南-长稳测试.md) |
-| **结果信号采集说明**（崩溃 / 白屏 / 无响应） | [`docs/信号采集-说明.md`](docs/信号采集-说明.md) |
 | **NL→用例生成说明**（六阶段 / 原因分类 / 真机评测口径） | [`docs/用例生成说明.md`](docs/用例生成说明.md) |
-| **退出码约定**（CI 集成用） | [`docs/约定-退出码.md`](docs/约定-退出码.md) |
+| **API 手册**（公共 API / CLI / 退出码约定 / 结果信号格式） | [`docs/API手册.md`](docs/API手册.md) |
 | **在线演示页**（一键整链 / 13 应用画廊） | [`docs/demo/onepager.html`](docs/demo/onepager.html) · [`docs/demo/gallery.html`](docs/demo/gallery.html) |
 | **离线 KPI 评测**（归因 / 自愈 / 探索冒烟） | `python tools/eval_kpi_offline.py` |
 | **折叠屏模拟器 × 自动探索**（高地 6 中间形态证据） | `python tools/explore_emulator.py`（需先启动模拟器实例） |
@@ -403,7 +401,7 @@ python examples/collect_signals.py --bundle com.ohos.note --sim   # 模拟设备
 python examples/collect_signals.py --bundle com.ohos.note         # 真机
 ```
 
-细节（每种异常的判据与置信度、未验证项）见 [`信号采集-说明.md`](docs/信号采集-说明.md)。
+细节（每种异常的判据与置信度）见 [API 手册](docs/API手册.md) §四。
 
 ---
 

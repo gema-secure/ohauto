@@ -226,7 +226,7 @@ def main(argv=None) -> int:
         hdc.list_targets()
     except (HdcError, Exception) as e:                     # noqa: BLE001
         print(f'[失败] 无法连接设备: {e}')
-        return 2                       # 设备不在场（约定见 docs/约定-退出码.md）
+        return 2                       # 设备不在场（约定见 docs/API手册.md §三）
 
     if args.check:
         ok = check(hdc)

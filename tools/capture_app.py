@@ -267,7 +267,7 @@ def main(argv=None) -> int:
         targets = hdc.list_targets()
     except Exception as e:                                     # noqa: BLE001
         print(f'[失败] 无法连接设备: {e}')
-        return 2                       # 设备不在场（约定见 docs/约定-退出码.md）
+        return 2                       # 设备不在场（约定见 docs/API手册.md §三）
     print(f'  设备      : {targets[0] if targets else "?"}')
 
     bundle = None if args.no_launch else args.bundle

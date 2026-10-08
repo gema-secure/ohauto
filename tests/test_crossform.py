@@ -821,7 +821,7 @@ class TestRunnerTool(unittest.TestCase):
         # ★ 有缺失/不可达时返回非 0 —— 这样能直接接进 CI 当门禁
         #
         # 2026-09-27 反转：原来钉 rc == 2，锁的恰是缺陷行为 ——
-        # 2 是「设备不在场」专用（docs/约定-退出码.md），CI 拿到 2 会按
+        # 2 是「设备不在场」专用（docs/API手册.md §三），CI 拿到 2 会按
         # 「跳过」处理而不是门禁红，真失败被静默放过。改钉 1（未达标）。
         import tempfile
         with tempfile.TemporaryDirectory() as d:
