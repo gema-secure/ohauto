@@ -915,6 +915,17 @@ class FakeHdc:
         # 逻辑完全测不了（真机上却是好的）—— 又一个「模拟器不保真」的坑。
         if cmd.startswith('echo '):
             return self._R(cmd[5:].strip())
+        # ★ `uitest dumpLayout ... && cat <路径>` —— 合并成一次往返的取树路径
+        # （`driver.refresh` 的非留痕分支就走这条，实测省约 150ms/次）。
+        # 模拟侧**必须同样认这条命令**：不认就等于整条取树路径在模拟环境里
+        # 变成空操作 —— 这正是「真机改了、模拟没跟上」那类假通过的另一面。
+        # 输出格式也要对齐真机：先一行 `DumpLayout saved to:<路径>`，再是 JSON。
+        if cmd.startswith('uitest dumpLayout') and '&& cat ' in cmd:
+            dev = cmd.split('&& cat ', 1)[1].strip()
+            self.dump_layout(dev, unfiltered=' -i' in cmd, with_attrs=' -a' in cmd)
+            data = self._files.get(dev) or b''
+            return self._R(f'DumpLayout saved to:{dev}\n'
+                           + data.decode('utf-8', 'replace'))
         if cmd.startswith('cat '):
             p = cmd[4:].strip()
             data = self._files.get(p)

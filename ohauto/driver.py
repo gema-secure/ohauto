@@ -26,6 +26,19 @@ from .layout import LayoutNode, Rect, flatten, parse_layout
 from .matcher import Matcher
 
 
+def _json_tail(text: str) -> str:
+    """切出 `uitest dumpLayout -p X && cat X` 输出里的 JSON 部分。
+
+    那条命令前面会带一行 `DumpLayout saved to:...`，整段直接喂给 `parse_layout`
+    会被判成"不是 JSON"。找不到 `{` / `[` 就原样返回 —— 让 `parse_layout`
+    去报它那条更清楚的错（设备失败文本 vs 不是 JSON）。
+    """
+    for i, ch in enumerate(text or ''):
+        if ch in '{[':
+            return text[i:]
+    return text or ''
+
+
 class DriverError(RuntimeError):
     """Driver 层错误（定位失败、断言失败、超时等）。"""
 
@@ -119,6 +132,12 @@ class Driver:
 
         self.steps: List[Step] = []
         self._root: Optional[LayoutNode] = None
+        #: 页面是否可能已经变了。**只有动作步骤会置脏**（见 `_mark_mutated`）——
+        #: 只读步骤（waitIdle/assert/screenshot）之间页面不可能变，
+        #: 这段时间里重复 dump 是纯浪费（一次约 1.6s，实测占用例墙钟 83%）。
+        self._tree_dirty = True
+        self.tree_dumps = 0        # 真取了几次树（对外可读，便于量收益）
+        self.tree_reuses = 0       # 复用了几次
         self._step_no = 0
         self._seq = 0
 
@@ -186,27 +205,55 @@ class Driver:
 
     def refresh(self, unfiltered: bool = False, with_attrs: bool = False,
                 save: bool = False) -> LayoutNode:
-        """重新拉取并解析控件树。
+        """重新拉取并解析控件树 —— **无条件重取**（动作前要看到最新的）。
 
-        重要：坐标随折叠 / 旋转 / 滚动变化，**每次操作前都应刷新**，不要缓存。
+        重要：坐标随折叠 / 旋转 / 滚动变化，**动作步骤前必须刷新**，不要复用。
+        想省这次取树请用 `driver.root`（它会判断页面是不是真的变过）。
+
+        无需留痕时把 `dumpLayout` 与 `cat` **合并成一次 shell 调用**：
+        实测分两次是 1182+161ms、合并后 1193ms，**省约 150ms/次**。
         """
-        dev = self.hdc.dump_layout(unfiltered=unfiltered, with_attrs=with_attrs)
-        local = None
         if save and self.artifact_dir:
+            # 要留痕就走文件：dumpLayout 落盘 + pull 回本地（多一次往返，值）
+            dev = self.hdc.dump_layout(unfiltered=unfiltered,
+                                       with_attrs=with_attrs)
             local = self._art('layout.json')
             self.hdc.pull(dev, local)
             self._root = parse_layout(local)
         else:
-            # 无需留痕时，直接读设备侧内容，省一次文件落地
-            res = self.hdc.shell(f'cat {dev}')
-            self._root = parse_layout(res.stdout)
+            flags = (' -i' if unfiltered else '') + (' -a' if with_attrs else '')
+            # 设备侧临时目录：真机走 `Hdc.tmp_dir`，模拟设备（FakeHdc）只有
+            # `DEVICE_TMP` 类属性 —— 取不到再退默认值，不要假设对面是谁。
+            tmp_dir = (getattr(self.hdc, 'tmp_dir', None)
+                       or getattr(self.hdc, 'DEVICE_TMP', None)
+                       or '/data/local/tmp')
+            dev = f'{tmp_dir}/ohauto_layout.json'
+            res = self.hdc.shell(f'uitest dumpLayout{flags} -p {dev} && cat {dev}',
+                                 check=True)
+            self._root = parse_layout(_json_tail(res.stdout))
+        self.tree_dumps += 1
+        self._tree_dirty = False
         return self._root
+
+    def _mark_mutated(self) -> None:
+        """动作步骤执行后调用：页面可能变了，下次取树必须重新 dump。
+
+        **只读步骤不要调它** —— 「少取树」这件事全靠这个标记来保证安全：
+        没被标记 = 中间没有任何动作 = 复用必然看到同一张树。
+        """
+        self._tree_dirty = True
 
     @property
     def root(self) -> LayoutNode:
-        if self._root is None:
-            self.refresh()
-        return self._root  # type: ignore[return-value]
+        """当前页面的控件树：**有效的就直接复用，脏了才重取**。
+
+        与 `refresh()` 的分工：要"动作前一定是最新的"用 `refresh()`；
+        要"读点什么、能省就省"用本属性（只读步骤都走这条路）。
+        """
+        if self._root is not None and not self._tree_dirty:
+            self.tree_reuses += 1
+            return self._root
+        return self.refresh()
 
     def dump_text(self, limit: int = 200) -> str:
         """打印控件树，便于人工核对真实结构。"""
@@ -271,8 +318,12 @@ class Driver:
         t0 = time.time()
         deadline = t0 + timeout / 1000.0
         try:
+            first = True
             while time.time() < deadline:
-                node = self.find(m, refresh=True)
+                # 首探走 `root`（页面自上次取树以来没变过就直接复用）；
+                # 之后每一探都必须真读 —— 等的就是"它出现"，缓存了语义就错了。
+                node = self.find(m, refresh=not first)
+                first = False
                 if node is not None:
                     if step is not None:
                         step.node_path = node.path
@@ -384,6 +435,7 @@ class Driver:
                 step.screenshot = self._art('before_tap.png')
                 self.hdc.pull(self.hdc.screen_cap(), step.screenshot)
             self.hdc.click(x, y)
+            self._mark_mutated()
             if post_idle:
                 self.wait_idle(timeout=timeout or self.default_timeout)
             return node
@@ -452,6 +504,7 @@ class Driver:
             self._fill_node_spec(step, node)
 
             self.hdc.click(x, y)              # 先聚焦输入框
+            self._mark_mutated()
             self.wait_idle(timeout=2000)
 
             if clear_first:
@@ -464,6 +517,7 @@ class Driver:
                 #  被当成 bug 报了 —— 这次按实际行为订正，而不是照注释去补发。）
                 try:
                     self.hdc.key_event(2072, 2038)   # Ctrl+A（部分版本生效）
+                    self._mark_mutated()
                 except HdcError as e:
                     # 不抛出：全选没成功不等于输入失败，后面 input_text 会暴露真问题。
                     # 但**不许静默** —— 写进 extra 留痕，否则「清空没生效」和
@@ -471,6 +525,7 @@ class Driver:
                     step.extra['clear_first'] = 'Ctrl+A 未生效: %s' % e
 
             self.hdc.input_text(x, y, text)
+            self._mark_mutated()
             self.wait_idle(timeout=2000)
             return node
         except Exception as e:
@@ -517,6 +572,7 @@ class Driver:
 
             step.coords = (p[0], p[1])
             self.hdc.swipe(*p)
+            self._mark_mutated()
             self.wait_idle(timeout=3000)
         except Exception as e:
             step.ok, step.error = False, str(e)[:400]
@@ -669,9 +725,11 @@ class Driver:
         t0 = time.time()
         try:
             self.hdc.force_stop(self.bundle)     # 保证是冷启动
+            self._mark_mutated()
             self._sleep(0.6)
             t_start = time.time()
             self.hdc.start_ability(self.bundle, self.ability)
+            self._mark_mutated()
             if wait:
                 self.wait_idle(timeout=timeout)
             elapsed = int((time.time() - t_start) * 1000)
