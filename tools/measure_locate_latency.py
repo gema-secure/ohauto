@@ -52,7 +52,7 @@ def share(part: float, whole: float) -> float:
     return part / whole if whole else 0.0
 
 
-def summarize(samples: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+def summarize(samples: Sequence[Dict[str, Any]], label: str = '') -> Dict[str, Any]:
     """把逐轮样本压成一张表的数字。
 
     `samples` 每项形如 `{'device_ms': .., 'cat_ms': .., 'host_ms': ..}`；
@@ -61,7 +61,11 @@ def summarize(samples: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     rows = [s for s in samples if isinstance(s, dict)]
     cols = {seg: [float(s.get(f'{seg}_ms') or 0.0) for s in rows] for seg in SEGMENTS}
     totals = [sum(c[i] for c in cols.values()) for i in range(len(rows))]
-    out: Dict[str, Any] = {'n': len(rows)}
+    pages = sorted({str(s.get('page') or '') for s in rows if s.get('page')})
+    sizes = [int(s['nodes']) for s in rows if s.get('nodes')]
+    out: Dict[str, Any] = {'n': len(rows), 'label': label,
+                           'pages': pages,
+                           'nodes_p50': int(percentile(sizes, 50)) if sizes else 0}
     for seg in SEGMENTS:
         out[f'{seg}_p50'] = round(percentile(cols[seg], 50), 1)
         out[f'{seg}_p95'] = round(percentile(cols[seg], 95), 1)
@@ -95,7 +99,11 @@ def render(summary: Dict[str, Any]) -> str:
     """出人话报告 —— 结论先行，数字带口径。"""
     if not summary.get('n'):
         return '没有样本，跑 `--rounds N` 采集，或换一份 JSONL。'
+    scene = summary.get('label') or '（未标场景）'
+    pages = '、'.join(summary.get('pages') or []) or '页面自报字段为空'
+    nodes = summary.get('nodes_p50') or 0
     lines = [
+        f'场景：{scene} ｜ 页面：{pages} ｜ 控件树规模（P50）：{nodes} 个节点',
         f'样本 {summary["n"]} 轮（真机实测，非模拟）',
         '',
         f'端到端 P50 {summary["total_p50"]:.0f}ms / P95 {summary["total_p95"]:.0f}ms'
@@ -125,7 +133,12 @@ def render(summary: Dict[str, Any]) -> str:
 # ---------------------------------------------------------------- 采集（需真机）
 
 def measure_round(hdc: Any, tree: str, matcher: Any = None) -> Dict[str, Any]:
-    """测一轮三段耗时。需要真机在线，本函数不在此做设备预检（由调用方负责）。"""
+    """测一轮三段耗时。需要真机在线，本函数不在此做设备预检（由调用方负责）。
+
+    顺带记下**这一轮的页面与规模** —— 延迟与控件树大小强相关，不记规模的话
+    「P50 多少毫秒」这句话没法跟另一次测量比（旧口径就是栽在这：只留了数字，
+    没留是哪一页、多大树）。
+    """
     from ohauto.layout import flatten, parse_layout
 
     t0 = time.perf_counter()
@@ -137,9 +150,14 @@ def measure_round(hdc: Any, tree: str, matcher: Any = None) -> Dict[str, Any]:
     if matcher is not None:
         matcher.filter(flatten(root))
     t3 = time.perf_counter()
+    page = (root.attributes.get('pagePath')
+            or root.attributes.get('abilityName')
+            or root.attributes.get('bundleName') or '')
     return {'device_ms': round((t1 - t0) * 1000, 1),
             'cat_ms': round((t2 - t1) * 1000, 1),
-            'host_ms': round((t3 - t2) * 1000, 1)}
+            'host_ms': round((t3 - t2) * 1000, 1),
+            'nodes': len(list(root.walk())),
+            'page': str(page)}
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -148,12 +166,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument('--tree', default=DEFAULT_TREE, help='设备侧控件树路径')
     ap.add_argument('--jsonl', default='', help='采集输出（默认 _out/locate_latency.jsonl）')
     ap.add_argument('--analyze', default='', help='只分析既有 JSONL（全离线）')
+    ap.add_argument('--label', default='', help='场景标签（写进报告头，如「桌面」「设置页」）')
     ap.add_argument('--target', default='', help='设备序列号（多设备时必填）')
     args = ap.parse_args(argv)
 
     if args.analyze:
         out = os.path.join(ROOT, '_out', 'locate_latency_report.json')
-        summary = summarize(load_jsonl(args.analyze))
+        summary = summarize(load_jsonl(args.analyze), label=args.label)
         print(render(summary))
         os.makedirs(os.path.dirname(out), exist_ok=True)
         with open(out, 'w', encoding='utf-8') as f:
@@ -179,7 +198,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f'  [{i}/{args.rounds}] device={row["device_ms"]}ms '
                   f'cat={row["cat_ms"]}ms host={row["host_ms"]}ms', flush=True)
     print()
-    print(render(summarize(samples)))
+    print(render(summarize(samples, label=args.label)))
     print(f'\n逐轮样本：{out}')
     return 0
 

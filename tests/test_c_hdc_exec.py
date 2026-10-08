@@ -236,6 +236,102 @@ class TestRunSemantics(_Base):
         self.assertEqual(self.calls[0][1]['timeout'], 7)
 
 
+class TestTransientChannelFailure(_Base):
+    """通道未就绪（`[Fail][E000004]:The communication channel is being established`）是
+    **环境状态**，不是命令缺陷 —— 重发就过。实测（本机 DAYU200）同一条命令隔两秒即成功，
+    而且这段文本会出现在 **stdout**（`cat` 的输出）里，不只是 stderr。
+    """
+
+    _FAIL_STDOUT = (b'[Fail][E000004]:The communication channel is being established.\n'
+                    b'Please wait for several seconds and try again.\n'
+                    b'[Fail]ExecuteCommand need connect-key? please confirm a device')
+
+    def _flaky_then_ok(self, fail_times=1):
+        state = {'n': 0}
+
+        def handler(cmd, kw):
+            state['n'] += 1
+            if state['n'] <= fail_times:
+                return _proc(rc=1, stdout=self._FAIL_STDOUT)
+            return _proc(stdout=b'{"attributes": {}}')
+        return handler, state
+
+    def test_transient_failure_in_stdout_is_recognised(self):
+        from ohauto.hdc import ShellResult
+        res = ShellResult(1, self._FAIL_STDOUT.decode(), '', 'cmd')
+        self.assertTrue(Hdc.is_transient_failure(res))
+
+    def test_plain_failure_is_not_transient(self):
+        from ohauto.hdc import ShellResult
+        self.assertFalse(Hdc.is_transient_failure(
+            ShellResult(1, '', 'no such file', 'cmd')))
+
+    def test_zero_rc_with_fail_text_is_still_retried(self):
+        """★ 关键形状：hdc 在通道未就绪时**返回码是 0**，`[Fail][E000004]` 打在 stdout。
+
+        只在 `not res.ok` 的分支里查瞬时标记会**整个漏掉**这种情况
+        （实机第一次复现时就是这样漏过去的）。
+        """
+        state = {'n': 0}
+
+        def handler(cmd, kw):
+            state['n'] += 1
+            if state['n'] == 1:
+                return _proc(rc=0, stdout=self._FAIL_STDOUT)
+            return _proc(rc=0, stdout=b'{"attributes": {}}')
+        self.sub._handler = handler
+        res = self.hdc.run(['shell', 'cat x'], check=True)
+        self.assertTrue(res.ok)
+        self.assertEqual(state['n'], 2)
+        self.assertNotIn('[Fail]', res.stdout)
+
+    def test_transient_can_be_turned_off_per_call(self):
+        """要拿 stdout 当普通文本的场景（grep 日志里恰含这几个字）可关掉。"""
+        self.sub._handler = lambda cmd, kw: _proc(rc=0, stdout=self._FAIL_STDOUT)
+        res = self.hdc.run(['shell', 'cat log'], transient=False)
+        self.assertIn('[Fail]', res.stdout)
+        self.assertEqual(len(self.calls), 1)
+
+    def test_retries_until_the_channel_comes_up(self):
+        handler, state = self._flaky_then_ok(fail_times=2)
+        self.sub._handler = handler
+        res = self.hdc.run(['shell', 'cat x'], check=True)
+        self.assertTrue(res.ok)
+        self.assertEqual(state['n'], 3)                 # 两次未就绪 + 一次成功
+        self.assertEqual(self.slept, [0.8, 1.6])
+
+    def test_transient_budget_is_bounded(self):
+        """永远未就绪时不能无限重试 —— 预算用完就按失败返回/抛出。"""
+        self.sub._handler = lambda cmd, kw: _proc(rc=1, stdout=self._FAIL_STDOUT)
+        res = self.hdc.run(['shell', 'cat x'])
+        self.assertFalse(res.ok)
+        self.assertEqual(len(self.calls), 1 + self.hdc.transient_retries)
+
+    def test_transient_retries_apply_even_with_check(self):
+        """`check=True` 时也要重试 —— 通道没建好时抛错毫无意义。"""
+        handler, state = self._flaky_then_ok(fail_times=1)
+        self.sub._handler = handler
+        res = self.hdc.run(['list', 'targets'], check=True)
+        self.assertTrue(res.ok)
+        self.assertEqual(state['n'], 2)
+
+    def test_plain_failure_still_honours_only_retries(self):
+        """普通失败不被瞬时预算放大：retries=1 → 恰好 2 次调用。"""
+        self.sub._handler = lambda cmd, kw: _proc(rc=1, stderr=b'boom')
+        with self.assertRaises(HdcError):
+            self.hdc.run(['list'], check=True, retries=1)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_timeout_is_not_multiplied_by_the_transient_budget(self):
+        """超时很贵，不能因为瞬时预算多等几轮。"""
+        def boom(cmd, kw):
+            raise subprocess.TimeoutExpired(cmd, kw.get('timeout'))
+        self.sub._handler = boom
+        with self.assertRaises(HdcError):
+            self.hdc.run(['list'], check=True)
+        self.assertEqual(len(self.calls), 1)
+
+
 class TestDeviceListing(_Base):
 
     def test_empty_output_means_no_device(self):

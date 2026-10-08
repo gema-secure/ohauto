@@ -35,6 +35,14 @@ class DeviceNotFound(HdcError):
     """没有找到可用的鸿蒙设备。"""
 
 
+#: hdc 通道的**瞬时**失败特征 —— 重连 / 唤醒 / 刚 kill 过守护进程之后发命令常命中。
+#: 实测（本机 DAYU200）：`[Fail][E000004]:The communication channel is being
+#: established. Please wait for several seconds and try again` —— 同一条命令隔两秒
+#: 重发就成功，而且这段文本会出现在 **stdout**（`cat` 的输出）里，不只是 stderr。
+#: 这类失败重试是**正确处置**而不是掩盖问题：它不是"命令写错了"，是"通道还没建好"。
+TRANSIENT_MARKERS = ('E000004', 'communication channel is being established')
+
+
 # ---------------------------------------------------------------- 结果
 
 @dataclass
@@ -75,6 +83,10 @@ class Hdc:
 
     DEFAULT_TIMEOUT = 30
     DEVICE_TMP = '/data/local/tmp'
+
+    #: 「通道未就绪」这类瞬时失败额外允许的重试次数（见 TRANSIENT_MARKERS）。
+    #: 与 `run(retries=...)` 分开：那个是调用方对**命令级失败**的要求。
+    transient_retries = 2
 
     # 常见 hdc 位置（含通配展开）
     #
@@ -200,6 +212,17 @@ class Hdc:
             cmd += ['-t', self.target]
         return cmd
 
+    @staticmethod
+    def is_transient_failure(res: 'ShellResult') -> bool:
+        """是不是「通道还没建好」这类瞬时失败。
+
+        查 stdout **和** stderr —— 实测 `cat` 把 `[Fail][E000004]...` 打在 stdout 上，
+        只看 stderr 会漏。
+        """
+        blob = f'{res.stdout}\n{res.stderr}'
+        low = blob.lower()
+        return any(m.lower() in low for m in TRANSIENT_MARKERS)
+
     def run(
         self,
         args: Sequence[str],
@@ -207,6 +230,7 @@ class Hdc:
         check: bool = False,
         binary: bool = False,
         retries: int = 0,
+        transient: bool = True,
     ):
         """执行一条 hdc 命令。
 
@@ -217,11 +241,21 @@ class Hdc:
         check:    为 True 时非零返回码抛 HdcError
         binary:   为 True 时返回 bytes（用于截图等二进制内容）
         retries:  失败重试次数（针对设备偶发超时）
+        transient:
+            为 True（默认）时，「通道未就绪」这类瞬时失败会**额外**重试
+            `transient_retries` 次。**判据按文本而不是返回码** —— 实测 hdc 在
+            通道未就绪时会把 `[Fail][E000004]...` 打在 stdout 上、返回码仍是 0，
+            只看 rc 会漏。要拿 stdout 当普通文本处理的场景（如 grep 设备日志里
+            恰好含这几个字）可以传 False 关掉。
         """
         cmd = self._base_cmd() + list(args)
         last_err = None
+        #: 循环上限 = 调用方要的重试次数 + 「通道未就绪」的额外预算。
+        #: 两者分开算：**普通失败**到 `retries` 就停（不空转），
+        #: **瞬时失败**额外允许 `transient_retries` 次（通道建好就好）。
+        budget = retries + self.transient_retries
 
-        for attempt in range(retries + 1):
+        for attempt in range(budget + 1):
             try:
                 proc = subprocess.run(
                     cmd,
@@ -240,6 +274,16 @@ class Hdc:
                 if self.verbose:
                     print(f'[hdc] {" ".join(cmd)}  -> rc={proc.returncode}')
 
+                # 通道未就绪：**check 是真是假、rc 是不是 0 都要重试** ——
+                # 它是环境状态不是命令缺陷，重发就好（实测隔两秒即成功）。
+                # ⚠️ 这一条必须放在 `if res.ok` **之前**：实测 rc=0 也会带 Fail 文本。
+                if (transient and attempt < self.transient_retries
+                        and self.is_transient_failure(res)):
+                    if self.verbose:
+                        print(f'[hdc] 通道未就绪，重试 {attempt + 1}/'
+                              f'{self.transient_retries}')
+                    time.sleep(0.8 * (attempt + 1))
+                    continue
                 if res.ok:
                     return res
                 if not check and attempt >= retries:
@@ -249,8 +293,12 @@ class Hdc:
                     # 的结果，调用方按 rc 自行判断 —— 这才是 check=False 的本意。
                     return res
                 last_err = HdcError(f'hdc 执行失败 rc={proc.returncode}: {err.strip()[:300]}')
+                if attempt >= retries:
+                    break                     # 普通预算用完，别空转
             except subprocess.TimeoutExpired:
                 last_err = HdcError(f'hdc 命令超时({timeout or self.timeout}s): {" ".join(cmd)}')
+                if attempt >= retries:
+                    break                     # 超时很贵，不因瞬时预算多等几轮
             if attempt < retries:
                 time.sleep(0.8 * (attempt + 1))
 
