@@ -83,6 +83,11 @@ class LocatorSpec:
     page_signature: str = ''         # 页面归属（B1 内容签名或等价物）
     target_id: str = ''
     text: str = ''
+    #: **子树文案聚合**（`LayoutNode.text_deep`）。真机上「可交互容器自身
+    #: text/id 全空、文案在子节点」是常态（id 覆盖仅 5.62%），
+    #: 自愈重探索时这一条往往是唯一能区分同类型兄弟的线索 ——
+    #: 见 `_pick_repair_candidate` 的第 2 档。
+    text_deep: str = ''
     descr: str = ''
     target_type: str = ''
     type_fp: str = ''                # explorer.type_fingerprint：跨页面同类锚点
@@ -149,6 +154,9 @@ class RepairReport:
     page_signature: str
     repaired: List[str] = field(default_factory=list)   # 成功换代的 locator_id
     failed: Dict[str, str] = field(default_factory=dict)  # id -> 失败原因
+    #: id -> 并列候选（`type#id` 或 `type«子树文案»`）。自愈失败时**必须**留下它 ——
+    #: 「有 3 个同分候选」比「线索全失效」可操作得多（人能一眼看出还差什么线索）。
+    ambiguous: Dict[str, List[str]] = field(default_factory=dict)
     details: List[str] = field(default_factory=list)
 
     @property
@@ -257,6 +265,7 @@ class LocatorManager:
         if node is not None:
             spec.type_fp = type_fingerprint(node)
             spec.control_key = control_key(node)
+            spec.text_deep = (getattr(node, 'text_deep', '') or '').strip()
             spec.parent_types = tuple(p.type for p in self._ancestors(node))
             spec.fallback_center = node.rect.center
         self._specs[spec.locator_id] = spec
@@ -657,7 +666,15 @@ class LocatorManager:
                     or (spec.target_type and n.type == spec.target_type)]
             new_node = self._pick_repair_candidate(spec, pool)
             if new_node is None:
-                rep.failed[lid] = '重探索后无唯一匹配候选（type_fp/control_key 均失效）'
+                ties = [f'{n.type}#{n.id}' if n.id else
+                        f'{n.type}«{(getattr(n, "text_deep", "") or n.text or "")[:12]}»'
+                        for n in (self._last_ties or [])[:5]]
+                rep.failed[lid] = ('重探索后无唯一匹配候选'
+                                   '（control_key / 子树文案 / text 三档都没唯一命中）')
+                if ties:
+                    rep.ambiguous[lid] = ties
+                    rep.failed[lid] += f'；并列候选 {len(self._last_ties)} 个：' + \
+                                       '、'.join(ties)
                 continue
 
             # 生成下一代定位器：以实况节点回填线索。
@@ -665,12 +682,13 @@ class LocatorManager:
             # 「先改写 spec + generation+1 + 清零失败计数，验证失败只报告
             # 不回滚」，后果是 spec 被静默污染、账本多出没通过的一代、
             # 自愈被推迟（阈值被清零）。
-            snapshot = (spec.target_id, spec.text, spec.descr, spec.target_type,
-                        spec.type_fp, spec.control_key, spec.parent_types,
-                        spec.fallback_center)
+            snapshot = (spec.target_id, spec.text, spec.text_deep, spec.descr,
+                        spec.target_type, spec.type_fp, spec.control_key,
+                        spec.parent_types, spec.fallback_center)
             next_generation = spec.generation + 1
             spec.target_id = new_node.id
             spec.text = new_node.text
+            spec.text_deep = (getattr(new_node, 'text_deep', '') or '').strip()
             spec.descr = new_node.descr
             spec.target_type = new_node.type
             spec.type_fp = type_fingerprint(new_node)
@@ -685,9 +703,9 @@ class LocatorManager:
                 # 真回滚：8 个线索字段逐项恢复快照；generation 不自增、
                 # consecutive_failures 不清零、h.repairs 不计 —— 让
                 # 「报告说什么」和「状态是什么」重新变回同一件事。
-                (spec.target_id, spec.text, spec.descr, spec.target_type,
-                 spec.type_fp, spec.control_key, spec.parent_types,
-                 spec.fallback_center) = snapshot
+                (spec.target_id, spec.text, spec.text_deep, spec.descr,
+                 spec.target_type, spec.type_fp, spec.control_key,
+                 spec.parent_types, spec.fallback_center) = snapshot
                 rep.failed[lid] = (f'第 {next_generation} 代候选验证未通过，'
                                    f'已回滚至第 {spec.generation} 代')
                 self._log(f'{lid} 自愈验证失败，已回滚至第 {spec.generation} 代')
@@ -708,16 +726,36 @@ class LocatorManager:
             h.successes += 1
         return rep
 
-    @staticmethod
-    def _pick_repair_candidate(spec: LocatorSpec,
+    def _pick_repair_candidate(self, spec: LocatorSpec,
                                pool: List[LayoutNode]) -> Optional[LayoutNode]:
-        """自愈选人：control_key 精确同款优先，其次 descr/text 同文案。"""
+        """自愈选人：按线索强度分四档，**每档都要求唯一**。
+
+        | 档 | 线索 | 为什么排这个位置 |
+        |---|---|---|
+        | 1 | `control_key` 精确同款 | 页面内稳定标识，最硬 |
+        | 2 | **`text_deep`（子树文案）** | 真机上容器自身 id/text 常为空、文案在子节点 —— **这一档就是为真机加的**：旧实现只有 1/3/4 档，于是「无 id 无自带文案的容器」在真机上直接掉到第 4 档（同类型多候选）→ 报「线索全失效」。 |
+        | 3 | 自带 text / descr 同文案 | 离线受控树常用 |
+        | 4 | 候选池只剩 1 个 | 没得挑，只能认 |
+
+        四档都没有唯一命中时**返回 None 并留下并列候选**（`_last_ties`），
+        让上层报「有 N 个同分候选」而不是含糊的「线索全失效」——
+        降级要能说清降在哪一档。
+        """
+        self._last_ties = []
         if not pool:
             return None
         if spec.control_key:
             exact = [n for n in pool if control_key(n) == spec.control_key]
             if len(exact) == 1:
                 return exact[0]
+        # ★ 第 2 档：子树文案。真机上这是容器唯一可辨识的信息。
+        if spec.text_deep:
+            deep = [n for n in pool
+                    if (getattr(n, 'text_deep', '') or '').strip() == spec.text_deep]
+            if len(deep) == 1:
+                return deep[0]
+            if len(deep) > 1:
+                self._last_ties = deep
         same_text = ([n for n in pool if spec.text and n.text == spec.text]
                      or [n for n in pool if spec.descr and n.descr == spec.descr])
         if len(same_text) == 1:
@@ -725,6 +763,8 @@ class LocatorManager:
         # 线索全失效：同类型多候选无法安全定人 —— 放弃，交给上层报失败
         if len(pool) == 1:
             return pool[0]
+        if not self._last_ties:
+            self._last_ties = list(pool)
         return None
 
     # ------------------------------------------------------ 查询
