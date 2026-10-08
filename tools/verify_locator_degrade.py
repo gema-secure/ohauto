@@ -26,6 +26,7 @@ import argparse
 import copy
 import json
 import os
+import re
 import sys
 import time
 
@@ -35,6 +36,8 @@ sys.path.insert(0, ROOT)
 
 from ohauto import Driver, Hdc, LocatorManager              # noqa: E402
 from ohauto.layout import parse_layout                      # noqa: E402
+from ohauto.vision import HybridLocator, VisionConfigError  # noqa: E402
+from ohauto.vision import build_provider                    # noqa: E402
 from preflight import require_device                  # noqa: E402
 
 DEVICE_HDC = None    # None = 走 Hdc 自动定位；本机路径写 hdc.config.json（隐私项不入源码）
@@ -42,8 +45,13 @@ BUNDLE = 'ohos.samples.distributedcalc'
 ABILITY = 'MainAbility'
 
 
-def grab_tree(hdc_path: str, target: str = '') -> dict:
-    """从真机抓一份原始控件树 JSON。"""
+def grab_tree(hdc_path: str, target: str = '', shot_out: str = ''):
+    """从真机抓一份原始控件树 JSON（并可选抓**同一屏**的截图）。
+
+    返回 `(raw_tree, shot_path_or_None)`。截图必须和控件树是**同一屏** ——
+    换通道时视觉看到的那张图配的就是这棵树，错开一屏就全错位了。
+    `binary=True` 拉图：`cat` 兜底会对 PNG 做 CRLF 转换，产出损坏但不报错的文件。
+    """
     hdc = require_device(hdc_path=hdc_path, target=target or None)
     d = Driver(bundle=BUNDLE, ability=ABILITY, hdc=hdc, verbose=False)
     try:
@@ -53,7 +61,28 @@ def grab_tree(hdc_path: str, target: str = '') -> dict:
         print(f'  [警告] 启动应用失败（继续用当前界面）: {e}')
     dev = d.hdc.dump_layout()
     text = d.hdc.shell(f'cat {dev}').stdout
-    return json.loads(text)
+    shot = None
+    if shot_out:
+        try:
+            dev_shot = d.hdc.screen_cap()
+            d.hdc.pull(dev_shot, shot_out, binary=True)
+            time.sleep(0.3)
+            dev = d.hdc.dump_layout()           # 截图后再dump一次，确保与图同屏
+            text = d.hdc.shell(f'cat {dev}').stdout
+            shot = shot_out
+        except Exception as e:
+            print(f'  [警告] 抓截图失败（换通道将不可用）: {e}')
+    return json.loads(text), shot
+
+
+def root_bounds(raw: dict) -> tuple:
+    """从树根的 bounds 里取屏幕尺寸 —— 换通道要按真实分辨率算，不猜。"""
+    a = raw.get('attributes') or {}
+    b = a.get('bounds') or ''
+    nums = [int(x) for x in re.findall(r'-?\d+', b)]
+    if len(nums) >= 4:
+        return nums[2], nums[3]
+    return 720, 1280
 
 
 def find_first(node: dict, pred):
@@ -122,21 +151,31 @@ def main(argv=None) -> int:
     ap.add_argument('--hdc', default=DEVICE_HDC)
     ap.add_argument('--target', default='')
     ap.add_argument('--from-json', default='', help='用现成的控件树 JSON')
+    ap.add_argument('--vision', action='store_true',
+                    help='装配视觉通道：场景 C 在线索全灭时换通道（需要 '
+                         'OHAUTO_VISION_* 或 OHAUTO_LLM_* 环境变量）')
     ap.add_argument('--out', default='', help='把抓到的树存下来（便于复跑）')
     ap.add_argument('--id', default='',
                     help='指定靶子控件的 id（默认取第一个数字 id）')
     args = ap.parse_args(argv)
 
+    shot = None
     if args.from_json:
         raw = json.load(open(args.from_json, encoding='utf-8'))
         print(f'  用现成控件树: {args.from_json}')
     else:
         print('  从真机抓控件树...')
-        raw = grab_tree(args.hdc, args.target)
+        shot_path = os.path.join(os.path.dirname(os.path.abspath(args.out or HERE)),
+                                 'degrade_shot.png') if args.vision else ''
+        raw, shot = grab_tree(args.hdc, args.target, shot_path)
         if args.out:
             json.dump(raw, open(args.out, 'w', encoding='utf-8'),
                       ensure_ascii=False)
             print(f'  已存到 {args.out}')
+    if args.vision:
+        print(f'  截图: {shot or "(没拿到 —— 换通道不可用)"}')
+    elif shot is None:
+        print('  （未开 --vision：场景 C 只走树内线索）')
 
     page_v1 = parse_layout(copy.deepcopy(raw))
 
@@ -158,7 +197,14 @@ def main(argv=None) -> int:
     print(f'\n  靶子控件: id={old_id!r} text={old_text!r} '
           f'type={target["attributes"].get("type")!r}')
 
-    lm = LocatorManager()
+    vision = None
+    if args.vision:
+        try:
+            vision = HybridLocator(provider=build_provider('openai'), verbose=False)
+            print('  视觉通道: 已装配（换通道可用）')
+        except VisionConfigError as e:
+            print(f'  [警告] 视觉通道不可用（{e}）—— 场景 C 将只走树内线索')
+    lm = LocatorManager(vision=vision)
     lm.register({'id': old_id}, page_v1)
     print(f'  已注册定位器: {list(lm.all_health().keys())}')
 
@@ -212,9 +258,14 @@ def main(argv=None) -> int:
               f'channel={getattr(r, "channel", "-")}  '
               f'level={getattr(r, "level", "-")}  连续失败={cf}')
 
-    rep = lm.repair_locators(page_signature='', page=parse_layout(t4), force=True)
+    screen = (root_bounds(raw)[0], root_bounds(raw)[1])
+    rep = lm.repair_locators(page_signature='', page=parse_layout(t4),
+                             force=True, image_path=shot, screen_size=screen)
     print(f'  自愈报告: repaired={getattr(rep, "repaired", None)}')
+    print(f'            details={getattr(rep, "details", None)}')
     print(f'            failed={getattr(rep, "failed", None)}')
+    if getattr(rep, 'ambiguous', None):
+        print(f'            ambiguous={rep.ambiguous}')
     healed = bool(getattr(rep, 'repaired', None))
     results.append(('C 自愈触发', healed, 'repaired' if healed else '未修好'))
 

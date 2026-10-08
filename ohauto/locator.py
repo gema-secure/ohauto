@@ -64,6 +64,12 @@ __all__ = ['LocateResult', 'LocatorSpec', 'LocatorHealth', 'RepairReport',
 
 _DEGRADE_NAMES = ('id_exact', 'id_fuzzy_text', 'path_type', 'vision', 'coordinate')
 
+#: 自愈换通道（第 5 档）的两个门槛。视觉框要**映射回一个**控件树节点，
+#: 且映射必须够唯一、置信度够高 —— 否则宁可如实失败：
+#: 自愈猜错等于把一条好定位器换成坏的，比不换更糟。
+VISION_IOU_MIN = 0.3        # 与 HybridLocator 的默认 iou_threshold 对齐
+VISION_CONF_MIN = 0.4       # 与 HybridLocator 的默认 min_confidence 对齐
+
 
 class LocatorMissError(Exception):
     """降级链五级全部落空。携带 locator_id 方便上层回写。"""
@@ -637,7 +643,10 @@ class LocatorManager:
     # ------------------------------------------------------ 自愈
     def repair_locators(self, page_signature: str = '',
                         page: Optional[LayoutNode] = None,
-                        force: bool = False) -> RepairReport:
+                        force: bool = False,
+                        image_path: Optional[str] = None,
+                        screen_size: Optional[Tuple[int, int]] = None,
+                        ) -> RepairReport:
         """契约接口：重探索当前页面，为连续失败的定位器生成下一代。
 
         page 不传时用最近一次 locate 看到的控件树（探索器重 dump 后
@@ -645,6 +654,9 @@ class LocatorManager:
 
         force=True（C 集成日手动触发的口径）：不看失败阈值，
         对该页面的所有定位器一律尝试重探索换代。
+
+        `image_path` / `screen_size`（可选）：线索四档全灭时用来**换通道** ——
+        见 `_repair_by_vision`。不传则行为与原来完全一致（纯树内线索）。
         """
         root = page or self._last_root
         rep = RepairReport(page_signature=page_signature)
@@ -665,6 +677,13 @@ class LocatorManager:
                     if (spec.type_fp and type_fingerprint(n) == spec.type_fp)
                     or (spec.target_type and n.type == spec.target_type)]
             new_node = self._pick_repair_candidate(spec, pool)
+            via_vision = False
+            if new_node is None:
+                new_node = self._repair_by_vision(spec, root, image_path,
+                                                  screen_size)
+                via_vision = new_node is not None
+                if via_vision:
+                    self._log(f'{lid} 树内线索全灭 → 换通道：视觉给出候选')
             if new_node is None:
                 ties = [f'{n.type}#{n.id}' if n.id else
                         f'{n.type}«{(getattr(n, "text_deep", "") or n.text or "")[:12]}»'
@@ -715,7 +734,8 @@ class LocatorManager:
             h.consecutive_failures = 0
             rep.repaired.append(lid)
             rep.details.append(
-                f'{lid}: 第{spec.generation}代 id={spec.target_id!r} '
+                f'{lid}: 第{spec.generation}代'
+                f'{"（via=vision）" if via_vision else ""} id={spec.target_id!r} '
                 f'text={spec.text!r} type_fp={spec.type_fp[:8]}')
             self._log(f'{lid} 自愈成功 -> 第 {spec.generation} 代')
 
@@ -725,6 +745,81 @@ class LocatorManager:
             h.attempts += 1
             h.successes += 1
         return rep
+
+    def _repair_by_vision(self, spec: LocatorSpec, root: LayoutNode,
+                          image_path: Optional[str],
+                          screen_size: Optional[Tuple[int, int]],
+                          ) -> Optional[LayoutNode]:
+        """第 5 档：树内线索全灭时**换通道**（第 4 档是「视觉得分」的降级链位置）。
+
+        为什么需要它 —— 真机实测（`tools/verify_locator_degrade.py` 场景 C）：
+        靶子是计算器键盘的 `L001_7`，而计算器按键**在控件树里连文案都没有**
+        （`text_deep` 为空）、同类型兄弟 18 个。此时 id / 子树文案 / text 三档
+        全都没法唯一定人，**任何"猜一个"都是错的**。但换成视觉通道，「7」这个
+        键在截图上是有字面图形的 —— 这正是多模态兜底该上场的地方。
+
+        三道闸，缺一不可（自愈猜错比不换更糟）：
+        1. 视觉**不是** uncertain（它自己也不确定就不要）；
+        2. 置信度 ≥ `VISION_CONF_MIN`；
+        3. 视觉框能**唯一**映射回一个控件树节点，且 IoU ≥ `VISION_IOU_MIN`。
+        """
+        if self.vision is None or not image_path:
+            return None
+        size = screen_size or (root.rect.width, root.rect.height)
+        try:
+            vt = self.vision.locate(root, image_path, spec.description,
+                                    int(size[0]), int(size[1]))
+        except Exception as e:                      # 视觉是增强项，失败不影响树内结论
+            self._log(f'{spec.locator_id} 换通道失败: {type(e).__name__}: {e}')
+            return None
+        if vt is None or getattr(vt, 'uncertain', False):
+            return None
+        if float(getattr(vt, 'confidence', 0.0)) < VISION_CONF_MIN:
+            return None
+
+        best_set: List[LayoutNode] = []
+        best_iou = 0.0
+        for n in flatten(root, only_visible=True):
+            r = n.rect.overlap_ratio(vt.rect)
+            if r <= 0:
+                continue
+            if r > best_iou + 1e-6:
+                best_set, best_iou = [n], r
+            elif abs(r - best_iou) <= 1e-6:
+                best_set.append(n)
+        if not best_set or best_iou < VISION_IOU_MIN:
+            return None
+        return self._break_vision_tie(best_set)
+
+    @staticmethod
+    def _break_vision_tie(tied: List[LayoutNode]) -> Optional[LayoutNode]:
+        """同分候选里挑一个 —— **真机上容器与子节点同 bounds 是常态**。
+
+        实测（计算器「7」键）：视觉框与**两个**节点的 IoU 都是 1.0 ——
+        `GridItem`（容器，无 id）与 `Button#…`（真正的按键）。
+        这种同分不能按「并列 ⇒ 放弃」处理，因为**它们不是两个候选，
+        是同一个区域的两层**。判据：
+          · 取**最深**的那层（子节点）；容器只是它的壳；
+          · 再同层就看 `clickable` / 有 id 的 —— 那才是可操作的目标；
+          · 仍分不出（真·两个并列的可点兄弟）→ 返回 None，
+            宁可不修，也不把定位器换成错的。
+        """
+        if len(tied) == 1:
+            return tied[0]
+
+        def depth(n: LayoutNode) -> int:
+            d, p = 0, n.parent
+            while p is not None:
+                d += 1
+                p = p.parent
+            return d
+
+        deepest = max(depth(n) for n in tied)
+        finals = [n for n in tied if depth(n) == deepest]
+        if len(finals) == 1:
+            return finals[0]
+        actionable = [n for n in finals if n.clickable or n.id]
+        return actionable[0] if len(actionable) == 1 else None
 
     def _pick_repair_candidate(self, spec: LocatorSpec,
                                pool: List[LayoutNode]) -> Optional[LayoutNode]:
