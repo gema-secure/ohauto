@@ -1,14 +1,19 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+# PEP 639（SPDX 协议表达式 + license-files）自 setuptools 77 起支持，
+# 构建隔离环境会自行拉取，因此这里声明的是构建期下限而非运行期依赖。
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ohauto"
-version = "0.1.0"
+# ★ 版本号的**唯一源**就是这一行。ohauto/__init__.py 通过 importlib.metadata
+#   读取它（源码直用时回退解析本文件），不在代码里另写字面量。
+version = "0.3.0"
 description = "面向 OpenHarmony 的多模态智能 UI 测试系统 —— 基于 hdc 命令行通路，设备侧零部署"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "见仓库说明（暂未选定开源协议）" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 keywords = ["openharmony", "harmonyos", "ui-automation", "testing", "hdc"]
 classifiers = [
     "Programming Language :: Python :: 3",

@@ -307,6 +307,18 @@ class TestVisionLevel(unittest.TestCase):
         # 无兜底坐标 → 全落空 → None，而不是异常
         self.assertIsNone(r)
 
+    def test_selfheal_thresholds_share_one_source_with_vision(self):
+        """自愈换通道的门槛与视觉通道默认值必须是**同一个对象**。
+
+        相等还不够：两处各写一份字面量时值也相等，靠注释声明「与某某对齐」
+        正是要消灭的写法。这里同时锁值与对象身份。
+        """
+        from ohauto import locator, vision
+        self.assertEqual(locator.VISION_IOU_MIN, vision.IOU_MIN_DEFAULT)
+        self.assertEqual(locator.VISION_CONF_MIN, vision.CONF_MIN_DEFAULT)
+        self.assertIs(locator.VISION_IOU_MIN, vision.IOU_MIN_DEFAULT)
+        self.assertIs(locator.VISION_CONF_MIN, vision.CONF_MIN_DEFAULT)
+
 
 if __name__ == '__main__':
     unittest.main()

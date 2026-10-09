@@ -19,7 +19,7 @@ ohauto（OpenHarmony + Automation）是 OpenHarmony 应用 UI 自动化能力层
 单通道方案的不足有真机数据支撑：7 份控件树 / 6 个应用 / 800 个节点中，
 仅 45 个节点带 id（5.62%），带 text 的 59 个（7.4%）；其中系统设置与纯 Canvas
 绘制的时钟应用整棵树 id 数为 0，控件树通道在这类应用上完全失效。
-复现命令：`python tools/profile_locators.py datasets/real_samples_20260919`。
+复现命令：`python tools/profile_locators.py datasets/gallery_13app`。
 
 ## 文档索引
 
@@ -60,11 +60,13 @@ ohauto（OpenHarmony + Automation）是 OpenHarmony 应用 UI 自动化能力层
 python -c "import ohauto"          # 需在项目根目录
 
 # 方式二：安装为包，获得命令行工具
-pip install .
+pip install -e ".[dev]"            # 可编辑安装 + 开发依赖（coverage）
 ohauto-doctor                      # 环境自检
 ```
 
-依赖：Python 3.9 及以上；`pyyaml>=6.0`（可选，缺失时用例 DSL 自动退化为 JSON）；
+依赖统一声明在 `pyproject.toml`（`[project.dependencies]` 与
+`[project.optional-dependencies]`），`requirements.txt` 只留指引、不再重复列一遍。
+运行期要求 Python 3.9 及以上；`pyyaml>=6.0`（可选，缺失时用例 DSL 自动退化为 JSON）；
 `hdc`（来自 DevEco Studio 或 OpenHarmony 公开 SDK）。
 
 ## 快速开始
@@ -382,3 +384,7 @@ python examples/dump_tree.py --bundle <包名>
 - Python 3.9+
 - pyyaml（可选，缺失时 DSL 退化为 JSON）
 - hdc（来自 DevEco Studio 或 OpenHarmony SDK）
+
+## 许可证
+
+Apache License 2.0 —— 与 OpenHarmony 生态主流协议一致，全文见 [`LICENSE`](LICENSE)。

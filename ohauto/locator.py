@@ -58,6 +58,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .layout import LayoutNode, Rect, flatten
 from .matcher import ON, Matcher
 from .explorer import type_fingerprint, control_key
+from .vision import CONF_MIN_DEFAULT, IOU_MIN_DEFAULT
 
 __all__ = ['LocateResult', 'LocatorSpec', 'LocatorHealth', 'RepairReport',
            'LocatorManager', 'LocatorMissError']
@@ -67,8 +68,9 @@ _DEGRADE_NAMES = ('id_exact', 'id_fuzzy_text', 'path_type', 'vision', 'coordinat
 #: 自愈换通道（第 5 档）的两个门槛。视觉框要**映射回一个**控件树节点，
 #: 且映射必须够唯一、置信度够高 —— 否则宁可如实失败：
 #: 自愈猜错等于把一条好定位器换成坏的，比不换更糟。
-VISION_IOU_MIN = 0.3        # 与 HybridLocator 的默认 iou_threshold 对齐
-VISION_CONF_MIN = 0.4       # 与 HybridLocator 的默认 min_confidence 对齐
+#: 取值直接来自视觉通道的默认口径（单一出处），不在这里另写一份字面量。
+VISION_IOU_MIN = IOU_MIN_DEFAULT
+VISION_CONF_MIN = CONF_MIN_DEFAULT
 
 
 class LocatorMissError(Exception):

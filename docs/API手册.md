@@ -134,8 +134,34 @@ sig: Signals = collect_signals(hdc, bundle='com.ohos.note')
 | `OHAUTO_LLM_BASE_URL` / `OHAUTO_LLM_MODEL` / `OHAUTO_LLM_API_KEY` | 用例生成 Provider（OpenAI 兼容接口） |
 | `OHAUTO_VISION_BASE_URL` / `OHAUTO_VISION_MODEL` / `OHAUTO_VISION_API_KEY` | 视觉定位 Provider |
 | `OHAUTO_SDK_ROOT` | SDK 脚本的根目录覆写 |
+| `OHAUTO_TARGET_SERIAL` | 目标设备串号（多设备时必须显式指定） |
+| `OHAUTO_VENV_PY` | OCR 子进程桥用的解释器（默认指向项目约定 venv） |
+| `OHAUTO_PERMISSION_POLICY` | 系统权限弹窗策略：`record` / `allow` / `deny`（默认 `deny`） |
 
 > key 只走环境变量，不落盘、不入库。
+
+### 系统权限弹窗（C3）
+
+应用冷启动常弹系统权限门（属主 `com.ohos.permissionmanager`）。它盖住内容区时
+`dumpLayout` 返回的是**弹窗的树**，定位、探索、压测会一起卡在上面 —— 真机实测过
+一整套冒烟因为一个弹窗从 6/6 掉到 4/6。
+
+`Explorer` 会在把当前页当页面之前先识别并按策略作答，动作记进
+`explorer.permission_events`（含属主、标题、点的是哪个按钮、判据）：
+
+```python
+ex = Explorer(driver, permission_policy='deny')   # 或读 OHAUTO_PERMISSION_POLICY
+```
+
+| 策略 | 行为 |
+|---|---|
+| `deny`（默认） | 点「禁止」——不在陌生设备上新增授权，但弹窗必须消掉 |
+| `allow` | 点「允许」——需要走通相机/通讯录这类需授权的流程时用 |
+| `record` | 只记录不动，保持「观察到」语义（收集证据时用） |
+
+识别要**同时**满足两条：窗口属主是系统权限 UI 进程 + 存在可见可点的允许/禁止
+按钮。只有前者会把权限管理器的普通页面当成弹窗；只有后者会把应用自己的
+「允许/取消」对话框当成系统权限门。
 
 ## 六、常见操作要点
 

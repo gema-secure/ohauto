@@ -31,14 +31,14 @@ DEFAULT_ABILITY = 'com.ohos.settings.MainAbility'
 def scan_fixtures() -> int:
     """对比三种候选判据在真机样本上的命中数 —— 判据就是按这张表选的。
 
-    不开设备、不联网，直接扫 `tests/fixtures/real_20260919/`。
+    不开设备、不联网，直接扫 `datasets/gallery_13app/`。
     """
     import glob
 
     from ohauto.layout import parse_layout
 
     files = [p for p in sorted(glob.glob(os.path.join(
-        os.path.dirname(HERE), 'tests', 'fixtures', 'real_20260919', '*.json')))
+        os.path.dirname(HERE), 'datasets', 'gallery_13app', '*.json')))
         if not p.endswith('.meta.json')]
     print('%-24s %-8s %-12s %-10s %s' % ('样本', '节点数', '越出父容器', '子比父大', '越出屏幕'))
     print('-' * 74)

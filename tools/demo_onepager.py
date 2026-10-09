@@ -36,7 +36,7 @@ KPI = [
     ('7', '真机应用样本'),
 ]
 
-#: 真机证据（实采，见 datasets/real_samples_20260919/）
+#: 真机证据（实采，见 datasets/gallery_13app/）
 EVIDENCE = [
     ('744', '个可见节点', '7 个应用样本合计，截图与控件树同坐标系'),
     ('12 / 0', '可交互 / id', 'com.ohos.settings：12 个可交互控件，**id 数为 0** '

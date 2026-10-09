@@ -41,7 +41,7 @@ def node(type_, id='', text='', bounds=(0, 0, 0, 0), clickable=False,
 
 
 def real_tree(name):
-    path = os.path.join(HERE, 'fixtures', 'real_20260919', name)
+    path = os.path.join(ROOT, 'datasets', 'gallery_13app', name)
     with open(path, 'r', encoding='utf-8') as f:
         return parse_layout(json.load(f))
 

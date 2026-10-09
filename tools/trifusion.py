@@ -11,10 +11,10 @@
 
     # 声明源 = 已沉淀的用例（没源码的应用也能查「用例有没有失效」）
     python tools/trifusion.py --case examples/cases/calculator.yaml \\
-        --runtime-json datasets/real_samples_20260919/sample_calc.json
+        --runtime-json datasets/gallery_13app/sample_calc.json
 
     # 只有运行时（没有声明源）—— 会同降级并说明，不会假装做过对齐
-    python tools/trifusion.py --runtime-json datasets/real_samples_20260919/app_settings.json
+    python tools/trifusion.py --runtime-json datasets/gallery_13app/app_settings.json
 """
 from __future__ import annotations
 

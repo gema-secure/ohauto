@@ -101,7 +101,7 @@ except ModuleNotFoundError as exc:                      # pragma: no cover
 
 #: 样本目录（按顺序取第一个存在的），仓库内自包含副本。
 DEFAULT_SAMPLES = (
-    os.path.join(ROOT, 'datasets', 'real_samples_20260919'),
+    os.path.join(ROOT, 'datasets', 'gallery_13app'),
 )
 
 DEFAULT_OUT = os.path.join(ROOT, '_out', 'vision_eval')
@@ -1605,7 +1605,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     src = find_samples_dir(args.samples)
     if not src:
         print('找不到样本目录。用 --samples 指定，或把 09-19 真机采集的 '
-              'samples/ 拷到 datasets/real_samples_20260919/')
+              'samples/ 拷到 datasets/gallery_13app/')
         return 1               # 前置缺（非设备类）→ 未达标，2 专留给设备不在场
 
     samples = load_samples(src)

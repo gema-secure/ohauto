@@ -60,8 +60,7 @@ jobs:
           PROJ=$(cut -d= -f2 proj_dir.txt)
           cd "$PROJ"
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install coverage
+          pip install -e ".[dev]"
 
       # ★ 唯一的质量门禁入口 —— 与本地执行完全一致
       - name: 质量门禁

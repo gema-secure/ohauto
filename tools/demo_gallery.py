@@ -24,7 +24,7 @@ OpenHarmony 开源版不含 screenrecorder 系统应用。因此演示材料采�
 用法::
 
     python tools/demo_gallery.py                       # 用真机样本集
-    python tools/demo_gallery.py --src datasets/real_samples_20260919 -o out.html
+    python tools/demo_gallery.py --src datasets/gallery_13app -o out.html
 """
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ sys.path.insert(0, ROOT)
 
 from ohauto.layout import parse_layout                    # noqa: E402
 
-DEFAULT_SRC = os.path.join(ROOT, 'datasets', 'real_samples_20260919')
+DEFAULT_SRC = os.path.join(ROOT, 'datasets', 'gallery_13app')
 #: 产物落在**仓库内**的 docs/demo/，演示材料要随仓库提交，
 #: 不能躺在 _out/（临时产物目录）里
 OUT = os.path.join(ROOT, 'docs', 'demo', 'gallery.html')

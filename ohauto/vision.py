@@ -26,6 +26,16 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from .layout import LayoutNode, Rect, flatten
 
 
+# ---------------------------------------------------------------- 通道门槛
+
+#: 双通道交叉校验的默认门槛：IoU 重叠下限 + 视觉置信度下限。
+#: **单一出处** —— `HybridLocator` / `TieredVisionLocator` 的构造默认值，
+#: 以及 locator 自愈「换视觉通道」时的唯一性判据，都引用这里。
+#: 两处各写一份字面量、再靠注释声明「与某某对齐」，是必然漂移的写法。
+IOU_MIN_DEFAULT = 0.3
+CONF_MIN_DEFAULT = 0.4
+
+
 # ---------------------------------------------------------------- 异常
 
 class VisionError(Exception):
@@ -323,8 +333,8 @@ class HybridLocator:
     """控件树 + 视觉 双通道融合定位。"""
 
     def __init__(self, provider: Optional[VisionProvider] = None,
-                 iou_threshold: float = 0.3,
-                 min_confidence: float = 0.4,
+                 iou_threshold: float = IOU_MIN_DEFAULT,
+                 min_confidence: float = CONF_MIN_DEFAULT,
                  verbose: bool = True):
         self.provider = provider or MockProvider()
         self.iou_threshold = iou_threshold
@@ -440,7 +450,7 @@ class TieredVisionLocator:
 
     def __init__(self, provider: Optional[VisionProvider] = None,
                  region_margin: int = 60,
-                 min_confidence: float = 0.4,
+                 min_confidence: float = CONF_MIN_DEFAULT,
                  verbose: bool = False,
                  crop_fn=None,
                  l1_require_exact: bool = True):

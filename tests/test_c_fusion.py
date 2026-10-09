@@ -19,7 +19,7 @@ from unittest import mock
 from ohauto import fusion
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FIX = os.path.join(ROOT, 'tests', 'fixtures', 'real_20260919')
+FIX = os.path.join(ROOT, 'datasets', 'gallery_13app')
 
 
 def _src(name, role, claims, ok=True, reason=''):
@@ -153,8 +153,8 @@ class TestAdapters(unittest.TestCase):
 
     def test_ocr_source_degrades_when_no_backend(self):
         """本机没装 OCR 后端时必须**如实报原因**，不能假装做过。"""
-        # ⚠️ 截图在 `datasets/` 下，**不在** tests/fixtures/（那里只放了 JSON）
-        png = os.path.join(ROOT, 'datasets', 'real_samples_20260919', 'etsclock.png')
+        # ⚠️ 截图与控件树都在 `datasets/gallery_13app/` 里（仓库内唯一副本）
+        png = os.path.join(ROOT, 'datasets', 'gallery_13app', 'etsclock.png')
         if not os.path.isfile(png):
             self.skipTest('没有 etsclock.png')
         src = fusion.source_ocr(png)
@@ -185,7 +185,7 @@ class TestVisionSource(unittest.TestCase):
         self.assertIn('未提供截图', src.reason)
 
     def test_degrades_without_key_and_says_what_to_configure(self):
-        png = os.path.join(ROOT, 'datasets', 'real_samples_20260919', 'etsclock.png')
+        png = os.path.join(ROOT, 'datasets', 'gallery_13app', 'etsclock.png')
         if not os.path.isfile(png):
             self.skipTest('没有 etsclock.png')
         src = fusion.source_vision(png)
@@ -206,7 +206,7 @@ class TestVisionSource(unittest.TestCase):
             def locate(self, img, ins, w, h, hints=None):
                 return [_T()]
 
-        png = os.path.join(ROOT, 'datasets', 'real_samples_20260919', 'etsclock.png')
+        png = os.path.join(ROOT, 'datasets', 'gallery_13app', 'etsclock.png')
         if not os.path.isfile(png):
             self.skipTest('没有 etsclock.png')
         src = fusion.source_vision(png, provider=_P())
@@ -384,9 +384,21 @@ class TestOcrVenvBridge(unittest.TestCase):
         self.assertIn('rapidocr', res.note)
         self.assertIn('via venv', res.claims[0].evidence)
 
+    def test_env_var_overrides_the_default_interpreter(self):
+        """OHAUTO_VENV_PY 优先于模块内默认路径 —— 换机器不必改源码。"""
+        with mock.patch.dict(os.environ, {'OHAUTO_VENV_PY': 'X:/venv/py.exe'}):
+            self.assertEqual(fusion._venv_python(), 'X:/venv/py.exe')
+
+    def test_env_var_pointing_nowhere_degrades_instead_of_raising(self):
+        """环境变量指到不存在的解释器 → 如实降级，不拉子进程也不抛错。"""
+        with mock.patch.dict(os.environ, {'OHAUTO_VENV_PY': 'X:/nope/py.exe'}):
+            with mock.patch('subprocess.run') as run:
+                self.assertIsNone(fusion._ocr_via_venv('D:/shot.png', 'ocr'))
+        run.assert_not_called()
+
 
 class TestOcrTesseractBackend(unittest.TestCase):
-    PNG = os.path.join(ROOT, 'datasets', 'real_samples_20260919', 'etsclock.png')
+    PNG = os.path.join(ROOT, 'datasets', 'gallery_13app', 'etsclock.png')
 
     def setUp(self):
         if not os.path.isfile(self.PNG):
@@ -435,7 +447,7 @@ class TestOcrTesseractBackend(unittest.TestCase):
 class TestVisionSourceEdgeCases(unittest.TestCase):
     """source_vision 的异常分支：定位抛错 / from_env 抽风 / 空标签 / 降权。"""
 
-    PNG = os.path.join(ROOT, 'datasets', 'real_samples_20260919', 'etsclock.png')
+    PNG = os.path.join(ROOT, 'datasets', 'gallery_13app', 'etsclock.png')
 
     def setUp(self):
         if not os.path.isfile(self.PNG):

@@ -225,6 +225,15 @@ class TestRunSemantics(_Base):
         self.assertEqual(res.stdout, '<binary>')
         self.assertEqual(res.raw, payload)
 
+    def test_raw_is_a_declared_field_with_an_empty_default(self):
+        """`raw` 必须是声明字段：它存在与否不该取决于走了哪条分支。"""
+        from dataclasses import fields
+        self.assertIn('raw', {f.name for f in fields(ShellResult)})
+        self.assertEqual(ShellResult(0, '', '', 'cmd').raw, b'')
+        # 非二进制分支同样带上默认值，调用方无需 getattr 兜底
+        self.sub._handler = lambda cmd, kw: _proc(stdout=b'{}')
+        self.assertEqual(self.hdc.run(['list']).raw, b'')
+
     def test_verbose_prints_the_command(self):
         self.hdc.verbose = True
         with mock.patch('builtins.print') as pr:
@@ -433,6 +442,20 @@ class TestLocate(unittest.TestCase):
         with open(os.path.join(self.tmp.name, '.ohauto.json'), 'w',
                   encoding='utf-8') as f:
             json.dump({'hdc': p}, f)
+        with mock.patch('ohauto.hdc.os.getcwd', lambda: self.tmp.name):
+            self.assertEqual(Hdc._from_config(), p)
+
+    def test_config_written_with_a_utf8_bom_is_still_read(self):
+        """带 BOM 的配置必须能读 —— 读不了就会被静默跳过。
+
+        PowerShell 5.1 的 `Set-Content -Encoding UTF8` 默认写 BOM，
+        而 `utf-8` 解码会抛 JSONDecodeError；异常被 `_from_config` 吞掉后
+        `_locate()` 会落到「常见安装位置」，**悄悄换成另一个 hdc 二进制**。
+        """
+        p = self._real_file()
+        cfg = os.path.join(self.tmp.name, 'hdc.config.json')
+        with open(cfg, 'w', encoding='utf-8-sig') as f:
+            json.dump({'hdc_path': p}, f)
         with mock.patch('ohauto.hdc.os.getcwd', lambda: self.tmp.name):
             self.assertEqual(Hdc._from_config(), p)
 

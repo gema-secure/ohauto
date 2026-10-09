@@ -33,7 +33,7 @@ from ohauto import fusion                                 # noqa: E402
 from ohauto.layout import parse_layout                    # noqa: E402
 
 DEFAULT_CASES = os.path.join(ROOT, 'examples', 'cases')
-DEFAULT_SAMPLES = os.path.join(ROOT, 'datasets', 'real_samples_20260919')
+DEFAULT_SAMPLES = os.path.join(ROOT, 'datasets', 'gallery_13app')
 
 
 def load_case_bundle(path: str) -> str:

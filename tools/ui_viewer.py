@@ -17,7 +17,7 @@ Node 做静态分析）。
     python tools/ui_viewer.py --dump -o view.html
 
     # 用已有的控件树 JSON
-    python tools/ui_viewer.py --json tests/fixtures/real_20260919/app_settings.json -o view.html
+    python tools/ui_viewer.py --json datasets/gallery_13app/app_settings.json -o view.html
 
 产物是一个**自包含**的 HTML（数据内嵌，无 CDN、无外链），可离线打开、可转发。
 """

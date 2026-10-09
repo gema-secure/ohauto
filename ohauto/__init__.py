@@ -41,6 +41,9 @@ ohauto — OpenHarmony 应用 UI 自动化能力层
     返回信息更细的 CaseResult/SuiteResult。**契约类型负责对外，内部类型负责细节。**
 """
 
+import os
+import re
+
 from .hdc import Hdc, HdcError, DeviceNotFound
 from .layout import LayoutNode, parse_layout
 from .matcher import ON, Matcher
@@ -85,8 +88,41 @@ from .treesum import (summarize_tree, summary_lines, count_nodes,
 from .vision import (MockProvider, OpenAICompatibleProvider as VisionOpenAIProvider,
                      HybridLocator, TieredVisionLocator, VisualTarget,
                      VisionError, VisionConfigError, build_provider)
+# C3 权限弹窗：识别 + 策略（默认点「禁止」，见 ohauto/permission.py）
+from .permission import (PermissionDialogVerdict, detect_permission_dialog,
+                         resolve_policy, POLICIES, DEFAULT_POLICY, ENV_POLICY,
+                         POLICY_RECORD, POLICY_ALLOW, POLICY_DENY)
 
-__version__ = '0.3.0'
+# ---------------------------------------------------------------- 版本
+
+
+def _resolve_version() -> str:
+    """取发行版本号 —— `pyproject.toml` 是唯一源，本文件不再写字面量。
+
+    已安装（含可编辑安装）时读发行元数据；源码直用（仓库根下 `import ohauto`）
+    时元数据不存在，就回退解析同一个 `pyproject.toml` —— 仍属同一个源，
+    不是第二份版本号。
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version('ohauto')
+    except PackageNotFoundError:
+        pass
+
+    pyproject = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'pyproject.toml')
+    try:
+        with open(pyproject, encoding='utf-8') as f:
+            found = re.search(r'^version\s*=\s*["\']([^"\']+)', f.read(),
+                              re.MULTILINE)
+    except OSError:
+        return '0.0.0+unknown'
+    return found.group(1) if found else '0.0.0+unknown'
+
+
+__version__ = _resolve_version()
 
 __all__ = [
     'Hdc', 'HdcError', 'DeviceNotFound',
@@ -124,4 +160,8 @@ __all__ = [
     'MockProvider', 'VisionOpenAIProvider', 'HybridLocator',
     'TieredVisionLocator', 'VisualTarget', 'VisionError',
     'VisionConfigError', 'build_provider',
+    # C3 权限弹窗识别与处置（策略默认 deny）
+    'PermissionDialogVerdict', 'detect_permission_dialog', 'resolve_policy',
+    'POLICIES', 'DEFAULT_POLICY', 'ENV_POLICY',
+    'POLICY_RECORD', 'POLICY_ALLOW', 'POLICY_DENY',
 ]

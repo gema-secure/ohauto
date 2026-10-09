@@ -22,7 +22,7 @@
 用法::
 
     python tools/make_blind_sheet.py
-    python tools/make_blind_sheet.py --samples datasets/real_samples_20260919
+    python tools/make_blind_sheet.py --samples datasets/gallery_13app
     python tools/make_blind_sheet.py --out _out/vision_eval/blind_sheet.html
 """
 from __future__ import annotations

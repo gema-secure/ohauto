@@ -21,7 +21,7 @@ import re
 import shutil
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Sequence
 
 
@@ -52,6 +52,11 @@ class ShellResult:
     stdout: str
     stderr: str
     command: str
+    #: 二进制输出的原始字节，仅 `run(..., binary=True)` 时有意义
+    #: （此时 `stdout` 是占位串 `<binary>`）。做成正式字段而不是事后
+    #: 动态挂属性：`pull()` 的 `cat` 兜底要直接读它，属性是否存在不该
+    #: 取决于走了哪条分支。`repr=False` 避免把整个文件塞进日志。
+    raw: bytes = field(default=b'', repr=False, compare=False)
 
     @property
     def ok(self) -> bool:
@@ -196,7 +201,12 @@ class Hdc:
             if not os.path.isfile(c):
                 continue
             try:
-                with open(c, 'r', encoding='utf-8') as f:
+                # ⚠️ 必须用 utf-8-sig：PowerShell 5.1 的
+                #    `Set-Content -Encoding UTF8` 会写 BOM，而带 BOM 的 JSON
+                #    用 `utf-8` 读会抛 JSONDecodeError。它被下面的 except 吞掉后
+                #    本函数静默返回 None，`_locate()` 就落到「常见安装位置」——
+                #    结果是**换了另一个 hdc 二进制而没有任何提示**（实测踩到）。
+                with open(c, 'r', encoding='utf-8-sig') as f:
                     data = _json.load(f)
                 p = data.get('hdc_path') or data.get('hdc')
                 if p and os.path.isfile(p):
@@ -267,8 +277,8 @@ class Hdc:
                 out = proc.stdout if binary else proc.stdout.decode('utf-8', 'replace')
                 err = proc.stderr.decode('utf-8', 'replace')
                 if binary:
-                    res = ShellResult(proc.returncode, '<binary>', err, ' '.join(cmd))
-                    res.raw = out  # type: ignore[attr-defined]
+                    res = ShellResult(proc.returncode, '<binary>', err,
+                                      ' '.join(cmd), raw=out)
                 else:
                     res = ShellResult(proc.returncode, out, err, ' '.join(cmd))
 
@@ -424,9 +434,9 @@ class Hdc:
                 f'rc={res.returncode} stdout={res.stdout.strip()[:200]}')
 
         # 兜底：部分版本 file recv 不稳，用 shell cat（仅文本安全）
-        raw = self.run(['shell', f'cat {device_path}'], binary=True,
+        cat = self.run(['shell', f'cat {device_path}'], binary=True,
                        timeout=self.timeout * 3, check=True)
-        data = getattr(raw, 'raw', b'')
+        data = cat.raw
         if not data:
             raise HdcError(
                 f'拉取失败: {device_path} -> {abs_local}\n'

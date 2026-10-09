@@ -3,7 +3,8 @@
 样本来源：C 在 2026-09-19 采的 7 组「截图 + `uitest dumpLayout` 控件树」配对，
 设备润和 DAYU200 / OpenHarmony 5.0.3.135 / 屏幕 **720×1280**，
 原包在 `C交付-给B-2026-09-22-2/datasets/real_samples_20260919/`，
-本目录是**原样复制**的 json（`.png` 没带，测试用不到图）。
+样本现统一存放于仓库内 `datasets/gallery_13app/`（唯一物理副本），
+本测试直接读该目录的 json；`.png` 与之同目录，测试用不到图。
 
 | 样本 | bundle | 页面 |
 |---|---|---|
@@ -43,7 +44,7 @@ from ohauto.generator import control_catalog, pick_stress_target          # noqa
 from ohauto.layout import flatten, parse_layout                           # noqa: E402
 from ohauto.matcher import ON                                             # noqa: E402
 
-FIXTURES = os.path.join(HERE, 'fixtures', 'real_20260919')
+FIXTURES = os.path.join(ROOT, 'datasets', 'gallery_13app')
 
 SAMPLES = ('app_note', 'app_photos', 'app_settings', 'etsclock',
            's_etsclock', 'sample_calc', 'sample_music')

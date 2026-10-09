@@ -165,6 +165,13 @@ def stage_explore(args, d):
         print(f'  可交互控件      {cov.interactive_visited}/{cov.interactive_total}')
         print(f'  覆盖度          {getattr(cov, "ratio", float("nan")):.1%}')
         print(f'  被安全策略拦下  {cov.blocked}')
+        # C3：权限弹窗是**有副作用的动作**（点了就等于替人作答），必须显式报出来
+        if ex.permission_events:
+            print(f'  权限弹窗        策略={ex.permission_policy} '
+                  f'作答 {len(ex.permission_events)} 次')
+            for e in ex.permission_events:
+                print(f'    · {e["owner"]}「{e["title"]}」→ '
+                      f'{e["answered"] or "未作答"}')
         print(f'  已访问状态数    {len(graph.states)}')
         for st in list(graph.states.values())[:6]:
             print(f'    · {st.sid} 「{st.title}」 visits={st.visits} '

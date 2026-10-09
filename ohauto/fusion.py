@@ -341,9 +341,18 @@ def source_runtime_tree(root: Any, *, name: str = 'runtime',
     return SourceResult(name, 'observation', ok=True, claims=claims, note=note)
 
 
-#: venv 解释器（本项目「包只装 venv」的隔离约定下的 OCR 后端宿主）
+#: venv 解释器的**默认**位置（本项目「包只装 venv」的隔离约定下的 OCR 后端宿主）。
+#: 它不是唯一取值：换机器、换平台或换虚拟环境布局时，用环境变量
+#: `OHAUTO_VENV_PY` 覆盖即可，不必改源码。
+#: ⚠️ `%USERPROFILE%` 只在 Windows 上会被展开；其它平台展开不出真实路径，
+#:    等价于「没有 venv 后端」，由调用方继续降级而不是报错。
 _VENV_PY = os.path.expandvars(
     r'%USERPROFILE%\.workbuddy\binaries\python\envs\default\Scripts\python.exe')
+
+
+def _venv_python() -> str:
+    """当前生效的 venv 解释器路径：`OHAUTO_VENV_PY` 优先，其次默认位置。"""
+    return os.environ.get('OHAUTO_VENV_PY') or _VENV_PY
 
 
 def _ocr_via_venv(image_path: str, name: str) -> Optional[SourceResult]:
@@ -364,7 +373,8 @@ def _ocr_via_venv(image_path: str, name: str) -> Optional[SourceResult]:
     看起来跟「worker 跑通了但没读到字」一模一样，比抛异常难查得多。
     所以三层都钉：子进程固定 UTF-8 + 父进程 `errors='replace'` + `stdout is None` 检测。
     """
-    if not os.path.isfile(_VENV_PY):
+    python = _venv_python()
+    if not os.path.isfile(python):
         return None
     worker = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                           'tools', 'ocr_worker.py')
@@ -376,7 +386,7 @@ def _ocr_via_venv(image_path: str, name: str) -> Optional[SourceResult]:
         _env = dict(os.environ)
         _env['PYTHONIOENCODING'] = 'utf-8'
         _env['PYTHONUTF8'] = '1'
-        proc = subprocess.run([_VENV_PY, worker, os.path.abspath(image_path)],
+        proc = subprocess.run([python, worker, os.path.abspath(image_path)],
                               capture_output=True, text=True, encoding='utf-8',
                               errors='replace', timeout=90, env=_env)
     except Exception as e:                                    # noqa: BLE001

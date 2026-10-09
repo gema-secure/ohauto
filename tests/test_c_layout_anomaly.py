@@ -17,8 +17,9 @@ from ohauto.layout import parse_layout
 from ohauto.signals import (LAYOUT_OVERFLOW_MIN_PX, Signals,
                             _judge_layout_anomaly)
 
-FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        'fixtures', 'real_20260919')
+FIXTURES = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    'datasets', 'gallery_13app')
 
 
 def _root(children, bounds='[0,0][720,1280]'):
@@ -115,12 +116,12 @@ class TestLayoutAnomalyNegative(unittest.TestCase):
 
 
 class TestLayoutAnomalyOnRealFixtures(unittest.TestCase):
-    """7 个真机样本零误报 —— 判据的误报基线，可离线复现。"""
+    """真机样本集零误报 —— 判据的误报基线，可离线复现。"""
 
     def test_no_false_positive_on_real_pages(self):
         files = [p for p in sorted(glob.glob(os.path.join(FIXTURES, '*.json')))
                  if not p.endswith('.meta.json')]
-        self.assertGreaterEqual(len(files), 7, '真机夹具不该少于 7 个')
+        self.assertGreaterEqual(len(files), 7, '真机样本不该少于 7 个')
         bad = []
         for p in files:
             with open(p, encoding='utf-8') as f:

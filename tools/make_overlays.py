@@ -31,11 +31,11 @@ INK = (26, 26, 26)
 
 #: 样本 → 说明（形态）
 CASES = [
-    ('app_settings', 'datasets/real_samples_20260919',
+    ('app_settings', 'datasets/gallery_13app',
      '形态二：183 节点 / 28 可交互 / 0 个 id —— 视觉通道兜底'),
-    ('launcher', 'datasets/multiapp_20261005',
+    ('launcher', 'datasets/gallery_13app',
      '形态一：211 节点 / 18 可交互（有文案）—— L1 免调模型'),
-    ('etsclock', 'datasets/real_samples_20260919',
+    ('etsclock', 'datasets/gallery_13app',
      '形态三：77 节点 / 0 可交互 —— 纯 Canvas，OCR 唯一通道'),
 ]
 
