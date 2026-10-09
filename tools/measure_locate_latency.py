@@ -192,7 +192,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     from ohauto.hdc import Hdc
     hdc = Hdc(target=args.target or None)
     if not hdc.list_targets():
-        print('设备连接：失败 —— 本工具需要真机/模拟器在线（见 doctor.py）', file=sys.stderr)
+        print('设备连接：失败 —— 本工具需要真机/模拟器在线（见 python -m ohauto.doctor）', file=sys.stderr)
         return 2
 
     out = args.jsonl or os.path.join(ROOT, '_out', 'locate_latency.jsonl')

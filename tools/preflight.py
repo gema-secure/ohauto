@@ -59,19 +59,19 @@ def require_device(target: str = None, hdc_path: str = None) -> Hdc:
     except Exception as e:                                    # hdc 本身跑不起来
         print('[设备连接] 失败：hdc list targets 异常 %s: %s'
               % (type(e).__name__, e))
-        print('  真相是「环境不通」，不是代码有 bug。请先跑: python doctor.py')
+        print('  真相是「环境不通」，不是代码有 bug。请先跑: python -m ohauto.doctor')
         sys.exit(2)
     if not targets:
         print('[设备连接] 失败：未检测到任何设备（hdc list targets 为空）')
         print('  真相是「设备没插」，不是代码有 bug。')
-        print('  请确认 USB 连接 / 设备授权，或先跑: python doctor.py')
+        print('  请确认 USB 连接 / 设备授权，或先跑: python -m ohauto.doctor')
         sys.exit(2)
     shown = [t if t else '<默认设备>' for t in targets]
     print('[设备连接] OK: %s' % ', '.join(shown))
     if target and target not in targets:
         print('[设备连接] 失败：指定的 %s 不在在线列表 %s 里'
               % (target, shown))
-        print('  串号了。用 --target 改成上面列表里的一个，或先跑: python doctor.py')
+        print('  串号了。用 --target 改成上面列表里的一个，或先跑: python -m ohauto.doctor')
         sys.exit(2)
     if not target:
         hdc.target = targets[0]      # 未指定串号时钉住第一台，后续 -t 保持一致

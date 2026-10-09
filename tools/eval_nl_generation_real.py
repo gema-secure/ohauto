@@ -127,7 +127,7 @@ def _launch_and_capture(hdc: Hdc, bundle: str, ability: str,
                 return root
     raise RuntimeError(
         '拉取控件树失败（不是 JSON，或节点过少）。'
-        f'拿到的前 120 字符：{last[:120]!r} —— 若为 [Fail]... 请先跑 doctor.py')
+        f'拿到的前 120 字符：{last[:120]!r} —— 若为 [Fail]... 请先跑 python -m ohauto.doctor')
 
 
 # ----------------------------------------------------------------- 描述集

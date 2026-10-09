@@ -268,14 +268,16 @@ class TestStaticSourceBridge(unittest.TestCase):
     """source_static_project 主体：bridge 可用 / 返回空 / import 失败，各有钉子。"""
 
     def _install_bridge(self, analyze_result):
-        mod = types.ModuleType('bridge')
+        # static_arkts 入包后，fusion 从 ohauto.static_arkts.bridge 导入（S1）——
+        # 假模块必须装在同一个键位才能被相对导入命中
+        mod = types.ModuleType('ohauto.static_arkts.bridge')
         mod.analyze_project = lambda root: analyze_result
         mod.last_error = lambda: '解析失败'
         mod.control_hints = lambda info: info.get('controls') or []
-        sys.modules['bridge'] = mod
+        sys.modules['ohauto.static_arkts.bridge'] = mod
 
     def tearDown(self):
-        sys.modules.pop('bridge', None)
+        sys.modules.pop('ohauto.static_arkts.bridge', None)
 
     def test_ok_path_builds_claims(self):
         self._install_bridge({
@@ -321,7 +323,7 @@ class TestStaticSourceBridge(unittest.TestCase):
         self.assertEqual(src.reason, '解析失败')
 
     def test_bridge_import_error_degrades(self):
-        with mock.patch.dict(sys.modules, {'bridge': None}):
+        with mock.patch.dict(sys.modules, {'ohauto.static_arkts.bridge': None}):
             src = fusion.source_static_project(ROOT)
         self.assertFalse(src.ok)
         self.assertIn('静态分析模块不可用', src.reason)

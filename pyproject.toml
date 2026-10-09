@@ -30,15 +30,14 @@ dev = [
     "coverage>=7.0",
 ]
 
-# 命令行入口：安装后可直接 `ohauto-doctor` 跑环境自检
+# 命令行入口：安装后可直接 `ohauto-doctor` 跑环境自检（源码直用则 python -m ohauto.doctor）
 [project.scripts]
-ohauto-doctor = "doctor:main"
+ohauto-doctor = "ohauto.doctor:main"
 
 [tool.setuptools]
-# doctor.py 在仓库根目录，作为独立模块一起打包
-py-modules = ["doctor"]
-packages = ["ohauto"]
+packages = ["ohauto", "ohauto.static_arkts"]
 
 [tool.setuptools.package-data]
-# 形态档案（77 条设备形态数据）是运行时依赖，必须随包分发
+# 形态档案（77 条设备形态数据）与静态分析器是运行时依赖，必须随包分发
 ohauto = ["devices/*.json", "devices/*.md"]
+"ohauto.static_arkts" = ["*.mjs"]

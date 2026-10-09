@@ -62,7 +62,7 @@ class TestParserSurvivesHostileInput(unittest.TestCase):
 def _hdc_available() -> bool:
     """本机是否装了 hdc——超长文本护栏的拦截发生在 exec 层构造 Hdc 时，
     无 hdc 的机器（如 CI runner）上这条测的是环境而非护栏本身。
-    探测口径与 doctor.py 一致：构造 Hdc()，抛错即视为无 hdc。"""
+    探测口径与 ohauto.doctor 一致：构造 Hdc()，抛错即视为无 hdc。"""
     try:
         from ohauto.hdc import Hdc as _H
         _H()

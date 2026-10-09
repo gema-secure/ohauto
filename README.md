@@ -87,8 +87,8 @@ ohauto-doctor                      # 环境自检
 ### 2. 环境自检
 
 ```bash
-python doctor.py
-python doctor.py --bundle com.example.app    # 额外检查应用能否启动
+python -m ohauto.doctor
+python -m ohauto.doctor --bundle com.example.app    # 额外检查应用能否启动
 ```
 
 自检依次覆盖 Python、hdc、设备连接、uitest 命令行通路（该通路决定技术路线）、
@@ -374,7 +374,7 @@ python examples/dump_tree.py --bundle <包名>
 |---|---|
 | `uiInput` 基于坐标 | 坐标随折叠、旋转、滚动变化，每次操作前必须重新获取控件树，系统已按此实现 |
 | 控件树盲区 | Canvas 绘制、纯图标按钮在控件树中可能没有信息，需视觉通道补位 |
-| 设备差异 | 不同 OpenHarmony 版本的 `uitest` 命令支持程度不同，`doctor.py` 可检出 |
+| 设备差异 | 不同 OpenHarmony 版本的 `uitest` 命令支持程度不同，`python -m ohauto.doctor` 可检出 |
 | 防自动化应用 | 部分商业应用禁止截图与注入，建议以自研或开源应用为测试目标 |
 | 开发者模式 | 真机需开启开发者模式与 USB 调试并授权宿主机 |
 | 平台范围 | 当前聚焦 OpenHarmony 生态；hdc 通道已隔离在独立封装层，可扩展其他平台 |

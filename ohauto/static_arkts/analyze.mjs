@@ -20,7 +20,7 @@
  *
  * 用法::
  *
- *     node tools/static_arkts/analyze.mjs <工程根目录> [-o out.json]
+ *     node ohauto/static_arkts/analyze.mjs <工程根目录> [-o out.json]
  *
  * 输出 JSON 结构见 README「静态分析」一节。
  */

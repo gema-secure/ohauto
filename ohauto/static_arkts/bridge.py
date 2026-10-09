@@ -7,7 +7,7 @@
 HapTest 的静态分析模块、HmTest 的 arkanalyzer（npm）、OpenHarmony 官方
 工具链（ohpm/hvigor）全在 Node 侧。所以：
 
-    Node（tools/static_arkts/analyze.mjs）  负责「读源码」
+    Node（ohauto/static_arkts/analyze.mjs）  负责「读源码」
         ↓ JSON
     Python（本模块）                          负责「用起来」
 
@@ -18,7 +18,7 @@ HapTest 的静态分析模块、HmTest 的 arkanalyzer（npm）、OpenHarmony �
 
 命令行::
 
-    python tools/static_arkts/bridge.py <工程根目录> [-o out.json]
+    python -m ohauto.static_arkts.bridge <工程根目录> [-o out.json]
 """
 from __future__ import annotations
 

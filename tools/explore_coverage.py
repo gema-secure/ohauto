@@ -37,7 +37,6 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(HERE, 'static_arkts'))
 
 from ohauto.runner import DeviceGuard                   # noqa: E402
 from preflight import require_device, default_target                    # noqa: E402
@@ -49,7 +48,7 @@ DEFAULT_BUNDLE = 'com.example.myapplication'
 
 def declared_pages(project: str) -> list:
     """静态源：应用内页面清单（已排除桌面卡片）。"""
-    from bridge import analyze_project, last_error
+    from ohauto.static_arkts.bridge import analyze_project, last_error
     info = analyze_project(project)
     if info is None:
         print('⚠️ 静态分析未执行：%s' % last_error())

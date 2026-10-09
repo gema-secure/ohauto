@@ -11,8 +11,8 @@
     6. 截图 / 控件树 是否可用（需设备）
 
 用法:
-    python doctor.py
-    python doctor.py --bundle com.example.app     # 额外检查指定应用是否可拉起
+    python -m ohauto.doctor
+    python -m ohauto.doctor --bundle com.example.app   # 额外检查指定应用是否可拉起
 """
 from __future__ import annotations
 
@@ -31,7 +31,6 @@ results = []
 def _find_via_config():
     """从项目内配置文件读 hdc 路径（与 ohauto.hdc 的查找顺序一致）。"""
     try:
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from ohauto.hdc import Hdc
         return Hdc._from_config() or Hdc._locate()
     except Exception:

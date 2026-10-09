@@ -52,8 +52,8 @@ ROOT = os.path.dirname(HERE)
 #: 是文档的一部分，质量要求只会更高。早期版本漏掉了这 6 个文件。
 #: `tests/` 有意排除：测试代码不必强制类型注解与命名细节。
 TARGET_DIRS: Tuple[str, ...] = ('ohauto', 'tools', 'ci', 'examples')
-#: 额外单文件
-TARGET_FILES: Tuple[str, ...] = ('doctor.py',)
+#: 额外单文件（doctor.py 已入包 ohauto/，由 TARGET_DIRS 覆盖）
+TARGET_FILES: Tuple[str, ...] = ()
 
 #: 跳过这些目录名
 SKIP_DIRS = frozenset({'__pycache__', '.git', '_out', 'node_modules'})
@@ -247,7 +247,7 @@ _NARRATIVE_PATTERNS: Tuple[re.Pattern, ...] = (
 #: **规则**：命中数 ≤ 基线 → warning（存量，逐步清）；> 基线或文件不在表内 →
 #: error（新增，阻断门禁）。故意调高基线 = 显式接受，必须写明理由。
 NARRATIVE_BASELINE: Dict[str, int] = {
-    'doctor.py': 1,
+    'ohauto/doctor.py': 1,
     'examples/run_suite.py': 2,
     'ohauto/__init__.py': 4,
     'ohauto/crossform.py': 2,

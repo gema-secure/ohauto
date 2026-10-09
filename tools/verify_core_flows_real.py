@@ -96,7 +96,7 @@ def _dump(hdc: Hdc, out_dir: str, tag: str,
     except Exception as e:      # 典型：dumpLayout 返回 [Fail]... 文本 = 设备掉线/锁屏
         raise RuntimeError(
             '控件树解析失败（dumpLayout 返回了非 JSON 文本，前 80 字符: %r）'
-            '—— 多半是设备掉线或锁屏，不是代码有 bug。可先跑: python doctor.py'
+            '—— 多半是设备掉线或锁屏，不是代码有 bug。可先跑: python -m ohauto.doctor'
             % txt[:80]) from e
     sig = hashlib.sha256(txt.encode('utf-8', 'replace')).hexdigest()[:16]
     if not shot:

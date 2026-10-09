@@ -72,7 +72,7 @@
 
 | 命令 | 用途 |
 |---|---|
-| `python doctor.py` | 环境自检（设备在场 / SDK / 依赖） |
+| `python -m ohauto.doctor` | 环境自检（设备在场 / SDK / 依赖） |
 | `python tools/quality_gate.py` | 一条命令全量门禁（单测 + 覆盖率 + 静态检查） |
 | `python tools/demo_full_chain.py [--real]` | 探索→生成→校验→执行→归因→自愈→沉淀 一键整链演示 |
 | `python tools/eval_kpi_offline.py` | 离线 KPI 评测（归因 / 自愈 / 探索冒烟，免设备） |
