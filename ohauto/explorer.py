@@ -40,6 +40,9 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from .driver import Driver, DriverError
 from .layout import LayoutNode, flatten, Rect  # noqa: E402
+from .permission import (POLICY_ALLOW, POLICY_DENY,  # noqa: E402
+                         PermissionDialogVerdict, detect_permission_dialog,
+                         resolve_policy)
 
 
 # ---------------------------------------------------------------- 安全策略
@@ -253,7 +256,7 @@ MIN_INTERACTIVE_OPACITY = 0.5
 #: 「多窗口叠加」判为弹窗时，两窗重叠面积至少要占屏幕的多少。
 #:
 #: ★ 这个数字不是拍的，是拿真机样本量出来的（2026-09-23，C 给的
-#:   `datasets/real_samples_20260919/`，DAYU200 720×1280）：
+#:   `datasets/gallery_13app/`，DAYU200 720×1280）：
 #:
 #:     状态栏窗口  hostWindowId=7  bbox [0,0][720,72]    52 节点
 #:     系统窗口    hostWindowId=9  bbox [0,0][720,32]     3 节点
@@ -695,7 +698,8 @@ class Explorer:
     def __init__(self, driver: Driver, policy: Optional[SafetyPolicy] = None,
                  artifact_dir: Optional[str] = None, verbose: bool = True,
                  tarpit_policy: Optional[TarpitPolicy] = None,
-                 vision_locator: Optional[Any] = None) -> None:
+                 vision_locator: Optional[Any] = None,
+                 permission_policy: Optional[str] = None) -> None:
         self.driver = driver
         self.policy = policy or SafetyPolicy()
         self.tarpit_policy = tarpit_policy or TarpitPolicy()
@@ -728,6 +732,11 @@ class Explorer:
         self.back_verdicts: List[str] = []
         self.last_budget: Optional[Budget] = None
         self.dialog: DialogVerdict = DialogVerdict()
+        # C3 权限弹窗：策略（record / allow / deny，默认 deny）+ 台账。
+        # 台账必须留：替用户作答是**有副作用的动作**，不能只在日志里一闪而过。
+        self.permission_policy = resolve_policy(permission_policy)
+        self.permission: PermissionDialogVerdict = PermissionDialogVerdict()
+        self.permission_events: List[Dict[str, Any]] = []
 
     def log(self, msg: str) -> None:
         if self.verbose:
@@ -811,6 +820,40 @@ class Explorer:
         self.dialog = detect_dialog(root)
         self._note_page(sig, root)
         return root, sig
+
+    def _clear_permission_dialog(self, root: Optional[LayoutNode]) -> bool:
+        """按策略处置系统权限弹窗；返回 True 表示已动作（调用方需重新观察）。
+
+        与「安全策略拦截」不是一回事：拦截是**不点**，这里是**必须点掉** ——
+        系统权限弹窗盖住整个内容区时 `dumpLayout` 返回的就是弹窗的树，
+        不点掉它，后面的观察、定位、点击全都打在弹窗上。
+        """
+        verdict = detect_permission_dialog(root)
+        self.permission = verdict
+        if not verdict.is_permission_dialog:
+            return False
+        chosen = None
+        if self.permission_policy == POLICY_ALLOW:
+            chosen = verdict.allow
+        elif self.permission_policy == POLICY_DENY:
+            chosen = verdict.deny
+        label = chosen.text.strip() if chosen is not None else ''
+        self.permission_events.append({
+            'policy': self.permission_policy, 'owner': verdict.owner,
+            'title': verdict.title, 'answered': label,
+            'evidence': list(verdict.evidence)})
+        if chosen is None:
+            self.log('权限弹窗（%s「%s」）策略=%s —— 未作答（无可点按钮）'
+                     % (verdict.owner, verdict.title, self.permission_policy))
+            return False
+        self.log('权限弹窗（%s「%s」）策略=%s → 点「%s」'
+                 % (verdict.owner, verdict.title, self.permission_policy, label))
+        try:
+            self.driver.tap(chosen, post_idle=True)
+        except Exception as e:                                     # noqa: BLE001
+            self.log('  权限弹窗作答失败: %s' % str(e)[:80])
+            return False
+        return True
 
     def _note_page(self, sig: PageSignature, root: Optional[LayoutNode]) -> None:
         """把当前页面的可交互控件登记进覆盖度分母。
@@ -1036,6 +1079,10 @@ class Explorer:
         t0 = time.time()
         steps = 0
         root, sig = self._observe()
+        # ★ 权限弹窗必须先答掉：它盖住内容区时整棵树都是弹窗的，
+        #   不处理的话「起始页面」直接就是弹窗，探索从这里整体跑偏。
+        if self._clear_permission_dialog(root):
+            root, sig = self._observe()
         start = self.graph.add_state(sig, self._page_title())
         self._tarpit_note(sig)
         self.log(f'起始页面 {start.sid}「{start.title}」 结构签名 {sig.structural_key[:8]}')
@@ -1073,6 +1120,10 @@ class Explorer:
             except DriverError as e:
                 self.log(f'刷新控件树失败: {e}')
                 continue
+
+            # 每轮重新观察后都要再判一次：权限弹窗可能在任意一次跳转后弹出
+            if self._clear_permission_dialog(root):
+                root, sig = self._observe()
 
             cands = self._candidates(root)[:b.max_actions_per_page]
             if (self.vision_locator is not None
@@ -1166,6 +1217,9 @@ class Explorer:
                  f'{f"，其中 {self.coverage.blocked} 个被安全策略拦下" if self.coverage.blocked else ""}）'
                  + (f'；tarpit 拦截 {len(self.tarpit_hits)} 次不入队'
                     if self.tarpit_hits else '')
+                 + (f'；权限弹窗作答 {len(self.permission_events)} 次'
+                    f'（策略 {self.permission_policy}）'
+                    if self.permission_events else '')
                  + (f'；不可达页面 {unreachable}' if unreachable else ''))
         return self.graph
 
