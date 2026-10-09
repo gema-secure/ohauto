@@ -198,31 +198,9 @@ def build_page_signature(root: LayoutNode, bundle: str = '',
     )
 
 
-def type_fingerprint(node: LayoutNode) -> str:
-    """控件的 **type 级稳定 ID**（`sha1(type)`）。
-
-    用途与 `control_key` 不同：这个是**跨页面**找同类控件的锚点，
-    是 A 的定位降级链里「层级路径 + 类型」那一级的实现基础。
-    """
-    return _digest(f'type:{node.type}')[:16]
-
-
-def control_key(node: LayoutNode) -> str:
-    """页面内可交互控件的**稳定标识**，用于覆盖度统计。
-
-    刻意**不含坐标**：滚动、折叠、旋转都会让坐标失效（任务卡红线第 5 条），
-    拿坐标当身份会让同一控件每动一下就变成一个「新控件」，覆盖率直接虚高。
-    取值优先级：id → text → descr → 类型+尺寸（最后的兜底，稳定性最差）。
-    """
-    if node.id:
-        base = f'id:{node.id}'
-    elif node.text:
-        base = f'text:{node.text}'
-    elif node.descr:
-        base = f'descr:{node.descr}'
-    else:
-        base = f'geo:{node.type}:{node.rect.width}x{node.rect.height}'
-    return _digest(base)[:16]
+# 控件身份指纹已下沉到 .identity（结构债 S7：locator L3 不再反向 import 本模块）。
+# 这里 re-export 是为兼容 explorer 内部调用与既有 `from ohauto.explorer import ...`。
+from .identity import control_key, type_fingerprint
 
 
 # ================================================================ ★ 优先级

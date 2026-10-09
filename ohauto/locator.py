@@ -57,7 +57,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .layout import LayoutNode, Rect, flatten
 from .matcher import ON, Matcher
-from .explorer import type_fingerprint, control_key
+from .identity import type_fingerprint, control_key  # S7：身份指纹下沉到 identity，不再反向 import explorer
 from .vision import CONF_MIN_DEFAULT, IOU_MIN_DEFAULT
 
 __all__ = ['LocateResult', 'LocatorSpec', 'LocatorHealth', 'RepairReport',
