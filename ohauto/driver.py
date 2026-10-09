@@ -368,10 +368,18 @@ class Driver:
         """等待界面稳定：连续 N 次控件树签名一致即认为空闲。
 
         等价于 UiTest 的 waitForIdle —— 点击后用它判断页面跳转完成。
+
+        首份基线直接用内存里已有的树（`_root`，典型是定位目标时那次 dump，
+        即「动作时刻的画面」），不为它单独跑一次全量 dump：动作后的第一份
+        新鲜签名与它一致，等价于「动作前后画面没动」，比「动作后连看两眼」
+        证据不弱、还省一次 dump。页面真跳转了，第一份新鲜签名就会与基线
+        不同，后续轮次与原逻辑完全一致 —— 最坏情况不比原来慢。
         """
         timeout = timeout if timeout is not None else self.default_timeout
         deadline = time.time() + timeout / 1000.0
         last, same = None, 0
+        if self._root is not None:
+            last = self._signature_of(self._root)
         while time.time() < deadline:
             sig = self._signature()
             if sig == last:
@@ -412,6 +420,11 @@ class Driver:
                 raise
             return f'<err:{time.time()}>'
         self._sig_errors = 0
+        return self._signature_of(root)
+
+    @staticmethod
+    def _signature_of(root: LayoutNode) -> str:
+        """对**已有**的树算轻量签名 —— 不碰设备，wait_idle 的基线种子用它。"""
         parts = [f'{n.type}|{n.id}|{n.text}'
                  for n in flatten(root, only_visible=True)]
         return ';'.join(parts)

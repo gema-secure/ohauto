@@ -994,7 +994,9 @@ class TestContractEntry(unittest.TestCase):
         正确做法是断言**必然成立**的因果关系 —— 只要步骤里出现过设备类失败，
         就一定经过 guard（探测/恢复）或触发过重试。
         """
-        fp = FaultPlan().fail_every('dump_layout', 4, kind='device')
+        # 周期 2：单步用例现在共 2 次 dump（定位 1 + wait_idle 判稳 1），
+        # 周期写大了故障永远落不进来 —— 这条测试要的是「故障必然触发」。
+        fp = FaultPlan().fail_every('dump_layout', 2, kind='device')
         hdc, d = make_driver(fp)
         g = R.DeviceGuard(hdc, allow_hdc_restart=False, verbose=False,
                           sleep_fn=lambda s: None)

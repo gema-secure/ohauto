@@ -723,7 +723,14 @@ class Explorer:
     # ------------------------------------------------------------ 页面
 
     def _page_signatures(self, root: Optional[LayoutNode] = None) -> PageSignature:
-        """取当前页面的双签名。"""
+        """取当前页面的双签名。
+
+        默认**无条件 refresh**（不是性能疏忽）：页面签名驱动返回核对、
+        导航判定、候选生成这些**状态决策**，而 `_tree_dirty` 只看得见
+        宿主发起的动作 —— 设备带外自变（晚到的跳转、通知、异步加载）
+        只有无条件重取才能兜住。省 dump 的口子开在 wait_idle 的判稳
+        基线上，不开在这里。
+        """
         root = root if root is not None else self.driver.refresh()
         return build_page_signature(
             root,
