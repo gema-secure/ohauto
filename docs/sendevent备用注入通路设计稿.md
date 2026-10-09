@@ -1,7 +1,10 @@
 # sendevent 备用注入通路 —— 设计稿（C8）
 
-> 状态：**设计成文，代码未动**。本稿只定义怎么接、接完怎么验收，
-> 不实现、也不改任何现有行为。
+> 状态：**已实现，真机核对完成**（DAYU200 / OpenHarmony，屏幕 720x1280，
+> `2f011130375330303010b120b3832c00`）。实现落在 `ohauto/hdc.py`
+> （`InputBackend` 契约 + 三个 backend + `detect_backend`）、`ohauto/sim.py`
+> （`FakeHdc` 同构）、`ohauto/doctor.py`（逐条列出可用性）、
+> `ohauto/report.py`（披露实际通路）；钉子 `tests/test_c_input_backend.py`。
 > 问题（C8）：技术路线**单点依赖 uitest** —— 设备没有 `uitest` 命令行通路时，
 > 引擎从「可用」直接掉到「零」，中间没有缓冲档。
 
@@ -27,18 +30,31 @@
 
 ## 二、备选通路盘点（能力矩阵）
 
-⚠️ 下表后三行的列内容**尚未在本机真机核对**，实现前必须逐格实测确认，
-不得照抄别处文档。
+⚠️ 下表已在真机逐格核对（DAYU200）。结论：`uitest` ✔（5.0.1.2）、
+`uinput` ✔（`uinput --help` 有 usage，命令形态见下）、`sendevent` ✘
+（该机**没有 `getevent`**，拿不到 evdev 轴范围 → 判不可用，不硬编码范围）。
 
 | 通路 | 能力 | 依赖 | 零部署 | 风险 |
 |---|---|---|---|---|
 | `uitest`（现状） | 读 + 写全套 | 设备带 uitest | 是 | 单点 |
-| `uinput` | 写：点击 / 滑动 / 按键 | `/system/bin/uinput` 存在且可执行 | 是 | 不同版本参数形态可能不同 |
-| `sendevent` | 写：最全（直接写 evdev 事件） | `/dev/input/eventN` 可写、需 root 或 input 组权限 | 是 | 坐标是 evdev 绝对值，需先校准轴范围 |
+| `uinput` | 写：点击 / 滑动 / 长按 / 按键 / 文本 | `/system/bin/uinput` 存在且可执行 | 是 | 不同版本参数形态可能不同 |
+| `sendevent` | 写：最全（直接写 evdev 事件） | `/dev/input/eventN` 可写 + 需 `getevent` 读轴范围 | 是 | 坐标是 evdev 绝对值，需先校准轴范围 |
 | `aa`（已在用） | 仅启动 / 停止 ability | 设备带 aa | 是 | 无 |
 | `hidumper`（已在用） | 只读：屏幕尺寸 / 性能 | 设备带 hidumper | 是 | 无 |
 
-结论：备用通路的目标是**把「写」补齐到够用**（点击 / 滑动 / 文本 / 返回），
+### 2.1 `uinput -T --touch` 命令形态（真机实测）
+
+`-T` 的**文档命令只有** `-d` / `-u` / `-i` / `-m` / `-c`，没有 `-g`：
+
+| 动作 | 命令 | 真机结果 |
+|---|---|---|
+| 点击 | `uinput -T -c x y` | ✔（-c 的 interval 须 <450ms，不带即默认） |
+| 滑动 | `uinput -T -m fx fy tx ty` | ✔ 下拉通知栏 199→72 节点、上滑 72→199 |
+| 长按 | `uinput -T -m x y x y -k <ms>` | ✔ 桌面图标长按弹出「打开/服务卡片/卡片中心/卸载」 |
+| 按键 | `uinput -K -l <OHOS KeyCode> <ms>` | ✔（1=Home 2=Back；`-d`/`-u` 分两次下发**不生效**） |
+| 文本 | `uinput -K -t <text>` | ✔（`-t` 不可与其它命令同用） |
+
+结论：备用通路的目标是**把「写」补齐到够用**（点击 / 滑动 / 长按 / 文本 / 返回），
 而不是复刻 uitest 的全部能力。
 
 ## 三、设计
@@ -109,10 +125,22 @@ class InputBackend(Protocol):
 
 ## 五、验收标准（实现时照此收口）
 
-- [ ] `doctor.py` 能区分三种 backend，并在报告里**逐条**列出可用性
-- [ ] `FakeHdc` 增 sendevent / uinput 分支，与 uitest 分支**同构**
-      （「模拟器不保真 = 测试全绿反而危险」）
-- [ ] 契约测试钉住 `InputBackend` 协议（删方法即失败）
-- [ ] 真机：至少在一台**强制禁用 uitest** 的设备上跑通
-      「点击 + 滑动 + 返回」三步
-- [ ] 报告里出现本次实际使用的 backend 名称；三者皆无时显式置位「不可交互」
+- [x] `doctor.py` 能区分三种 backend，并在报告里**逐条**列出可用性
+      —— 第 6 关 uitest 判 BAD 时不再 `return`，逐条打印
+      `uitest/uinput/sendevent` 的可用性与说明；三者皆无则报「不可交互」档。
+- [x] `FakeHdc` 增 sendevent / uinput 分支，与 uitest 分支**同构**
+      （「模拟器不保真 = 测试全绿反而危险」）—— `_apply_alt_input` 认
+      `-T -c` / `-T -m` / `-K -t` / `-K -l` / `sendevent`；`-d`/`-u` 照真机落空。
+- [x] 契约测试钉住 `InputBackend` 协议（删方法即失败）—— `tests/test_c_input_backend.py`
+      `TestInputBackendContract`（含 `_Half` 反例）。
+- [x] 真机：至少在一台**强制禁用 uitest** 的设备上跑通「点击 + 滑动 + 返回」三步
+      —— `detect_backend(force='uinput')` 下：滑动（下拉通知栏 199→72、上滑 72→199）、
+      点击（备忘录列表 111→217，键盘弹出）、返回（217→111）三步均有节点/截图证据。
+- [x] 报告里出现本次实际使用的 backend 名称；三者皆无时显式置位「不可交互」
+      —— `report.collect` 落 `input_backend`，Markdown 出「输入通路」行，
+      `none` 显示为「none（不可交互）」。
+
+真机诚实记录：本机（DAYU200）**没有 `getevent`** → `sendevent` 判**不可用**
+（不是猜一组轴范围）；`sendevent` 的 evdev 代码路径由离线测试
+（`GETEVENT` 夹具）覆盖，未在真机取得实际注入证据。本机 `uitest` 与 `uinput`
+均可用 —— 因此「强制禁用 uitest」以 `force='uinput'` 模拟，非物理移除。

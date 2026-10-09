@@ -146,6 +146,15 @@ def main():
         except Exception as e:
             print(f'设备检测失败: {e}')
             return 1
+        # C8：在**同一个** Hdc 实例上探测实际可用的输入注入通路
+        # （uitest → uinput → sendevent），后续 guard / driver 都用它 ——
+        # 报告里披露的才是真正生效的那条。不探测的话 `backend_name` 只是
+        # 默认值 uitest，把它当结论写进报告是不诚实的。
+        hdc = probe
+        rep = probe.detect_backend(verbose=verbose)
+        print(f'输入通路: {rep["selected"]}'
+              + ('' if rep['interactive'] else '（不可交互档：写操作会失败）')
+              + '\n')
 
     # ---------------------------------------------------------- 组装 Runner
     policy = RetryPolicy.no_retry() if args.no_retry else RetryPolicy()

@@ -34,6 +34,11 @@ import zlib
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .layout import Rect
+# C8：备用输入通路的执行器**直接复用** `hdc` 里那三个 backend 类 ——
+# 手写第二份命令拼装迟早会与真机分叉。它们以下划线开头（包内实现细节），
+# 但 sim 与 hdc 同属本包、sim 是 L3 可依赖 L2，故此处引用是合规的。
+from .hdc import (Hdc, InputUnavailable, _NullBackend, _parse_axis_ranges,
+                  _SendeventBackend, _UinputBackend)
 
 
 # ---------------------------------------------------------------- 页面定义
@@ -170,6 +175,24 @@ NON_RESPONSIVE_PAGES: frozenset = frozenset({'static_fixed'})
 
 # 密码框里的虚拟文本（用于校验 input 是否真的落到目标控件）
 TYPED: Dict[str, str] = {}
+
+# ---- C8 备用输入通路（uinput / sendevent）在模拟侧的常量
+#
+# `uinput --help` 的探测输出：真机 `Hdc._probe_backend('uinput')` 认的是
+# 「rc==0 且输出含 usage」，这里照抄同一判据，否则备用通路在离线环境里
+# 永远探成「不可用」（模拟器不保真 = 测试全绿反而危险）。
+_UINPUT_USAGE = 'usage: uinput [-T|-K|-M] ...\n'
+
+#: uinput `-K -l <code>` 收的是 **OpenHarmony KeyCode**（真机实测 1=Home、2=Back）。
+_UINPUT_OHOS_KEYS = {1: 'Home', 2: 'Back'}
+
+
+def _is_int(s: Any) -> bool:
+    try:
+        int(s)
+        return True
+    except (TypeError, ValueError):
+        return False
 
 
 # ---------------------------------------------------------------- PNG 生成
@@ -485,6 +508,16 @@ class FakeHdc:
         self.frozen = frozen                         # 卡死：控件树永不变
         self.faultlog_denied = faultlog_denied       # 模拟非 root 读不到崩溃日志
         self._frozen_tree: Optional[Dict[str, Any]] = None
+
+        # ---- C8 备用输入通路（uinput / sendevent）模拟所需状态
+        # 默认 uitest，与 `Hdc.__init__` 一致（未探测）；`detect_backend()` 后
+        # 才反映真实可用通路。三者皆无时置 'none'（不可交互档）。
+        self._backend_name = 'uitest'
+        #: uinput 的文本输入命令（`-K -t`）不带坐标，落在**最近一次点击**处。
+        self._last_tap: Optional[Tuple[int, int]] = None
+        #: sendevent 手势状态：down / move / up 是**三次独立**的 hdc 往返，
+        #: 手指按下的起点必须跨调用保留，否则还原不出「点击 vs 滑动」。
+        self._se_state: Dict[str, Any] = {}
 
         for item in (crash_logs or ()):
             self.add_fault_log(item, dirname='faultlogger')
@@ -976,6 +1009,17 @@ class FakeHdc:
             if _parts:
                 self._ui_input(*_parts[2:])
             return self._R('No Error')
+        # ★ C8 备用通路**同构**：真机上写操作可能经 `uinput` / `sendevent`
+        #   下发（`Hdc.detect_backend()` 选了备用通路时），模拟侧必须认这两种
+        #   命令，否则备用通路在离线环境里静默变成空操作 —— 又一例
+        #   「模拟器不保真 = 测试全绿反而危险」。
+        if cmd.startswith('uinput') or cmd.startswith('sendevent'):
+            # `uinput --help` 是 `Hdc._probe_backend('uinput')` 的**探测**命令，
+            # 不是注入动作 —— 必须返回含 usage 的文本，模拟真机。
+            if cmd.startswith('uinput') and '--help' in cmd.split():
+                return self._R(_UINPUT_USAGE)
+            self._apply_alt_input(cmd)
+            return self._R('No Error')
         if 'uitest --version' in cmd:
             return self._R('uitest 1.0.0')
         if cmd.startswith('aa start'):
@@ -1037,10 +1081,19 @@ class FakeHdc:
     # ------------------------------------------------------ 操作注入
 
     def _ui_input(self, *parts) -> None:
+        """`uitest uiInput ...` 的模拟入口（记录命令 + 执行动作）。"""
         cmd = 'uitest uiInput ' + ' '.join(str(p) for p in parts)
         self.calls.append(cmd)
         self._fault('ui_input', cmd)
-        sp = [str(p) for p in parts]
+        self._apply_input_action([str(p) for p in parts])
+
+    def _apply_input_action(self, sp: List[str]) -> None:
+        """写动作的**共同语义**（命中控件、切页、TYPED、解锁 …）。
+
+        uitest 与备用通路（uinput / sendevent）都汇聚到这里：备用通路在
+        模拟侧只是**命令形态**不同，动作语义必须与 uitest 逐字一致 ——
+        否则会出现「备用通路下测试绿、真机挂」这类假通过。
+        """
         kind = sp[0]
 
         if kind in ('click', 'doubleClick', 'longClick'):
@@ -1090,23 +1143,236 @@ class FakeHdc:
                 self.current = 'login'
             self._log(f'keyEvent {key} -> {self.current}')
 
-    def click(self, x, y): self._ui_input('click', x, y)
-    def double_click(self, x, y): self._ui_input('doubleClick', x, y)
-    def long_click(self, x, y): self._ui_input('longClick', x, y)
+    # ---- C8：按当前通路派发写动作（与真机 `Hdc._backend` 派发同构）
+    #
+    # 默认 uitest —— 与改动前**逐字一致**（既有测试与调用方零迁移）。
+    # `detect_backend(force='uinput')` 之后，同一个 `click()` 会下发 uinput
+    # 命令并**走它自己的解析路径**，从而让「换通路、动作语义不变」这条性质
+    # 在离线环境里也测得到。
+    _sh_quote = staticmethod(Hdc._sh_quote)
+
+    def _backend_object(self):
+        """按当前通路取写动作执行器；uitest 时返回 None（走既有 `_ui_input` 直连）。"""
+        if self._backend_name == 'uinput':
+            return _UinputBackend(self)
+        if self._backend_name == 'sendevent':
+            w, h = self.screen_size
+            return _SendeventBackend(self, '/dev/input/event5',
+                                     {'x': (0, w - 1), 'y': (0, h - 1)})
+        if self._backend_name == 'none':
+            return _NullBackend('模拟器：没有可用的输入注入通路')
+        return None
+
+    def _require_uitest(self, action: str) -> None:
+        """`fling / drag / dircFling` 是 uitest 专有扩展（与真机同纪律）。"""
+        if self._backend_name != 'uitest':
+            raise InputUnavailable(
+                f'{action} 仅在 uitest 通路可用（当前 {self._backend_name}）')
+
+    def _apply_alt_input(self, cmd: str) -> None:
+        """C8 备用通路（uinput / sendevent）命令的解析 —— 与真机同构。
+
+        只认**真机实测有效**的形态（`-d` / `-u` 分两次下发实测不生效，
+        这里也照做「无动作」，不假装成功）：
+            uinput -T -c x y                点击
+            uinput -T -m fx fy tx ty        滑动
+            uinput -T -m x y x y -k <ms>    长按（原地 + keep time，零位移）
+            uinput -K -t <text>             文本（无坐标，落在最近一次点击处）
+            uinput -K -l <code> <ms>        按键（OHOS KeyCode：1=Home 2=Back）
+            sendevent <node> <t> <c> <v>    evdev 事件（可 `;` 串联多条）
+        """
+        try:
+            tokens = shlex.split(cmd)
+        except ValueError:                      # 引号没配对等畸形命令
+            tokens = cmd.split()
+        if not tokens:
+            return
+        if tokens[0] == 'sendevent':
+            self._apply_sendevent_cmd(cmd)
+        else:
+            self._apply_uinput(tokens[1:])
+
+    def _apply_uinput(self, args: List[str]) -> None:
+        if not args:
+            return
+        mode, rest = args[0], args[1:]
+        if mode == '-T' and rest:
+            sub = rest[0]
+            nums = [int(a) for a in rest[1:] if _is_int(a)]
+            if sub == '-c' and len(nums) >= 2:
+                self._last_tap = (nums[0], nums[1])
+                self._apply_input_action(['click', nums[0], nums[1]])
+            elif sub == '-m' and len(nums) >= 4:
+                x1, y1, x2, y2 = nums[:4]
+                if (x1, y1) == (x2, y2) and '-k' in rest:
+                    # 原地 + keep time = 长按（`-T` 无独立长按命令）
+                    self._last_tap = (x1, y1)
+                    self._apply_input_action(['longClick', x1, y1])
+                else:
+                    self._apply_input_action(
+                        ['swipe', x1, y1, x2, y2, 600])
+            return
+        if mode == '-K' and rest:
+            sub = rest[0]
+            if sub == '-t':
+                x, y = self._last_tap or (0, 0)
+                self._apply_input_action(['inputText', x, y, ' '.join(rest[1:])])
+            elif sub == '-l' and len(rest) >= 2 and _is_int(rest[1]):
+                key = _UINPUT_OHOS_KEYS.get(int(rest[1]))
+                if key:
+                    self._apply_input_action(['keyEvent', key])
+        # `-d` / `-u`（按下/抬起分两次下发）真机上不生效 —— 落空，不假装成功。
+
+    def _apply_sendevent_cmd(self, cmd: str) -> None:
+        """把 `sendevent` 事件序列还原成点击 / 滑动。
+
+        一次手势在真机上是 down → move* → up，`_SendeventBackend` 又把它们
+        拆到**多次** hdc 往返 —— 所以按下的起点必须存在 `_se_state` 里跨调用
+        保留，否则还原不出「点击 vs 滑动」。
+        """
+        st = self._se_state
+        for group in cmd.split(';'):
+            toks = group.split()
+            if len(toks) < 5 or toks[0] != 'sendevent':
+                continue
+            if not (_is_int(toks[2]) and _is_int(toks[3]) and _is_int(toks[4])):
+                continue
+            typ, code, val = int(toks[2]), int(toks[3]), int(toks[4])
+            if typ == 3:                        # EV_ABS
+                if code == 0x35:                # ABS_MT_POSITION_X
+                    st['x'] = val
+                elif code == 0x36:              # ABS_MT_POSITION_Y
+                    st['y'] = val
+                if st.get('first') is not None:
+                    st['moved'] = True
+            elif typ == 1 and code == 0x14A:    # EV_KEY / BTN_TOUCH
+                if val == 1:
+                    st['first'] = (st.get('x', 0), st.get('y', 0))
+                    st['moved'] = False
+                else:
+                    first, st['first'] = st.get('first'), None
+                    if first is None:
+                        continue
+                    last = (st.get('x', 0), st.get('y', 0))
+                    if st.get('moved') and last != first:
+                        self._apply_input_action(
+                            ['swipe', first[0], first[1], last[0], last[1], 600])
+                    else:
+                        self._last_tap = first
+                        self._apply_input_action(['click', first[0], first[1]])
+
+    def click(self, x, y):
+        b = self._backend_object()
+        if b is None:
+            self._ui_input('click', x, y)
+        else:
+            b.click(x, y)
+
+    def double_click(self, x, y):
+        b = self._backend_object()
+        if b is None:
+            self._ui_input('doubleClick', x, y)
+        else:
+            b.double_click(x, y)
+
+    def long_click(self, x, y):
+        b = self._backend_object()
+        if b is None:
+            self._ui_input('longClick', x, y)
+        else:
+            b.long_click(x, y)
+
     # 参数名与 `Hdc` 逐一对齐（HdcLike 契约内的四个）—— 全仓都是位置调用，
     # 改名零风险；不一致会让「FakeHdc 可替换 Hdc」只对一半。
-    def input_text(self, x, y, text): self._ui_input('inputText', x, y, text)
-    def swipe(self, fx, fy, tx, ty, velocity=600):
-        self._ui_input('swipe', fx, fy, tx, ty, velocity)
+    def input_text(self, x, y, text):
+        b = self._backend_object()
+        if b is None:
+            self._ui_input('inputText', x, y, text)
+        else:
+            b.input_text(x, y, text)
 
-    def fling(self, fx, fy, tx, ty, v=600): self._ui_input('fling', fx, fy, tx, ty, v)
-    def drag(self, fx, fy, tx, ty, v=600): self._ui_input('drag', fx, fy, tx, ty, v)
+    def swipe(self, fx, fy, tx, ty, velocity=600):
+        b = self._backend_object()
+        if b is None:
+            self._ui_input('swipe', fx, fy, tx, ty, velocity)
+        else:
+            b.swipe(fx, fy, tx, ty, velocity)
+
+    def fling(self, fx, fy, tx, ty, v=600):
+        self._require_uitest('fling')
+        self._ui_input('fling', fx, fy, tx, ty, v)
+
+    def drag(self, fx, fy, tx, ty, v=600):
+        self._require_uitest('drag')
+        self._ui_input('drag', fx, fy, tx, ty, v)
+
     def dirc_fling(self, direction, velocity=600):
+        self._require_uitest('dircFling')
         self._ui_input('dircFling', direction, velocity)
 
-    def key_event(self, *keys): self._ui_input('keyEvent', *keys)
+    def key_event(self, *keys):
+        b = self._backend_object()
+        if b is None:
+            self._ui_input('keyEvent', *keys)
+        else:
+            b.key_event(*keys)
+
     def back(self): self.key_event('Back')
     def home(self): self.key_event('Home')
+
+    # ---- C8：输入通路探测（与真机 `Hdc.detect_backend` 同构）
+    #
+    # 结论照抄真机 DAYU200 的实测事实：uitest ✔ / uinput ✔ / sendevent ✘
+    # （真机没有 `getevent`，读不到 evdev 轴范围 → sendevent 无法校准）。
+    # 照抄事实、而不是「一律可用」，是为了让备用通路这条路径在离线环境里
+    # 真的被走到，而不是被模拟器的乐观假设掩盖。
+    BACKENDS = ('uitest', 'uinput', 'sendevent')
+
+    @property
+    def backend_name(self) -> str:
+        return self._backend_name
+
+    @property
+    def interactive(self) -> bool:
+        return self._backend_name != 'none'
+
+    def detect_backend(self, force=None, verbose=False) -> Dict[str, Any]:
+        if force is not None and force not in self.BACKENDS:
+            raise ValueError(
+                f'force 必须是 {"/".join(self.BACKENDS)}，收到: {force!r}')
+        names = list(self.BACKENDS) if force is None else [force]
+        probes: List[Dict[str, Any]] = []
+        selected: Optional[str] = None
+        for name in names:
+            ok, detail = self._probe_backend(name)
+            probes.append({'name': name, 'ok': ok, 'detail': detail})
+            if verbose:
+                print(f"[sim] 输入通路 {name}: "
+                      f"{'可用' if ok else '不可用'} —— {detail}")
+            if ok and selected is None:
+                selected = name
+        self._backend_name = selected or 'none'
+        return {'selected': self._backend_name,
+                'interactive': self.interactive,
+                'probes': probes}
+
+    def _probe_backend(self, name: str) -> Tuple[bool, str]:
+        """探测单个通路时**真的发命令**（与 `Hdc._probe_backend` 同法），
+        不返回硬编码布尔值 —— 免得探测结论与 shell 分派失配。"""
+        if name == 'uitest':
+            v = self.uitest_version()
+            return ((True, f'uitest {v}') if v
+                    else (False, '设备不支持 uitest 命令行通路'))
+        if name == 'uinput':
+            out = self.shell('uinput --help').stdout or ''
+            if 'usage' in out.lower():
+                return True, 'uinput 存在且可执行'
+            return False, (out.strip() or 'rc≠0')[:120]
+        # sendevent 依赖 `getevent` 读 evdev 轴范围；模拟器与真机一致：没有
+        parsed = _parse_axis_ranges(self.shell('getevent -p').stdout or '')
+        if parsed is None:
+            return False, 'getevent 缺失或未解析到轴范围，evdev 坐标无法校准'
+        return True, parsed[0]
 
     # ------------------------------------------------------ 应用管理
 

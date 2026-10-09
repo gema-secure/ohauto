@@ -160,21 +160,39 @@ def main() -> int:
         check('设备时间', WARN, f'{type(e).__name__}: {e}')
 
     # ---------------------------------------------------------- 6 uitest 通路
+    # C8：uitest 不可用**不再直接终止自检** —— 写动作还有 uinput / sendevent
+    # 两条备用通路（设计稿 §3.2 探测顺序 uitest → uinput → sendevent）。
+    # 逐条探测并如实列出结论；三者皆无才落「不可交互」档。
+    uitest_ok = False
     try:
         r = subprocess.run([hdc, 'shell', 'uitest --version'], capture_output=True,
                            text=True, timeout=25)
         out = ((r.stdout or '') + (r.stderr or '')).strip()
-        if r.returncode == 0 and out and 'not found' not in out.lower():
+        uitest_ok = (r.returncode == 0 and bool(out)
+                     and 'not found' not in out.lower())
+        if uitest_ok:
             check('uitest 命令行通路', OK,
                   f'{out}\n-> 技术路线：走轻量的 hdc 命令行通路（设备侧零部署）')
         else:
-            check('uitest 命令行通路', BAD,
-                  f'设备不支持 uitest 命令：{out[:200]}\n'
-                  f'-> 需改用 ArkTS API 通路（要为被测应用打包测试 HAP，成本更高）')
-            return _summary()
+            check('uitest 命令行通路', BAD, f'设备不支持 uitest 命令：{out[:200]}')
     except Exception as e:
         check('uitest 命令行通路', BAD, f'{type(e).__name__}: {e}')
-        return _summary()
+
+    if not uitest_ok:
+        from ohauto.hdc import Hdc
+        d = Hdc(hdc_path=hdc)
+        rep = d.detect_backend()
+        lines = [f'{p["name"]:<9} {"可用" if p["ok"] else "不可用"}  {p["detail"]}'
+                 for p in rep['probes']]
+        if rep['interactive']:
+            check('输入注入通路（备用）', OK,
+                  f'uitest 不可用，改用备用通路：{rep["selected"]}\n'
+                  + '\n'.join(lines))
+        else:
+            check('输入注入通路（备用）', BAD,
+                  '三个输入通路全部不可用 —— 置为「不可交互」档：只能做**只读观测**'
+                  '（截图 / 控件树 / aa 拉起），任何写操作都会响亮失败\n'
+                  + '\n'.join(lines))
 
     # ---------------------------------------------------------- 7 截图
     try:

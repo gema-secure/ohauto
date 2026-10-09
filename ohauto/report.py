@@ -31,6 +31,13 @@ def collect(driver, run_report=None, extra: Optional[Dict[str, Any]] = None
         'summary': driver.summary() if hasattr(driver, 'summary') else {},
         'steps': driver.steps_to_dict() if hasattr(driver, 'steps_to_dict') else [],
     }
+    # C8：披露本次执行**实际生效**的输入通路（uitest / uinput / sendevent /
+    # none）。备用通路下「跑通了」与「主力通路跑通了」不是一回事，报告里
+    # 看不出来就会让人误判环境；取不到（老实现 / 无该属性）时留空不硬造。
+    hdc = getattr(driver, 'hdc', None)
+    backend = getattr(hdc, 'backend_name', None)
+    if backend:
+        data['input_backend'] = backend
     if run_report is not None:
         data['case'] = run_report.to_dict() if hasattr(run_report, 'to_dict') else run_report
     if extra:
@@ -88,6 +95,13 @@ def to_markdown(data: Dict[str, Any], path: str,
     rate = s.get('success_rate', 0.0)
     L.append(f"| 成功率 | {rate * 100:.1f}% |")
     L.append(f"| 总耗时 | {s.get('total_elapsed_ms', 0)} ms |")
+    # C8：输入通路落一行。`none` 必须写明「不可交互」—— 它意味着本次执行
+    # 只做了只读观测（截图 / 控件树），任何写操作都会响亮失败，把这条
+    # 摆在报告里比让人从「步骤数很少」去猜要诚实。
+    backend = data.get('input_backend')
+    if backend:
+        shown = f'{backend}（不可交互）' if backend == 'none' else backend
+        L.append(f'| 输入通路 | {shown} |')
     # 截图分级留存的省略必须可见（docs/截图分级留存策略.md）——
     # 只在数据在场的旧报告上保持原样，不制造空行。
     if 'screenshots_saved' in s or 'screenshots_skipped' in s:

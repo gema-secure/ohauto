@@ -22,7 +22,8 @@ import shutil
 import subprocess
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Protocol, Sequence, runtime_checkable
+from typing import (Any, Dict, List, Optional, Protocol, Sequence, Tuple,
+                    runtime_checkable)
 
 
 # ---------------------------------------------------------------- 异常
@@ -117,6 +118,296 @@ class HdcLike(Protocol):
     def force_stop(self, bundle: str) -> ShellResult: ...
 
 
+# ---------------------------------------------------------------- 输入通路
+#
+# C8：写动作原先把 `uitest uiInput` 焊死在 `Hdc._ui_input` 上 —— 设备没有
+# uitest 命令行通路时，引擎从「可用」直接掉到「零」，中间没有缓冲档。
+# 这里把写动作收敛到一个窄契约 `InputBackend`，`Hdc` 持一个实例并派发；
+# 探测顺序 uitest → uinput → sendevent，首个可用者胜出（`Hdc.detect_backend`）。
+
+class InputUnavailable(HdcError):
+    """输入注入通路不可用，或某个动作在该通路上无法表达。
+
+    必须**响亮失败**：备用通路下「以为降级成功、其实没注入」是假绿，
+    与 sim / vision 里已有的两条纪律同类。
+    """
+
+
+@runtime_checkable
+class InputBackend(Protocol):
+    """写动作注入通路 —— **窄契约**（C8）。
+
+    只声明上层（`Driver`）真正会调的写动作；`fling / drag / dircFling`
+    是 uitest 专有扩展，不进契约。契约纪律与 `HdcLike` 同法：
+    删除契约内的方法必须让引用处报错。
+    """
+    name: str
+
+    def click(self, x: int, y: int) -> None: ...
+    def double_click(self, x: int, y: int) -> None: ...
+    def long_click(self, x: int, y: int) -> None: ...
+    def swipe(self, fx: int, fy: int, tx: int, ty: int,
+              velocity: int = 600) -> None: ...
+    def input_text(self, x: int, y: int, text: str) -> None: ...
+    def key_event(self, *keys) -> None: ...
+
+
+#: uinput `-K` 收的是 **OpenHarmony KeyCode**（不是 Linux keycode）：
+#: 真机实测 `1` 触发 Home、`2` 触发 Back。**只登记实测过的键**，不猜。
+_UINPUT_KEYCODES = {'Home': 1, 'Back': 2}
+
+
+class _UitestBackend:
+    """现状通路：`uitest uiInput ...`（读 + 写全套，首选）。"""
+
+    name = 'uitest'
+
+    def __init__(self, hdc: 'Hdc') -> None:
+        self.hdc = hdc
+
+    def _run(self, *parts) -> None:
+        self.hdc.shell('uitest uiInput ' + ' '.join(str(p) for p in parts),
+                       check=True)
+
+    def click(self, x: int, y: int) -> None:
+        self._run('click', int(x), int(y))
+
+    def double_click(self, x: int, y: int) -> None:
+        self._run('doubleClick', int(x), int(y))
+
+    def long_click(self, x: int, y: int) -> None:
+        self._run('longClick', int(x), int(y))
+
+    def swipe(self, fx: int, fy: int, tx: int, ty: int,
+              velocity: int = 600) -> None:
+        self._run('swipe', int(fx), int(fy), int(tx), int(ty), velocity)
+
+    def input_text(self, x: int, y: int, text: str) -> None:
+        self._run('inputText', int(x), int(y), self.hdc._sh_quote(text))
+
+    def key_event(self, *keys) -> None:
+        self._run('keyEvent', *keys)
+
+
+class _UinputBackend:
+    """备选通路一：`uinput` 命令行注入。
+
+    命令形态来自**真机实测**（DAYU200 / OpenHarmony，720x1280）：
+
+        click  `uinput -T -c x y`
+        long   `uinput -T -m x y x y -k <hold>`（原地 + keep time）
+        swipe  `uinput -T -m fx fy tx ty`
+        text   `uinput -K -t <text>`
+        key    `uinput -K -l <keycode> <ms>`
+
+    ⚠️ 实测坑：按键用 `-d` / `-u` 分两次下发**不生效**，只有 `-l`
+    （press & hold，ms 允许 3000~15000）才被系统接纳 —— 于是按键走 `-l`，
+    默认 3000ms（工具下限）。
+    """
+
+    name = 'uinput'
+    KEY_HOLD_MS = 3000          # uinput -l 的允许下限（实测 3000~15000）
+    LONG_PRESS_MS = 1200        # 长按保持时长（`-m ... -k <ms>` 的 keep time）
+
+    def __init__(self, hdc: 'Hdc') -> None:
+        self.hdc = hdc
+
+    def _run(self, *parts) -> None:
+        self.hdc.shell('uinput ' + ' '.join(str(p) for p in parts), check=True)
+
+    def click(self, x: int, y: int) -> None:
+        self._run('-T', '-c', int(x), int(y))
+
+    def double_click(self, x: int, y: int) -> None:
+        # uinput 触屏没有 double-click 子命令；双击=两次单击，语义等价。
+        self.click(x, y)
+        self.click(x, y)
+
+    def long_click(self, x: int, y: int) -> None:
+        # `-T --touch` 的文档命令只有 -d/-u/-i/-m/-c，**没有** -g —— uinput
+        # 触屏无独立长按命令。长按 = 原地 `-m`（起点=终点，零位移）+ `-k` 保持
+        # 按下（keep time）。真机实测：桌面图标长按弹出「打开/服务卡片/卡片中心/
+        # 卸载」菜单；同参数下 `-g` 无回显（非 -T 命令），故不采用。
+        self._run('-T', '-m', int(x), int(y), int(x), int(y),
+                  '-k', self.LONG_PRESS_MS)
+
+    def swipe(self, fx: int, fy: int, tx: int, ty: int,
+              velocity: int = 600) -> None:
+        # velocity 在 uinput 触屏上没有对应参数（平滑时间固定），收下不用。
+        self._run('-T', '-m', int(fx), int(fy), int(tx), int(ty))
+
+    def input_text(self, x: int, y: int, text: str) -> None:
+        self._run('-K', '-t', self.hdc._sh_quote(text))
+
+    def key_event(self, *keys) -> None:
+        for k in keys:
+            code = _UINPUT_KEYCODES.get(str(k))
+            if code is None:
+                raise InputUnavailable(
+                    f'uinput 通路不认识按键 {k!r}：只登记了实测过的 '
+                    f'{sorted(_UINPUT_KEYCODES)}；其它键请改用 uitest 通路')
+            self._run('-K', '-l', code, self.KEY_HOLD_MS)
+
+
+class _SendeventBackend:
+    """备选通路二：`sendevent` 直接写 evdev 事件（最后一档）。
+
+    ⚠️ 真机实测（DAYU200）：设备**没有 `getevent`**，拿不到 evdev 轴范围
+    （ABS_MT_POSITION_X/Y 的 min/max），无法把像素坐标映射到绝对量 ——
+    该设备上此通路判**不可用**，而不是猜一组硬编码范围（猜错的落点
+    在产物里看不出来）。有 `getevent` 的设备由 `_parse_axis_ranges()`
+    解析轴范围后可用。
+
+    文本输入**刻意不做**：中文 / emoji 无法用 evdev 直接表达（设计稿 §4），
+    调用即报 `InputUnavailable` 并给替代建议，绝不静默跳过。
+    """
+
+    name = 'sendevent'
+
+    # Linux input 事件常量（内核稳定，非设备相关）
+    EV_SYN, EV_KEY, EV_ABS = 0, 1, 3
+    SYN_REPORT = 0
+    BTN_TOUCH = 0x14A
+    ABS_MT_SLOT = 0x2F
+    ABS_MT_POSITION_X, ABS_MT_POSITION_Y = 0x35, 0x36
+    ABS_MT_TRACKING_ID = 0x39
+    SLOT = 0                    # 单指恒定 slot 0（多指手势不在设计范围内）
+    SWIPE_STEPS = 12            # 轨迹插值步数（够平滑，又不至于太多往返）
+
+    def __init__(self, hdc: 'Hdc', node: str,
+                 ranges: Dict[str, Tuple[int, int]]) -> None:
+        self.hdc = hdc
+        self.node = node
+        self.ranges = ranges
+
+    def _map(self, x: int, y: int) -> Tuple[int, int]:
+        """像素坐标 → evdev 绝对量。映射范围**从设备读**（`getevent -p`）。"""
+        (x0, x1), (y0, y1) = self.ranges['x'], self.ranges['y']
+        w, h = self.hdc.screen_size()
+        mx = x0 + int(round((x1 - x0) * x / max(w - 1, 1)))
+        my = y0 + int(round((y1 - y0) * y / max(h - 1, 1)))
+        return mx, my
+
+    def _seq(self, *events) -> None:
+        # 多条 sendevent 合到**一次** hdc 往返 —— 否则一次滑动要十几次往返。
+        cmds = '; '.join(f'sendevent {self.node} {t} {c} {v}'
+                         for t, c, v in events)
+        self.hdc.shell(cmds, check=True)
+
+    def _down(self, x: int, y: int) -> None:
+        mx, my = self._map(x, y)
+        self._seq((self.EV_ABS, self.ABS_MT_SLOT, self.SLOT),
+                  (self.EV_ABS, self.ABS_MT_TRACKING_ID, 1),
+                  (self.EV_ABS, self.ABS_MT_POSITION_X, mx),
+                  (self.EV_ABS, self.ABS_MT_POSITION_Y, my),
+                  (self.EV_KEY, self.BTN_TOUCH, 1),
+                  (self.EV_SYN, self.SYN_REPORT, 0))
+
+    def _move(self, x: int, y: int) -> None:
+        mx, my = self._map(x, y)
+        self._seq((self.EV_ABS, self.ABS_MT_POSITION_X, mx),
+                  (self.EV_ABS, self.ABS_MT_POSITION_Y, my),
+                  (self.EV_SYN, self.SYN_REPORT, 0))
+
+    def _up(self) -> None:
+        self._seq((self.EV_ABS, self.ABS_MT_SLOT, self.SLOT),
+                  (self.EV_ABS, self.ABS_MT_TRACKING_ID, -1),
+                  (self.EV_KEY, self.BTN_TOUCH, 0),
+                  (self.EV_SYN, self.SYN_REPORT, 0))
+
+    def click(self, x: int, y: int) -> None:
+        self._down(x, y)
+        self._up()
+
+    def double_click(self, x: int, y: int) -> None:
+        self.click(x, y)
+        self.click(x, y)
+
+    def long_click(self, x: int, y: int) -> None:
+        self._down(x, y)
+        time.sleep(0.8)
+        self._up()
+
+    def swipe(self, fx: int, fy: int, tx: int, ty: int,
+              velocity: int = 600) -> None:
+        self._down(fx, fy)
+        for i in range(1, self.SWIPE_STEPS + 1):
+            self._move(fx + (tx - fx) * i // self.SWIPE_STEPS,
+                       fy + (ty - fy) * i // self.SWIPE_STEPS)
+        self._up()
+
+    def input_text(self, x: int, y: int, text: str) -> None:
+        raise InputUnavailable(
+            'sendevent 通路不支持文本输入：中文 / emoji 无法用 evdev 直接表达。'
+            '请改用 uitest / uinput 通路，或把该步改为点选控件')
+
+    def key_event(self, *keys) -> None:
+        # 原始 evdev 走 Linux keycode（与 uinput 的 OHOS KeyCode 不同）。
+        table = {'Home': 102, 'Back': 158, 'Power': 116}
+        for k in keys:
+            code = table.get(str(k))
+            if code is None:
+                raise InputUnavailable(
+                    f'sendevent 通路不认识按键 {k!r}：只登记了 {sorted(table)}')
+            self._seq((self.EV_KEY, code, 1), (self.EV_SYN, self.SYN_REPORT, 0),
+                      (self.EV_KEY, code, 0), (self.EV_SYN, self.SYN_REPORT, 0))
+
+
+class _NullBackend:
+    """三者皆无：**不可交互**档（只剩只读观测 + aa 拉起）。
+
+    任何写动作即时响亮失败 —— 「假装在跑」比报错危险得多（设计稿 §3.4）。
+    """
+
+    name = 'none'
+
+    def __init__(self, reason: str = '') -> None:
+        self.reason = reason or '没有可用的输入注入通路'
+
+    def _fail(self, action: str) -> None:
+        raise InputUnavailable(f'{self.reason}（{action} 无法注入）')
+
+    def click(self, x: int, y: int) -> None:
+        self._fail('click')
+
+    def double_click(self, x: int, y: int) -> None:
+        self._fail('double_click')
+
+    def long_click(self, x: int, y: int) -> None:
+        self._fail('long_click')
+
+    def swipe(self, fx: int, fy: int, tx: int, ty: int,
+              velocity: int = 600) -> None:
+        self._fail('swipe')
+
+    def input_text(self, x: int, y: int, text: str) -> None:
+        self._fail('input_text')
+
+    def key_event(self, *keys) -> None:
+        self._fail('key_event')
+
+
+def _parse_axis_ranges(text: str) -> Optional[Tuple[str, Dict[str, Tuple[int, int]]]]:
+    """从 `getevent -p` 输出里解析触摸屏节点与 X/Y 轴范围。
+
+    返回 `(节点, {'x': (min, max), 'y': (min, max)})`；解析不到返回 None。
+    真机 / 版本间输出可能略有出入，这里只认最稳的「add device N: /dev/input/eventN」
+    + 「ABS_MT_POSITION_X ... min X max Y」两段。
+    """
+    node = None
+    m = re.search(r'add device \d+:\s*(/dev/input/event\d+)', text)
+    if m:
+        node = m.group(1)
+    ranges: Dict[str, Tuple[int, int]] = {}
+    for axis, key in (('ABS_MT_POSITION_X', 'x'), ('ABS_MT_POSITION_Y', 'y')):
+        am = re.search(rf'{axis}.*?min\s+(-?\d+),\s*max\s+(-?\d+)', text)
+        if am:
+            ranges[key] = (int(am.group(1)), int(am.group(2)))
+    if node and 'x' in ranges and 'y' in ranges:
+        return node, ranges
+    return None
+
+
 # ---------------------------------------------------------------- 主类
 
 class Hdc:
@@ -180,6 +471,9 @@ class Hdc:
         self.timeout = timeout
         self.tmp_dir = tmp_dir
         self.verbose = verbose
+        #: 输入注入通路。默认 uitest —— 与改动前行为**逐字一致**；
+        #: 要启用备用通路请显式调 `detect_backend()`（doctor / 入口脚本会调）。
+        self._backend: InputBackend = _UitestBackend(self)
 
         if not self.hdc_path:
             raise HdcError(
@@ -415,6 +709,96 @@ class Hdc:
             return None
         return res.stdout.strip() or None
 
+    # ------------------------------------------------------------ 输入通路探测
+
+    @property
+    def backend_name(self) -> str:
+        """当前生效的输入通路名：uitest / uinput / sendevent / none。
+
+        默认是 uitest（未探测）。`detect_backend()` 之后才反映真实可用通路。
+        """
+        return self._backend.name
+
+    @property
+    def interactive(self) -> bool:
+        """能否做写操作。未探测时恒为 True（默认 uitest）；探测后才可信。"""
+        return self._backend.name != 'none'
+
+    def screen_size(self) -> Tuple[int, int]:
+        """设备主屏像素尺寸 (w, h)。解析 hidumper 的 RenderService 输出。
+
+        sendevent 的 evdev 轴映射需要它（像素 → 绝对量）。真机实测输出同时
+        含 `render size:` 与 `activeMode:`；老裁剪版本可能只有
+        `screen size: W x H`，一并兜住。
+        """
+        out = self.shell('hidumper -s RenderService -a screen',
+                         timeout=20).stdout
+        for pat in (r'activeMode:\s*(\d+)x(\d+)',
+                    r'render size:\s*(\d+)x(\d+)',
+                    r'screen size:\s*(\d+)\s*x\s*(\d+)'):
+            m = re.search(pat, out)
+            if m:
+                return int(m.group(1)), int(m.group(2))
+        raise HdcError('无法从 hidumper 解析屏幕尺寸（sendevent 需要它做轴映射）')
+
+    def detect_backend(self, force: Optional[str] = None,
+                       verbose: bool = False) -> Dict[str, Any]:
+        """探测可用输入通路并设为当前通路，返回探测报告（C8）。
+
+        顺序 uitest → uinput → sendevent，首个可用者胜出。`force` 指定
+        'uitest'/'uinput'/'sendevent' 时只探该通路（用于验证备用通路，等价于
+        「强制禁用 uitest」）。三者皆无 → `_NullBackend`（不可交互档）。
+
+        判据看**返回码 + 输出不是错误文本**，不看「有没有输出」——
+        与 `uitest_version()` 同一纪律。这是**非侵入式**探测（不真去点屏幕），
+        完整的「实际效果」由真机执行时验证。
+        """
+        if force is not None and force not in ('uitest', 'uinput', 'sendevent'):
+            raise ValueError(
+                f'force 必须是 uitest/uinput/sendevent，收到: {force!r}')
+        names = ['uitest', 'uinput', 'sendevent'] if force is None else [force]
+        probes: List[Dict[str, Any]] = []
+        selected: Optional[InputBackend] = None
+        for name in names:
+            ok, detail, backend = self._probe_backend(name)
+            probes.append({'name': name, 'ok': ok, 'detail': detail})
+            if verbose:
+                print(f"[hdc] 输入通路 {name}: "
+                      f"{'可用' if ok else '不可用'} —— {detail}")
+            if ok and selected is None:
+                selected = backend
+        if selected is None:
+            reasons = '；'.join(f'{p["name"]}: {p["detail"]}' for p in probes)
+            selected = _NullBackend(f'没有可用的输入注入通路（{reasons}）')
+        self._backend = selected
+        return {'selected': selected.name, 'interactive': self.interactive,
+                'probes': probes}
+
+    def _probe_backend(self, name: str):
+        """探测单个通路，返回 (是否可用, 说明, backend 实例或 None)。"""
+        try:
+            if name == 'uitest':
+                ver = self.uitest_version()
+                if ver:
+                    return True, f'uitest {ver}', _UitestBackend(self)
+                return False, '设备不支持 uitest 命令行通路', None
+            if name == 'uinput':
+                res = self.shell('uinput --help', timeout=15)
+                out = f'{res.stdout}\n{res.stderr}'
+                if res.ok and 'usage' in out.lower():
+                    return True, 'uinput 存在且可执行', _UinputBackend(self)
+                return False, (out.strip() or 'rc≠0')[:120], None
+            # sendevent：必须能读到 evdev 轴范围（靠 getevent）才算可用
+            res = self.shell('getevent -p', timeout=20)
+            parsed = _parse_axis_ranges(f'{res.stdout}\n{res.stderr}')
+            if parsed is None:
+                return False, 'getevent 缺失或未解析到轴范围，evdev 坐标无法校准', None
+            node, ranges = parsed
+            detail = f'{node} x{ranges["x"]} y{ranges["y"]}'
+            return True, detail, _SendeventBackend(self, node, ranges)
+        except HdcError as e:
+            return False, f'{type(e).__name__}: {e}', None
+
     # ------------------------------------------------------------ 截图
 
     def screen_cap(self, device_path: str = None) -> str:
@@ -522,18 +906,26 @@ class Hdc:
         """
         return "'" + str(s).replace("'", "'\\''") + "'"
 
+    def _require_uitest(self, action: str) -> None:
+        """`fling / drag / dircFling` 是 uitest 专有扩展 —— 备用通路直接报错。"""
+        if self._backend.name != 'uitest':
+            raise InputUnavailable(
+                f'{action} 仅在 uitest 通路可用（当前 {self._backend.name}）；'
+                f'请改用 swipe(direction, scale) 或换回 uitest 通路')
+
     def click(self, x: int, y: int) -> None:
-        self._ui_input('click', int(x), int(y))
+        self._backend.click(int(x), int(y))
 
     def double_click(self, x: int, y: int) -> None:
-        self._ui_input('doubleClick', int(x), int(y))
+        self._backend.double_click(int(x), int(y))
 
     def long_click(self, x: int, y: int) -> None:
-        self._ui_input('longClick', int(x), int(y))
+        self._backend.long_click(int(x), int(y))
 
     def input_text(self, x: int, y: int, text: str) -> None:
         # 文本必须整体作为**一个**参数下到设备侧 shell —— 见 `_sh_quote` 的说明。
         # 含空格/引号/$ 的输入文本在 UI 测试里是高频场景，不是边角情况。
+        # 长度闸与通路无关（Windows 单条命令行上限对三种通路都成立），留在这里。
         quoted = self._sh_quote(text)
         if len(quoted) > 30000:
             # Windows 单条命令行上限 32767 字符，超限是 subprocess 直接炸
@@ -542,28 +934,31 @@ class Hdc:
             raise HdcError(
                 '输入文本过长（引号后 %d 字符 > 30000 上限）——请拆分用例步骤；'
                 '自动分段注入需真机验证后开放' % len(quoted))
-        self._ui_input('inputText', int(x), int(y), quoted)
+        self._backend.input_text(int(x), int(y), text)
 
     def swipe(self, fx: int, fy: int, tx: int, ty: int, velocity: int = 600) -> None:
-        self._ui_input('swipe', int(fx), int(fy), int(tx), int(ty), velocity)
+        self._backend.swipe(int(fx), int(fy), int(tx), int(ty), velocity)
 
     def fling(self, fx: int, fy: int, tx: int, ty: int, velocity: int = 600) -> None:
+        self._require_uitest('fling')
         self._ui_input('fling', int(fx), int(fy), int(tx), int(ty), velocity)
 
     def drag(self, fx: int, fy: int, tx: int, ty: int, velocity: int = 600) -> None:
+        self._require_uitest('drag')
         self._ui_input('drag', int(fx), int(fy), int(tx), int(ty), velocity)
 
     def dirc_fling(self, direction: int, velocity: int = 600) -> None:
         """方向滑动：0=左 1=右 2=上 3=下"""
         if direction not in (0, 1, 2, 3):
             raise ValueError('direction 必须是 0(左)/1(右)/2(上)/3(下)')
+        self._require_uitest('dircFling')
         self._ui_input('dircFling', direction, velocity)
 
     def key_event(self, *keys) -> None:
         """实体按键：Home / Back / Power / KeyCode 数字。最多三个组合键。"""
         if len(keys) > 3:
             raise ValueError('最多支持三个按键组合')
-        self._ui_input('keyEvent', *keys)
+        self._backend.key_event(*keys)
 
     def back(self) -> None:
         self.key_event('Back')

@@ -21,7 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from ohauto.hdc import Hdc, ShellResult      # noqa: E402
+from ohauto.hdc import Hdc, ShellResult, _UitestBackend   # noqa: E402
 from ohauto.sim import FakeHdc               # noqa: E402
 
 
@@ -34,6 +34,9 @@ def make_recording_hdc():
     h.tmp_dir = '/data/local/tmp'
     h.verbose = False
     h.calls = []
+    # 手工构造必须与 `Hdc.__init__` 对齐：写动作现在经 backend 派发，
+    # 少了这个属性 `input_text` 会直接 AttributeError（C8）。
+    h._backend = _UitestBackend(h)
 
     def fake_run(args, timeout=None, check=False, binary=False, retries=0):
         h.calls.append(list(args))
