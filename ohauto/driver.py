@@ -374,6 +374,13 @@ class Driver:
         新鲜签名与它一致，等价于「动作前后画面没动」，比「动作后连看两眼」
         证据不弱、还省一次 dump。页面真跳转了，第一份新鲜签名就会与基线
         不同，后续轮次与原逻辑完全一致 —— 最坏情况不比原来慢。
+
+        ★ 反向依赖声明（主责 AI 审阅裁定，见 docs/审阅意见文档）：「一次新鲜
+        采样即可判稳」的证据强度，依赖 explorer 对页面签名/候选的**无条件
+        refresh 兜底**（晚到跳转在那里被捕获，见 `_page_signatures` 文档；
+        钉子：tests/test_f_wait_idle_semantics.py）。若有调用方脱离该兜底、
+        直接拿本函数返回值做导航决策，必须为它禁用基线种子，恢复
+        「动作后连取两次」的语义 —— 降级必须显式，不能靠默认值蒙混。
         """
         timeout = timeout if timeout is not None else self.default_timeout
         deadline = time.time() + timeout / 1000.0
