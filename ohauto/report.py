@@ -102,6 +102,12 @@ def to_markdown(data: Dict[str, Any], path: str,
         L.append(f"- 结论：**{'通过' if case.get('ok') else '未通过'}**")
         L.append('')
 
+    # ---- 内存趋势（2C【C4】：note_stability 类用例的内存曲线并入报告）
+    # 没采（`perf is None`）就不出这一节 —— 不制造空标题；采了但缺样本
+    # 会照实写「缺 N 个」，绝不因为缺数据就把整节吞掉（缺样本 ≠ 正常）。
+    for _line in _perf_lines(_pick_curve(data)):
+        L.append(_line)
+
     # ---- 失败步归因（挑战 #5 闭环，2026-09-23）
     # 数据来自 case.steps[].verdict（runner 在失败分支上挂的 diagnose 结论）。
     # 为什么单列一节而不是塞进步骤表：归因的价值在**证据**与**建议**，
@@ -174,6 +180,79 @@ def to_markdown(data: Dict[str, Any], path: str,
     with open(path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(L))
     return path
+
+
+#: PSS 走势迷你图（报告里「曲线」的可见形态）。零依赖、纯文本。
+_SPARK = '▁▂▃▄▅▆▇█'
+
+
+def _pick_curve(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """从报告数据里找内存趋势曲线。
+
+    来源优先级：直接注入的 `perf` → suite 汇总（`suite.perf`）→ 单用例
+    （`case.perf`）。**找不到就是 None**（本次没开采集），报告不出这一节。
+    """
+    suite = data.get('suite') or {}
+    case = data.get('case') or {}
+    for c in (data.get('perf'), suite.get('perf') if isinstance(suite, dict) else None,
+              case.get('perf') if isinstance(case, dict) else None):
+        if c:
+            return c
+    return None
+
+
+def _perf_lines(perf: Optional[Dict[str, Any]]) -> List[str]:
+    """渲染「内存趋势」一节；无曲线返回空列表（不制造空标题）。"""
+    if not perf or not (perf.get('series') or []):
+        return []
+    a = perf.get('analysis') or {}
+    series = perf.get('series') or []
+    pss = [s.get('pss_kb') for s in series]
+
+    L = ['## 内存趋势', '']
+    n = a.get('pss_n', 0)
+    miss = a.get('pss_missing', 0)
+    L.append(f"- 采样点 {a.get('samples', len(series))} 个 —— 有效 PSS {n}，"
+             f"缺样本 {miss}（缺样本如实留痕，**不按正常计**）")
+    if a.get('pss_min') is not None:
+        L.append(f"- PSS 区间 {_mb(a['pss_min'])} ~ {_mb(a['pss_max'])}"
+                 f"（前半均值 {_mb(a.get('pss_mean_first'))} / "
+                 f"后半均值 {_mb(a.get('pss_mean_second'))}）")
+    if a.get('slope_pct') is None:
+        L.append(f"- 斜率：**不判定**（有效 PSS 样本不足 {n} 个）")
+    else:
+        flag = '，**疑似泄漏**' if a.get('leak_suspect') else '，无泄漏嫌疑'
+        L.append(f"- 斜率：{a['slope_pct']:+.2f}%（后半 vs 前半）{flag}")
+    if a.get('load_mean') is not None:
+        L.append(f"- 设备负载 load1：均值 {a['load_mean']}，峰值 {a['load_peak']}")
+    spark = _sparkline(pss)
+    if spark:
+        L.append(f"- 走势：`{spark}`（左早右晚，`·` = 缺样本）")
+    L.append('')
+    return L
+
+
+def _mb(kb: Any) -> str:
+    """KB → MB 显示（取不到就写 `-`，不编造 0）。"""
+    if kb is None:
+        return '-'
+    return f'{kb / 1024:.1f} MB'
+
+
+def _sparkline(values: List[Optional[int]]) -> str:
+    """把 PSS 序列压成一行迷你走势图；缺样本位用 `·` 留痕。样本 < 2 返回空。"""
+    nums = [v for v in values if v is not None]
+    if len(nums) < 2:
+        return ''
+    lo, hi = min(nums), max(nums)
+    span = (hi - lo) or 1
+    out = []
+    for v in values:
+        if v is None:
+            out.append('·')
+            continue
+        out.append(_SPARK[int((v - lo) / span * (len(_SPARK) - 1))])
+    return ''.join(out)
 
 
 def _md_escape(s: str) -> str:

@@ -546,6 +546,10 @@ class CaseResult:
     #: skipped 必须与 saved 并列出报告：省略本身是要留痕的行为。
     screenshots_saved: int = 0
     screenshots_skipped: int = 0
+    #: 内存趋势曲线（2C【C4】，`collect_perf` 开启时才有）。
+    #: None = 本次**没采**；「采了但缺样本」看 `analysis['pss_missing']`
+    #: —— 后者必须如实留痕，不能退回 None 伪装成没采过。
+    perf: Optional[Dict[str, Any]] = None
 
     # ---------------------------------------------------------- 统计
 
@@ -676,7 +680,7 @@ class CaseResult:
         return sorted(self.steps, key=lambda s: -s.elapsed_ms)[:n]
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d: Dict[str, Any] = {
             'name': self.name, 'bundle': self.bundle,
             'total': self.total, 'passed': self.passed, 'failed': self.failed,
             'cascade_failed': self.cascade_failed,
@@ -702,6 +706,9 @@ class CaseResult:
             'slowest': [s.to_dict() for s in self.slowest()],
             'steps': [s.to_dict() for s in self.steps],
         }
+        if self.perf is not None:
+            d['perf'] = self.perf
+        return d
 
 
 @dataclass
@@ -711,6 +718,9 @@ class SuiteResult:
     cases: List[CaseResult] = field(default_factory=list)
     elapsed_ms: int = 0
     guard_stats: Dict[str, int] = field(default_factory=dict)
+    #: 汇总级内存趋势曲线（各用例曲线合并后重算斜率，见 `_merge_perf_curves`）。
+    #: None = 没采；报告直接消费它（`report._pick_curve`）。
+    perf: Optional[Dict[str, Any]] = None
 
     @property
     def total(self) -> int:
@@ -824,8 +834,21 @@ class SuiteResult:
         """整批用例按分级策略**有意省略**的截图合计 —— 省略必须可见。"""
         return sum(c.screenshots_skipped for c in self.cases)
 
+    def refresh_perf(self) -> None:
+        """从各用例曲线重算汇总级内存曲线（2C【C4】）。
+
+        `Runner.run_suite` 自动调；**增量拼装 suite 的调用方**（逐轮
+        `run_suite` 再把 `cases` 并进来，如 examples/run_suite.py 的长稳
+        写法）要在拼完后自己调一次，否则汇总曲线会漏。
+        """
+        curves = [c.perf for c in self.cases if c.perf]
+        if len(curves) == 1:
+            self.perf = curves[0]
+        elif curves:
+            self.perf = _merge_perf_curves(curves)
+
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d: Dict[str, Any] = {
             'cases': len(self.cases),
             'total_steps': self.total, 'passed': self.passed,
             'failed': self.failed, 'cascade_failed': self.cascade_failed,
@@ -848,6 +871,31 @@ class SuiteResult:
             'screenshots_skipped': self.screenshots_skipped,
             'case_results': [c.to_dict() for c in self.cases],
         }
+        if self.perf is not None:
+            d['perf'] = self.perf
+        return d
+
+
+def _merge_perf_curves(curves: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """把多条用例的曲线合并成汇总曲线（长稳多轮场景）。
+
+    序列按用例顺序拼接；斜率由 `perf.analyze_samples` 对合并后的原始样本
+    **重算** —— 不能平均各自的斜率，那会在用例衔接处（如冷启动后水位回落）
+    严重失真。样本不足时 analyze_samples 自己会拒绝判定（不起斜率）。
+    """
+    from .perf import analyze_samples
+    series: List[Dict[str, Any]] = []
+    raw: List[Dict[str, Any]] = []
+    for c in curves:
+        for s in (c.get('series') or []):
+            series.append(dict(s))
+            raw.append({'pss_kb': s.get('pss_kb'), 'load1': s.get('load1')})
+    return {
+        'bundle': curves[0].get('bundle') or '',
+        'series': series,
+        'analysis': analyze_samples(raw),
+        'merged_cases': len(curves),
+    }
 
 
 # ================================================================ Runner
@@ -881,6 +929,10 @@ class Runner:
                       集成层目前选的是执行侧那条（`locator_sink`）。
     locator_id_resolver: 规格 → locator_id 的反查（集成层注入）。**只给归因结论补 id**，
                       不回写。不接也能跑，只是归因结论里 locator_id 为空。
+    collect_perf:     是否在每步之后采一轮设备内存/负载（2C【C4】）。**默认 False**
+                      —— 开启后每步多两次设备往返（pidof + hidumper），
+                      诊断链路不该背它；长稳场景（note_stability）才显式开。
+                      曲线挂 `CaseResult.perf` / `SuiteResult.perf`，随报告落盘。
     """
 
     def __init__(
@@ -897,6 +949,7 @@ class Runner:
         diagnose_signals: bool = False,
         diagnose_locator_sink: Optional[Callable[[str, str], None]] = None,
         locator_id_resolver: Optional[Callable[[Dict[str, Any]], str]] = None,
+        collect_perf: bool = False,
     ):
         self.policy = policy or RetryPolicy()
         self.guard = guard
@@ -941,6 +994,12 @@ class Runner:
         # 规格 → locator_id 的反查（集成层注入）。**只用于给归因结论补 id**，
         # 不回写 —— 回写只有 `_report_locator_failure` 一条路，见那里。
         self.locator_id_resolver = locator_id_resolver
+        # ---- 内存趋势采集（2C【C4】并入报告）--------------------------------
+        # **默认关**：每步多两次设备往返（pidof + hidumper），诊断链路不该背它，
+        # 长稳场景才显式开。开启后每步采一轮，曲线挂 CaseResult.perf，
+        # 由 SuiteResult 合并后进 Markdown 报告（验收原句「产出内存趋势曲线
+        # 并入报告」，docs/发展规划与改进建议.md §2 2C）。
+        self.collect_perf = bool(collect_perf)
         # 归因自身的失败（不是被测应用的失败）。归因是**旁路**，它挂了不能影响执行，
         # 但也不能静默 —— 攒起来供报告/调用方检查。
         self.diagnose_errors: List[str] = []
@@ -1207,6 +1266,15 @@ class Runner:
         _shots0 = int(getattr(driver, 'shots_saved', 0) or 0)
         _skips0 = int(getattr(driver, 'shots_skipped', 0) or 0)
 
+        # ---- 内存趋势采集通道（2C【C4】）------------------------------------
+        # 延迟导入：signals 与 runner 同层，但不让执行器硬依赖它。
+        perf_ch = None
+        if self.collect_perf:
+            from .signals import PerfChannel
+            hdc = getattr(driver, 'hdc', None)
+            if hdc is not None:
+                perf_ch = PerfChannel(hdc, driver.bundle or '')
+
         first_failure: Optional[int] = None      # 首个失败步号，用于级联追溯
 
         for i, st in enumerate(steps, 1):
@@ -1227,6 +1295,11 @@ class Runner:
 
             action, arg = next(iter(st.items()))
             sr = self.run_step(driver, i, action, arg)
+            # 每步跑完看一眼内存/负载水位（2C【C4】）。sample() 是旁路，
+            # 采不到只记警告绝不中断 —— 「缺样本 ≠ 正常」的降级纪律
+            # 在 ohauto/perf.py，这里只负责按步推进时序。
+            if perf_ch is not None:
+                perf_ch.sample(rounds_done=i)
 
             # ---- 级联识别
             # 判定依据：前一步失败过，且本步失败类别与首个失败类别相同。
@@ -1289,6 +1362,10 @@ class Runner:
         # 截图账同口径增量（分级留存，docs/截图分级留存策略.md）
         res.screenshots_saved = max(0, int(getattr(driver, 'shots_saved', 0) or 0) - _shots0)
         res.screenshots_skipped = max(0, int(getattr(driver, 'shots_skipped', 0) or 0) - _skips0)
+        # 曲线只在**真的采过**时挂上（空步骤的用例没有样本 → 保持 None，
+        # 「没采」与「采了但缺样本」由此可辨）。
+        if perf_ch is not None and perf_ch.samples:
+            res.perf = perf_ch.curve()
         if self.artifact_budget:
             self._prune_artifacts(driver, res)
         return res
@@ -1325,6 +1402,8 @@ class Runner:
         suite.elapsed_ms = int((time.time() - t0) * 1000)
         if guard is not None:
             suite.guard_stats = guard.stats()
+        # 汇总级内存曲线：多轮/多用例合并成一条（单条曲线直接沿用，不重算）。
+        suite.refresh_perf()
         return suite
 
     # ---------------------------------------------------------- 产物轮转

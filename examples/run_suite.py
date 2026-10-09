@@ -80,6 +80,9 @@ def main():
                     help='每个用例保留的产物文件上限，0 表示不限制')
     ap.add_argument('--no-hdc-restart', action='store_true',
                     help='禁止设备自愈时重启 hdc 服务（更保守）')
+    ap.add_argument('--perf', action='store_true',
+                    help='每步采集设备内存/负载，产出内存趋势曲线并入报告'
+                         '（长稳场景用；每步多两次设备往返，默认关）')
     ap.add_argument('--quiet', action='store_true', help='少打印')
     args = ap.parse_args()
 
@@ -152,6 +155,7 @@ def main():
     runner = Runner(policy=policy, guard=guard,
                     continue_on_fail=not args.stop_on_fail,
                     artifact_budget=args.artifact_budget,
+                    collect_perf=args.perf,
                     verbose=verbose)
 
     # ---------------------------------------------------------- 执行
@@ -187,6 +191,7 @@ def main():
         suite.elapsed_ms += one.elapsed_ms
         if one.guard_stats:
             suite.guard_stats = one.guard_stats
+        suite.refresh_perf()          # 进程被杀也要留得住已采出的曲线
         try:
             report.to_json({'suite': suite.to_dict(),
                             'kpi_target': args.kpi,
@@ -198,6 +203,8 @@ def main():
                   % (type(e).__name__, e))
 
     # ---------------------------------------------------------- 汇总
+    # 增量拼装的 suite 要自己重算汇总曲线（每轮 run_suite 只算自己那份）。
+    suite.refresh_perf()
     _print_summary(suite, guard, args)
 
     # ---------------------------------------------------------- 报告
