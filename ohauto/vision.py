@@ -492,10 +492,12 @@ class TieredVisionLocator:
         return out
 
     # ------------------------------------------------------ L2
-    def _region_context(self, anchors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _region_context(self, anchors: List[Dict[str, Any]],
+                        hints: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """取锚点候选的外包区域（带 margin），筛出区域内的 hints。
 
-        返回值第一个元素是锚点本身（保持优先展示）。
+        `hints` 由调用方显式传入（过去读实例属性 `_all_hints_cache`，
+        那是跨调用存活的隐藏状态）。返回值第一个元素是锚点本身。
         """
         if not anchors:
             return []
@@ -505,7 +507,7 @@ class TieredVisionLocator:
         r_ = max(r.right for r in rects) + self.region_margin
         b = max(r.bottom for r in rects) + self.region_margin
         region = Rect(l, t, r_, b)
-        near = [h for h in (self._all_hints_cache or [])
+        near = [h for h in (hints or [])
                 if region.overlap_ratio(Rect.parse(h.get('bounds'))) > 0]
         # 锚点放最前，模型对列表开头的元素注意力更高
         return anchors + [h for h in near if h not in anchors]
@@ -541,8 +543,6 @@ class TieredVisionLocator:
             return self._cache[key]
         self.cache_misses += 1
 
-        self._all_hints_cache = hints
-
         # --- L1：静态候选（不调模型） ---
         # C 专文 ⑥（2026-09-23 定稿）：补 deep 之后容器也会命中（deep 拼接
         # 了子项文案），「必须唯一命中」在真机上基本永不成立 —— 实测补了
@@ -574,7 +574,7 @@ class TieredVisionLocator:
 
         # --- L2：候选区域送模型 ---
         if static:
-            context = self._region_context(static)
+            context = self._region_context(static, hints)
             # 有 PIL 钩子时真正裁剪，否则整图 + 局部上下文
             img = image_path
             if self.crop_fn is not None:

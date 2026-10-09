@@ -22,7 +22,7 @@ import shutil
 import subprocess
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence
+from typing import List, Optional, Protocol, Sequence, runtime_checkable
 
 
 # ---------------------------------------------------------------- 异常
@@ -64,6 +64,57 @@ class ShellResult:
 
     def __str__(self) -> str:
         return f'<ShellResult rc={self.returncode} cmd={self.command!r}>'
+
+
+# ---------------------------------------------------------------- 接口契约
+
+@runtime_checkable
+class HdcLike(Protocol):
+    """`Driver` 依赖的设备接口 —— **窄契约**。
+
+    只声明 `Driver` 实际调用到的一面，不照抄 `Hdc` 的整个公共面：
+    接口隔离，换实现的人只需要满足这 15 个方法与 1 个属性。真正驱动
+    这层抽象的是 `Driver.refresh()` —— 它过去用 `getattr` 三元兜底去猜
+    对面是 `Hdc` 还是 `FakeHdc`，契约写明之后兜底就没有存在理由了。
+
+    两处**已知的口径差异**（有意保留，不是遗漏）：
+
+    * `shell` 标注返回 `ShellResult`，但 `FakeHdc.shell` 回的是内部的
+      轻量替身（只有 `returncode / stdout / stderr / ok`，没有 `command`
+      与 `raw`）。`Driver` 只读 `.stdout`，实际用到的比标注还窄 ——
+      本仓库没有类型检查器，不为它再拆一个 `ShellResultLike`。
+    * `start_ability` / `force_stop` 的返回值 `Driver` 不接收。
+
+    注意 `runtime_checkable` 的两条限制（本仓库 CI 为 3.13，本机 3.14，
+    两者行为一致）：
+
+    * 3.12 起 `isinstance()` **会**连数据成员 `tmp_dir` 一起查 —— 所以
+      `FakeHdc` 必须真的有这个实例属性，光有 `DEVICE_TMP` 类属性过不了。
+    * `issubclass()` 遇到数据成员直接抛 `TypeError`，检查请一律走
+      `isinstance()`。声明里写了 `requires-python >= 3.9`，而 3.9~3.11 的
+      `isinstance()` 会跳过数据成员；CI 不跑那几个版本，不为此加兼容。
+    """
+    tmp_dir: str
+
+    def shell(self, cmd: str, **kw) -> ShellResult: ...
+    def screen_cap(self, device_path: str = None) -> str: ...
+    def dump_layout(self, device_path: str = None, unfiltered: bool = False,
+                    with_attrs: bool = False) -> str: ...
+    def pull(self, device_path: str, local_path: str,
+             binary: bool = False) -> str: ...
+    def click(self, x: int, y: int) -> None: ...
+    def double_click(self, x: int, y: int) -> None: ...
+    def long_click(self, x: int, y: int) -> None: ...
+    def input_text(self, x: int, y: int, text: str) -> None: ...
+    def swipe(self, fx: int, fy: int, tx: int, ty: int,
+              velocity: int = 600) -> None: ...
+    def dirc_fling(self, direction: int, velocity: int = 600) -> None: ...
+    def key_event(self, *keys: int) -> None: ...
+    def back(self) -> None: ...
+    def home(self) -> None: ...
+    def start_ability(self, bundle: str,
+                      ability: str = 'EntryAbility') -> ShellResult: ...
+    def force_stop(self, bundle: str) -> ShellResult: ...
 
 
 # ---------------------------------------------------------------- 主类

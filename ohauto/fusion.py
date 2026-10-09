@@ -345,7 +345,28 @@ def _venv_python() -> str:
     return os.environ.get('OHAUTO_VENV_PY') or _VENV_PY
 
 
-def _ocr_via_venv(image_path: str, name: str) -> Optional[SourceResult]:
+class _OcrTrace:
+    """本次 OCR 降级的回退轨迹 —— 取代模块级可变全局。
+
+    每次 `source_ocr()` 建一个，跟着调用栈走。模块级全局的毛病是它跨调用
+    存活：上一次的失败原因会串到这一次的报告里（假归因比没归因更糟），
+    于是过去还得靠开头的 `.clear()` 补救。收进对象之后这两个问题一起消失，
+    而且天然可重入。
+    """
+
+    def __init__(self) -> None:
+        self.errors: List[str] = []
+
+    def add(self, msg: str) -> None:
+        self.errors.append(msg)
+
+    @property
+    def last(self) -> str:
+        return self.errors[-1] if self.errors else ''
+
+
+def _ocr_via_venv(image_path: str, name: str,
+                  trace: Optional['_OcrTrace'] = None) -> Optional[SourceResult]:
     """回退：用 **venv 解释器**跑 `tools/ocr_worker.py`。
 
     为什么要有这条：本项目的 Python 包只装进 venv（不污染托管运行时），
@@ -353,6 +374,10 @@ def _ocr_via_venv(image_path: str, name: str) -> Optional[SourceResult]:
     走子进程桥一下，两边约定都不用破。
 
     返回 None 表示「这条路也走不通」，交给上层继续降级。
+
+    `trace` 是可选的失败原因收集器：`source_ocr()` 会传一个进来，好在最终
+    降级报告里说清「试过什么、卡在哪」。不传（直接调用，如单测）时就地
+    新建一个丢弃 —— 行为与契约都不变。
 
     ⚠️ 子进程 stdout 的编码必须在**子进程这一侧**固定下来（下面 `env` 那几行）。
     Windows 上 venv 解释器默认按 locale（**cp936**）写 stdout，而父进程按 utf-8 解码
@@ -363,6 +388,8 @@ def _ocr_via_venv(image_path: str, name: str) -> Optional[SourceResult]:
     看起来跟「worker 跑通了但没读到字」一模一样，比抛异常难查得多。
     所以三层都钉：子进程固定 UTF-8 + 父进程 `errors='replace'` + `stdout is None` 检测。
     """
+    if trace is None:
+        trace = _OcrTrace()
     python = _venv_python()
     if not os.path.isfile(python):
         return None
@@ -380,20 +407,20 @@ def _ocr_via_venv(image_path: str, name: str) -> Optional[SourceResult]:
                               capture_output=True, text=True, encoding='utf-8',
                               errors='replace', timeout=90, env=_env)
     except Exception as e:                                    # noqa: BLE001
-        _OCR_VENV_ERR.append('venv 子进程异常: %s: %s' % (type(e).__name__, e))
+        trace.add('venv 子进程异常: %s: %s' % (type(e).__name__, e))
         return None
     if proc.stdout is None:
         # 「解码失败」的静默形态：上面根本不进 except，rc 还是 0
-        _OCR_VENV_ERR.append('worker stdout 解码失败（子进程编码不受控）—— '
-                             '这跟「没读到字」不是一回事，不许混为一谈')
+        trace.add('worker stdout 解码失败（子进程编码不受控）—— '
+                  '这跟「没读到字」不是一回事，不许混为一谈')
         return None
     if proc.returncode != 0:
         err = (proc.stderr or '').strip().splitlines()
-        _OCR_VENV_ERR.append(err[-1] if err else 'worker 返回 %d' % proc.returncode)
+        trace.add(err[-1] if err else 'worker 返回 %d' % proc.returncode)
         return None
     lines = [t.strip() for t in (proc.stdout or '').splitlines() if t.strip()]
     if not lines:
-        _OCR_VENV_ERR.append('worker 跑通但没读到文字')
+        trace.add('worker 跑通但没读到文字')
         return None
     # 后端名由 worker 写在 stderr（stdout 只放识别结果）。
     # **必须如实标注是谁读的** —— 写死成 winsdk 而实际用 rapidocr，就是假信息。
@@ -405,9 +432,6 @@ def _ocr_via_venv(image_path: str, name: str) -> Optional[SourceResult]:
               for t in lines]
     return SourceResult(name, 'observation', ok=True, claims=claims,
                         note='%s（经 venv 解释器）读到 %d 行' % (be, len(lines)))
-
-
-_OCR_VENV_ERR: List[str] = []
 
 
 def source_ocr(image_path: str, *, name: str = 'ocr',
@@ -436,9 +460,9 @@ def source_ocr(image_path: str, *, name: str = 'ocr',
         return SourceResult(name, 'observation', ok=False,
                             reason='未提供截图文件')
 
-    # 每次调用先清空：这是「**本次**调用」的回退轨迹容器。
-    # 不清会把上一次调用的失败原因串到这一次的报告里 —— 假归因，比没归因更糟。
-    _OCR_VENV_ERR.clear()
+    # 本次调用的回退轨迹。是局部对象而不是模块全局 —— 跨调用串味从根上
+    # 不可能发生，也就不再需要「先清空」这一步来补救。
+    trace = _OcrTrace()
 
     if backend in ('auto', 'winsdk'):
         try:
@@ -474,15 +498,15 @@ def source_ocr(image_path: str, *, name: str = 'ocr',
                 return SourceResult(name, 'observation', ok=False,
                                     reason='未安装 winsdk（pip install winsdk）')
             # auto：当前解释器没有后端，退回 venv 解释器（见 _ocr_via_venv）
-            via_venv = _ocr_via_venv(image_path, name)
+            via_venv = _ocr_via_venv(image_path, name, trace=trace)
             if via_venv is not None:
                 return via_venv
         except Exception as e:
             if backend == 'winsdk':
                 return SourceResult(name, 'observation', ok=False,
                                     reason='winsdk OCR 失败: %s' % e)
-            _OCR_VENV_ERR.append('本解释器 winsdk 失败: %s' % e)
-            via_venv = _ocr_via_venv(image_path, name)
+            trace.add('本解释器 winsdk 失败: %s' % e)
+            via_venv = _ocr_via_venv(image_path, name, trace=trace)
             if via_venv is not None:
                 return via_venv
 
@@ -502,7 +526,7 @@ def source_ocr(image_path: str, *, name: str = 'ocr',
                                 reason='pytesseract 失败: %s' % e)
 
     # 降级要把**试过什么、卡在哪**说清楚 —— 只说"没装后端"没法排查
-    detail = ('；venv 回退也失败：%s' % _OCR_VENV_ERR[-1]) if _OCR_VENV_ERR else ''
+    detail = ('；venv 回退也失败：%s' % trace.last) if trace.errors else ''
     return SourceResult(
         name, 'observation', ok=False,
         reason=('未装任何 OCR 后端（试过 winsdk / pytesseract / venv 回退）%s'

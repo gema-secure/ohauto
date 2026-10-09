@@ -21,7 +21,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from .hdc import DeviceNotFound, Hdc, HdcError
+from .hdc import DeviceNotFound, Hdc, HdcError, HdcLike
 from .layout import LayoutNode, Rect, flatten, parse_layout
 from .matcher import Matcher
 
@@ -96,7 +96,8 @@ class Driver:
     ----------
     bundle:       被测应用包名，如 'com.example.app'
     ability:      入口 Ability 名，默认 'EntryAbility'
-    hdc:          自定义 Hdc 实例；为 None 时自动创建
+    hdc:          自定义设备实例（满足 HdcLike 契约即可，如 sim.FakeHdc）；
+                  为 None 时自动创建真机 Hdc
     artifact_dir: 留痕目录（截图 / 控件树 / 报告），为 None 则不落盘
     default_timeout: waitFor 默认超时（毫秒）
     poll_interval:   waitFor 轮询间隔（毫秒）
@@ -109,7 +110,7 @@ class Driver:
         self,
         bundle: str,
         ability: str = 'EntryAbility',
-        hdc: Optional[Hdc] = None,
+        hdc: Optional[HdcLike] = None,
         artifact_dir: Optional[str] = None,
         default_timeout: int = 8000,
         poll_interval: int = 300,
@@ -221,13 +222,10 @@ class Driver:
             self.hdc.pull(dev, local)
             self._root = parse_layout(local)
         else:
-            flags = (' -i' if unfiltered else '') + (' -a' if with_attrs else '')
-            # 设备侧临时目录：真机走 `Hdc.tmp_dir`，模拟设备（FakeHdc）只有
-            # `DEVICE_TMP` 类属性 —— 取不到再退默认值，不要假设对面是谁。
-            tmp_dir = (getattr(self.hdc, 'tmp_dir', None)
-                       or getattr(self.hdc, 'DEVICE_TMP', None)
-                       or '/data/local/tmp')
-            dev = f'{tmp_dir}/ohauto_layout.json'
+            flags = ('-i' if unfiltered else '') + ('-a' if with_attrs else '')
+            # 设备侧临时目录：由 HdcLike 契约保证存在，不再 getattr 兜底 ——
+            # 兜底会把「实现没满足契约」悄悄伪装成「用了默认目录」。
+            dev = f'{self.hdc.tmp_dir}/ohauto_layout.json'
             res = self.hdc.shell(f'uitest dumpLayout{flags} -p {dev} && cat {dev}',
                                  check=True)
             self._root = parse_layout(_json_tail(res.stdout))

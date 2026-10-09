@@ -444,6 +444,10 @@ class FakeHdc:
         self.verbose = verbose
         self.hdc_path = '<simulated>'
         self.target = 'simulator'
+        # 实例属性，与 `Hdc.__init__` 对齐：`HdcLike` 契约要求它存在。
+        # 只有 `DEVICE_TMP` 类属性过不了 isinstance（3.12+ 会连数据成员一起查），
+        # 而 `Driver.refresh()` 过去正是为此写了 getattr 兜底链。
+        self.tmp_dir = self.DEVICE_TMP
         self.actions: List[Dict[str, Any]] = []      # 操作留痕，供断言
         self._files: Dict[str, bytes] = {}
         self.calls: List[str] = []
@@ -1061,12 +1065,18 @@ class FakeHdc:
     def click(self, x, y): self._ui_input('click', x, y)
     def double_click(self, x, y): self._ui_input('doubleClick', x, y)
     def long_click(self, x, y): self._ui_input('longClick', x, y)
-    def input_text(self, x, y, t): self._ui_input('inputText', x, y, t)
-    def swipe(self, fx, fy, tx, ty, v=600): self._ui_input('swipe', fx, fy, tx, ty, v)
+    # 参数名与 `Hdc` 逐一对齐（HdcLike 契约内的四个）—— 全仓都是位置调用，
+    # 改名零风险；不一致会让「FakeHdc 可替换 Hdc」只对一半。
+    def input_text(self, x, y, text): self._ui_input('inputText', x, y, text)
+    def swipe(self, fx, fy, tx, ty, velocity=600):
+        self._ui_input('swipe', fx, fy, tx, ty, velocity)
+
     def fling(self, fx, fy, tx, ty, v=600): self._ui_input('fling', fx, fy, tx, ty, v)
     def drag(self, fx, fy, tx, ty, v=600): self._ui_input('drag', fx, fy, tx, ty, v)
-    def dirc_fling(self, d, v=600): self._ui_input('dircFling', d, v)
-    def key_event(self, *k): self._ui_input('keyEvent', *k)
+    def dirc_fling(self, direction, velocity=600):
+        self._ui_input('dircFling', direction, velocity)
+
+    def key_event(self, *keys): self._ui_input('keyEvent', *keys)
     def back(self): self.key_event('Back')
     def home(self): self.key_event('Home')
 
