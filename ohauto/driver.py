@@ -8,6 +8,7 @@ L3 语义层 —— Driver 门面
     操作：uiInput 注入坐标事件
     等待：waitFor 轮询 / waitForIdle 界面稳定判定
     断言：assert_exists / assert_text / assert_gone
+            assert.checked / assert.enabled / assert.count / assert.memory_below（2C【C5】）
     留痕：每步自动记录（截图 + 控件树 + 操作），供报告与脚本生成
 
 这是整个能力层唯一需要「懂业务」的地方，其余各层都是纯机械转换。
@@ -24,6 +25,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from .hdc import DeviceNotFound, Hdc, HdcError, HdcLike
 from .layout import LayoutNode, Rect, flatten, parse_layout
 from .matcher import Matcher
+from .perf import device_sample
 
 
 def _json_tail(text: str) -> str:
@@ -763,6 +765,94 @@ class Driver:
                     f'断言失败：文本不匹配\n  期望: {expected!r}\n  实际: {node.text!r}')
             return node
         except Exception as e:
+            step.ok, step.error = False, str(e)[:400]
+            raise
+        finally:
+            step.elapsed_ms = int((time.time() - t0) * 1000)
+            self._record(step)
+
+    # -- 2C【C5】断言原语扩展（docs/发展规划与改进建议.md §2 2C）------------
+
+    def assert_checked(self, m: Matcher, expected: bool = True,
+                       timeout: Optional[int] = None) -> LayoutNode:
+        """断言控件（复选框/开关类）的选中状态。"""
+        return self._assert_flag(m, 'checked', expected, timeout)
+
+    def assert_enabled(self, m: Matcher, expected: bool = True,
+                       timeout: Optional[int] = None) -> LayoutNode:
+        """断言控件可用（未禁用）。"""
+        return self._assert_flag(m, 'enabled', expected, timeout)
+
+    def _assert_flag(self, m: Matcher, attr: str, expected: bool,
+                     timeout: Optional[int]) -> LayoutNode:
+        """assert.checked / assert.enabled 的共用骨架：先等存在，再比状态。"""
+        step = self._new_step(f'assert.{attr}', str(m), expected)
+        t0 = time.time()
+        try:
+            node = self.assert_exists(m, timeout=timeout)
+            actual = bool(getattr(node, attr))
+            if actual != bool(expected):
+                raise DriverError(
+                    f'断言失败：控件应 {attr}={expected}\n  实际: {actual}')
+            return node
+        except Exception as e:                     # noqa(断言留痕旁路，与 assert.text 同款)
+            step.ok, step.error = False, str(e)[:400]
+            raise
+        finally:
+            step.elapsed_ms = int((time.time() - t0) * 1000)
+            self._record(step)
+
+    def assert_count(self, m: Matcher, expected: int,
+                     timeout: Optional[int] = None,
+                     interval: Optional[int] = None) -> int:
+        """断言匹配控件的数量等于 expected；轮询到相等或超时。返回实际数量。"""
+        step = self._new_step('assert.count', str(m), expected)
+        t0 = time.time()
+        try:
+            timeout = timeout if timeout is not None else self.default_timeout
+            interval = interval or self.poll_interval
+            deadline = time.time() + timeout / 1000.0
+            actual = -1
+            while True:
+                actual = len(self.find_all(m, refresh=True))
+                if actual == expected:
+                    return actual
+                if time.time() >= deadline:
+                    raise DriverError(
+                        f'断言失败：控件数量应为 {expected}\n  实际: {actual}')
+                self._sleep(interval / 1000.0)
+        except Exception as e:                     # noqa(断言留痕旁路，与 assert.text 同款)
+            step.ok, step.error = False, str(e)[:400]
+            raise
+        finally:
+            step.elapsed_ms = int((time.time() - t0) * 1000)
+            self._record(step)
+
+    def assert_memory_below(self, max_pss_kb: int,
+                            bundle: Optional[str] = None) -> Dict[str, Any]:
+        """断言被测应用 PSS 低于阈值 —— 性能采样进断言原语的桥（2C【C4+C5】）。
+
+        **缺样本不判通过**：采不到 PSS 就算失败 —— 「没采到」绝不能伪装成
+        「采到了且达标」（ohauto/perf.py 的「缺样本 ≠ 正常」约定）。
+        返回采样字典（pss_kb / load1 / alive / warn），报告可直接消费。
+        """
+        target = bundle or self.bundle
+        step = self._new_step('assert.memory_below', target, max_pss_kb)
+        t0 = time.time()
+        try:
+            s = device_sample(self.hdc, target)
+            step.extra['pss_kb'] = s.get('pss_kb')
+            step.extra['alive'] = s.get('alive')
+            if s.get('pss_kb') is None:
+                raise DriverError(
+                    '断言失败：未采到 PSS（缺样本不判通过）\n原因: '
+                    + '; '.join(s.get('warn') or []))
+            if s['pss_kb'] > max_pss_kb:
+                raise DriverError(
+                    f'断言失败：PSS 超阈值\n  阈值: {max_pss_kb} KB\n'
+                    f'  实际: {s["pss_kb"]} KB')
+            return s
+        except Exception as e:                     # noqa(断言留痕旁路，与 assert.text 同款)
             step.ok, step.error = False, str(e)[:400]
             raise
         finally:

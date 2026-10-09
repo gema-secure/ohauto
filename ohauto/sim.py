@@ -40,11 +40,15 @@ from .layout import Rect
 
 def _node(type_: str, cid: str, text: str, bounds: str,
           clickable: str = 'true', descr: str = '',
-          visible: str = 'true', enabled: str = 'true') -> Dict[str, Any]:
+          visible: str = 'true', enabled: str = 'true',
+          checked: str = '') -> Dict[str, Any]:
     a = {'type': type_, 'id': cid, 'text': text, 'bounds': bounds,
          'clickable': clickable, 'visible': visible, 'enabled': enabled}
     if descr:
         a['descr'] = descr
+    if checked:
+        # 选中状态只在使用方显式给时才输出 —— 缺省节点与既有页面完全不变。
+        a['checked'] = checked
     return {'attributes': a}
 
 
@@ -463,6 +467,11 @@ class FakeHdc:
         self.fault_meta: Dict[str, Dict[str, Any]] = {}
         self.hilog_text = hilog_text
         self.dead_bundles = set(dead_bundles or ())
+        # 2C 性能采样（ohauto/perf.py）需要的设备侧资源水位，均可按需改写：
+        # pss_kb —— `hidumper --mem <pid>` 里的 PSS 合计（真机 DAYU200 实测口径）；
+        # loadavg —— `/proc/loadavg` 原文（1/5/15 分钟负载）。
+        self.pss_kb = 41322
+        self.loadavg = '0.50 0.35 0.30 2/1234 5678'
         # 'content'（默认，模拟真机正常内容页）| 'solid'（纯色图，专用于测白屏判据）
         #
         # 默认值必须是 'content'。早期默认是 'solid'，后果是：**干净场景
@@ -596,6 +605,18 @@ class FakeHdc:
         lines.append('===================')
         lines.append('foldScreenIds_ size is 0')
         return '\n'.join(lines)
+
+    def _mem_dump(self) -> str:
+        """产出与真机**同构**的 `hidumper --mem <pid>` 内存表。
+
+        解析规则（ohauto/perf.py `_parse_pss`）依赖三个特征：表头行含 Pss；
+        随后有一行**不带数字**的 Total 单位行；数值行首个数字 = PSS 合计
+        （KB）。两侧格式必须一致，否则「模拟绿、真机挂」。
+        """
+        return ('                                Pss  Shared  Private  '
+                'SwapPss  Pss\n'
+                '                                Total  Clean  Dirty\n'
+                f'            Total   {self.pss_kb}  2048  8192  0\n')
 
     # ------------------------------------------------------ 故障注入
 
@@ -931,6 +952,8 @@ class FakeHdc:
             return self._R(f'DumpLayout saved to:{dev}\n'
                            + data.decode('utf-8', 'replace'))
         if cmd.startswith('cat '):
+            if cmd.strip() == 'cat /proc/loadavg':
+                return self._R(self.loadavg)
             p = cmd[4:].strip()
             data = self._files.get(p)
             if data is None:
@@ -981,6 +1004,11 @@ class FakeHdc:
             #
             # 仍保留对 `screen size` 这种老写法的兼容：真机上某些裁剪版本
             # 只有 DisplayManagerService，输出形如 `screen size: W x H`。
+            if '--mem' in cmd:
+                # 2C：真机 `hidumper --mem <pid>` 同构内存表 —— 表头含 Pss，
+                # 两行 Total 开头（单位行无数字、数值行首个数字 = PSS 合计
+                # KB）。解析规则见 ohauto/perf.py，两侧必须同构。
+                return self._R(self._mem_dump())
             if 'RenderService' in cmd:
                 return self._R(self._screen_dump())
             w, h = self.screen

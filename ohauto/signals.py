@@ -50,6 +50,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .layout import LayoutNode, parse_layout
+from .perf import analyze_samples, take_sample
 
 
 # ================================================================ 设备侧路径
@@ -209,6 +210,10 @@ class Signals:
     process_alive: Optional[bool] = None  # pidof 是否还有该进程；None = 没测到
     layout_nodes: Optional[int] = None    # 采集到的控件树节点数
     faults_in_window: List[str] = field(default_factory=list)   # 窗口内该目录的全部文件名
+    # 2C【C4】性能采样（collect_perf=True 或 PerfChannel.attach 时才有）。
+    # None = **没开启采集** —— 与「采到了但缺样本」（perf['pss_kb'] is None）
+    # 必须能区分，见 ohauto/perf.py 的「缺样本 ≠ 正常」约定。
+    perf: Optional[Dict[str, Any]] = None
 
     # ---------------------------------------------------------- 便捷查询
 
@@ -234,7 +239,7 @@ class Signals:
         return round(min(0.99, 1.0 - rest), 4)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d = {
             'bundle': self.bundle,
             'captured_at': self.captured_at,
             'device_time': self.device_time,
@@ -249,6 +254,11 @@ class Signals:
             'layout_nodes': self.layout_nodes,
             'faults_in_window': list(self.faults_in_window),
         }
+        # 没开性能采集就不出这个键 —— 消费方可以靠键的存在与否区分「没采」
+        # 与「采了但缺样本」，序列化口径与字段语义一致。
+        if self.perf is not None:
+            d['perf'] = dict(self.perf)
+        return d
 
     def to_json(self, path: Optional[str] = None, indent: int = 2) -> str:
         text = json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
@@ -257,6 +267,63 @@ class Signals:
             with open(path, 'w', encoding='utf-8') as f:
                 f.write(text)
         return text
+
+
+# ================================================================ 性能 / 资源通道（2C【C4】）
+
+class PerfChannel:
+    """性能 / 资源采样通道 —— hidumper PSS + loadavg 负载 + 进程存活的周期采样。
+
+    采样与分析原语单源在 `ohauto/perf.py`（L1）；本类是**面向编排的通道**：
+    持有一串采样点、随时能出内存趋势曲线（验收口径：note_stability 类
+    用例产出 PSS 曲线并入报告，docs/发展规划与改进建议.md §2 2C）。
+
+    与 faultlog 采集同一条降级纪律：采样是旁路，失败记 None + 警告，
+    绝不把正在跑的测试搞崩 —— `sample()` 不抛异常。
+    """
+
+    def __init__(self, hdc: Any, bundle: str, host_pid: Optional[int] = None):
+        self.hdc = hdc
+        self.bundle = bundle
+        self.host_pid = host_pid
+        self.samples: List[Dict[str, Any]] = []
+
+    def sample(self, rounds_done: Optional[int] = None) -> Dict[str, Any]:
+        """采一轮并记入本通道。失败在返回值的 `warn` 里，不抛异常。"""
+        s = take_sample(self.hdc, self.bundle, host_pid=self.host_pid,
+                        rounds_done=rounds_done)
+        self.samples.append(s)
+        return s
+
+    def curve(self) -> Dict[str, Any]:
+        """内存趋势曲线：PSS / 负载序列 + `perf.analyze_samples` 斜率分析。"""
+        return {
+            'bundle': self.bundle,
+            'series': [{'ts': s.get('ts'), 'pss_kb': s.get('pss_kb'),
+                        'load1': s.get('load1')} for s in self.samples],
+            'analysis': analyze_samples(self.samples),
+        }
+
+    def flush(self, path: str, clear: bool = False) -> int:
+        """把已采样本追加写入 jsonl（每行一个采样点）。返回本次写出行数。
+
+        默认**不清空**内存样本 —— 曲线要能随时重出；长跑边采边落盘防丢时
+        传 clear=True（落盘节奏由调用方定，工具壳 tools/stability_telemetry.py
+        是逐轮即时落盘的写法）。
+        """
+        if not self.samples:
+            return 0
+        with open(path, 'a', encoding='utf-8') as f:
+            for s in self.samples:
+                f.write(json.dumps(s, ensure_ascii=False) + '\n')
+        n = len(self.samples)
+        if clear:
+            self.samples = []
+        return n
+
+    def attach(self, sig: 'Signals', rounds_done: Optional[int] = None) -> None:
+        """采一轮并把结果挂到 `Signals.perf` —— 诊断时顺带看资源水位。"""
+        sig.perf = self.sample(rounds_done)
 
 
 # ================================================================ 崩溃日志解析
@@ -869,6 +936,7 @@ def collect_signals(
     probe_gap_s: float = 0.0,
     collect_layout: bool = True,
     collect_screenshot: bool = True,
+    collect_perf: bool = False,
 ) -> Signals:
     """采集一次「设备上发生了什么」。**除参数错误外不抛异常。**
 
@@ -895,6 +963,10 @@ def collect_signals(
         默认 1 轮（不额外付出设备往返）。
     collect_layout / collect_screenshot:
         是否采集控件树 / 截图。
+    collect_perf:
+        是否顺带采一轮性能样本（写入 `Signals.perf`）。**默认 False** ——
+        诊断链路不背这两次设备往返；长稳场景显式开启，或直接用
+        `PerfChannel` 做周期采样（结果挂 `Signals.perf` 或走 `curve()`）。
 
     返回的 `Signals` 里：
 
@@ -944,6 +1016,10 @@ def collect_signals(
 
     # ---- 2. 进程存活（辅证据）
     sig.process_alive = _probe_process_alive(hdc, bundle, sig)
+
+    # ---- 2.5 性能采样（2C【C4】，默认关 —— 见参数说明）
+    if collect_perf:
+        PerfChannel(hdc, bundle).attach(sig)
 
     # ---- 3. 截图 + 白屏判据（先出原始判据，**延迟定案**见步骤 6.5）
     if collect_screenshot:

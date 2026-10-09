@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""应用长稳遥测采样器（B15）—— 与跑测进程并行，每 60 秒采一轮设备侧资源。
+"""应用长稳遥测采样器（B15）—— CLI 壳。
+
+采样与分析原语已收编进 `ohauto/perf.py`（docs/发展规划与改进建议.md §2 2C），
+本文件只保留命令行入口：参数解析、采样循环、结论打印。周期采样与趋势曲线
+要在进程内消费（并入报告）时直接用 `ohauto.signals.PerfChannel`。
 
 用法::
 
@@ -13,22 +17,19 @@
     # 分析：PSS 斜率 / 负载趋势 / 缺样本统计
     python tools/stability_telemetry.py --analyze tools/_out/b15/telemetry.jsonl --strict
 
-设计约定（见 docs/ 下的「B15 应用长稳执行设计」）：
+设计约定（继承自 ohauto/perf.py，即原「B15 应用长稳执行设计」）：
 - 采样失败**记 None + 警告字段**，绝不编造、绝不中断——「缺样本 ≠ 正常」；
 - 单次采样 < 2 秒（60 秒间隔下占空比 ~3%，不影响被测跑测的延迟口径）；
-- 零依赖：hdc 交互复用 `ohauto.hdc`，宿主内存解析走 tasklist CSV。
+- 零依赖：hdc 交互复用 `ohauto.hdc`。
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import re
-import subprocess
 import sys
 import time
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -36,99 +37,17 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from ohauto.hdc import Hdc                                    # noqa: E402
+from ohauto.perf import (analyze_samples, take_sample,        # noqa: E402
+                         MIN_PSS_SAMPLES, PSS_SLOPE_THRESHOLD)
 
 DEFAULT_INTERVAL = 60
-#: PSS 斜率判据：后半程均值 / 前半程均值，涨幅超过它 → 报泄漏嫌疑。
-#: 首轮校准前是**暂行值**，首轮长稳跑完按实测分布冻结（先测再定）。
-PSS_SLOPE_THRESHOLD = 30.0
-
-
-# ---------------------------------------------------------------- 采集
-
-def _device_sample(hdc: Hdc, bundle: str) -> Dict[str, Any]:
-    """一次设备侧采样：被测应用 PSS / 负载 / 存活。失败记 None + 警告。"""
-    s: Dict[str, Any] = {'pss_kb': None, 'load1': None, 'alive': None,
-                         'pid': None, 'warn': []}
-    try:
-        r = hdc.shell('pidof %s' % bundle, timeout=15)
-        pids = (r.stdout or '').split()
-        if not pids:
-            s['alive'] = False
-            s['warn'].append('被测应用进程不在运行')
-            return s
-        s['alive'] = True
-        s['pid'] = pids[0]
-    except Exception as e:
-        s['warn'].append('pidof 失败: %s: %s' % (type(e).__name__, e))
-        return s
-
-    try:
-        r = hdc.shell('hidumper --mem %s' % s['pid'], timeout=30)
-        # 解析格式（真机 DAYU200 实测定稿）：表头行含 `Pss  Shared ...`，
-        # **数值在紧随其后的 `Total 41322 ...` 行**——表头行本身没有数字。
-        # 规则：见到 Pss 表头后，扫其后首个 Total 行，取第一个数字 = PSS 合计。
-        pss = None
-        seen_header = False
-        for line in (r.stdout or '').splitlines():
-            up = line.upper()
-            if 'PSS' in up:
-                seen_header = True
-                continue
-            # 表格有**两行** Total 开头：先是单位行（Total Clean Dirty...，无数字），
-            # 后才是数值行（Total 41322 ...）——只在拿到数字时才停。
-            if seen_header and re.match(r'\s*Total\b', line, re.IGNORECASE):
-                nums = re.findall(r'(\d+)', line)
-                if nums:
-                    pss = int(nums[0])
-                    break
-        if pss is None:
-            s['warn'].append('hidumper 输出里没解析到 PSS（表头+Total 结构缺失）')
-        else:
-            s['pss_kb'] = pss
-    except Exception as e:
-        s['warn'].append('hidumper 失败: %s: %s' % (type(e).__name__, e))
-
-    try:
-        r = hdc.shell('cat /proc/loadavg', timeout=10)
-        m = re.match(r'\s*([0-9.]+)', r.stdout or '')
-        if m:
-            s['load1'] = float(m.group(1))
-    except Exception as e:
-        s['warn'].append('loadavg 失败: %s: %s' % (type(e).__name__, e))
-    return s
-
-
-def _host_sample(host_pid: Optional[int]) -> Dict[str, Any]:
-    """宿主跑测进程的内存（tasklist CSV，Windows）。host_pid 空则跳过。"""
-    s: Dict[str, Any] = {'host_mem_kb': None}
-    if not host_pid:
-        return s
-    try:
-        r = subprocess.run(['tasklist', '/FI', 'PID eq %d' % host_pid,
-                            '/FO', 'CSV', '/NH'],
-                           capture_output=True, text=True, timeout=20)
-        m = re.search(r'"\s?([\d,\s]+)\s?K"', r.stdout or '')
-        if m:
-            s['host_mem_kb'] = int(m.group(1).replace(',', ''))
-    except Exception as e:
-        s['warn'] = ['tasklist 失败: %s' % e]
-    return s
-
-
-def take_sample(hdc: Hdc, bundle: str, host_pid: Optional[int],
-                rounds_done: Optional[int] = None) -> Dict[str, Any]:
-    s = {'ts': datetime.now().isoformat(timespec='seconds')}
-    s.update(_device_sample(hdc, bundle))
-    s.update(_host_sample(host_pid))
-    if rounds_done is not None:
-        s['rounds_done'] = rounds_done
-    return s
 
 
 # ---------------------------------------------------------------- 分析
 
 def analyze(path: str, strict: bool = False) -> int:
-    samples: List[Dict[str, Any]] = []
+    """读 jsonl、出斜率结论。判据计算在 `ohauto.perf.analyze_samples`。"""
+    samples: List[dict] = []
     with open(path, encoding='utf-8') as f:
         for line in f:
             line = line.strip()
@@ -137,33 +56,28 @@ def analyze(path: str, strict: bool = False) -> int:
                     samples.append(json.loads(line))
                 except ValueError:
                     continue          # 坏行跳过（写侧是 jsonl，正常不会坏）
-    pss = [s['pss_kb'] for s in samples if s.get('pss_kb') is not None]
-    missing = sum(1 for s in samples if s.get('pss_kb') is None)
-    loads = [s['load1'] for s in samples if s.get('load1') is not None]
+    a = analyze_samples(samples)
 
     print('=' * 60)
-    print('  遥测分析（%d 个采样点）' % len(samples))
-    if len(pss) < 4:
-        print('  ❌ 有效 PSS 样本不足 4 个（缺失 %d）——无法判斜率' % missing)
+    print('  遥测分析（%d 个采样点）' % a['samples'])
+    if a['insufficient']:
+        print('  ❌ 有效 PSS 样本不足 %d 个（缺失 %d）——无法判斜率'
+              % (MIN_PSS_SAMPLES, a['pss_missing']))
         return 1
-    half = len(pss) // 2
-    m1 = sum(pss[:half]) / half
-    m2 = sum(pss[half:]) / (len(pss) - half)
-    pct = (m2 - m1) / m1 * 100 if m1 else 0.0
     print('  被测应用 PSS: 前半均值 %.0f KB → 后半均值 %.0f KB'
-          % (m1, m2))
+          % (a['pss_mean_first'], a['pss_mean_second']))
     print('  斜率: %+.2f%%（暂行阈值 ±%.0f%%，首轮跑完校准冻结）'
-          % (pct, PSS_SLOPE_THRESHOLD))
-    print('  PSS 范围: %d ~ %d KB ｜ 缺失采样: %d' % (min(pss), max(pss), missing))
-    if loads:
-        print('  设备负载1: 均值 %.2f ｜ 峰值 %.2f' % (sum(loads) / len(loads),
-                                                     max(loads)))
-    leak = pct > PSS_SLOPE_THRESHOLD
-    if leak:
+          % (a['slope_pct'], PSS_SLOPE_THRESHOLD))
+    print('  PSS 范围: %d ~ %d KB ｜ 缺失采样: %d'
+          % (a['pss_min'], a['pss_max'], a['pss_missing']))
+    if a['load_mean'] is not None:
+        print('  设备负载1: 均值 %.2f ｜ 峰值 %.2f'
+              % (a['load_mean'], a['load_peak']))
+    if a['leak_suspect']:
         print('  ❌ PSS 持续上扬超阈值 —— 报泄漏嫌疑，按采样点定位')
     else:
         print('  ✅ PSS 无持续上扬 —— 泄漏判据通过')
-    if strict and leak:
+    if strict and a['leak_suspect']:
         return 1
     return 0
 
@@ -217,7 +131,7 @@ def main(argv: List[str] = None) -> int:
                     d = json.loads(last)
                     totals = d.get('totals') or {}
                     rounds = totals.get('cycles')
-            except Exception:
+            except (OSError, ValueError):
                 pass
         s = take_sample(hdc, args.bundle, args.host_pid, rounds)
         with open(args.out, 'a', encoding='utf-8') as f:

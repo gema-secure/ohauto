@@ -53,7 +53,10 @@ from .runner import (Runner, DeviceGuard, RetryPolicy, FailureKind,
                      CaseResult, SuiteResult, StepResult, StepAttempt,
                      run, run_case, run_suite)
 from .signals import (collect_signals, Signals, CrashRecord, Anomaly,
-                      parse_crash_log, parse_fault_filename)
+                      parse_crash_log, parse_fault_filename, PerfChannel)
+# C4 性能/资源采样原语（2C 收编自 tools/stability_telemetry.py，单源 ohauto/perf.py）
+from .perf import (device_sample, host_sample, take_sample, analyze_samples,
+                   PSS_SLOPE_THRESHOLD, MIN_PSS_SAMPLES)
 from .diagnose import (diagnose, diagnose_all, summarize, Verdict, Category,
                        ExecutionRecord, CATEGORY_CN)
 # 2026-09-23 追加（B 闭环接入 API）：失败步 → Verdict 的一站式入口。
@@ -136,6 +139,9 @@ __all__ = [
     # C4 信号采集
     'collect_signals', 'Signals', 'CrashRecord', 'Anomaly',
     'parse_crash_log', 'parse_fault_filename',
+    # C4/C5 性能与资源采集（2C）：采样原语 + 通道 + 斜率判据
+    'PerfChannel', 'device_sample', 'host_sample', 'take_sample',
+    'analyze_samples', 'PSS_SLOPE_THRESHOLD', 'MIN_PSS_SAMPLES',
     # B4 失败归因（分工卡接口总表：B -> C 的 diagnose）
     'diagnose', 'diagnose_all', 'summarize',
     'Verdict', 'Category', 'CATEGORY_CN', 'ExecutionRecord',

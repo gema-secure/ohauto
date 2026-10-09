@@ -484,7 +484,7 @@ def _check_import_boundary(path: str, tree) -> List[Finding]:
 #: 层级表改动 = 架构决策，必须同步 docs/发展规划与改进建议.md。
 LAYERS: Dict[int, Tuple[str, ...]] = {
     1: ('layout', 'identity', 'matcher', 'permission', 'treesum',
-        'llm_transport', 'report', 'static_arkts'),
+        'llm_transport', 'perf', 'report', 'static_arkts'),
     2: ('hdc', 'devices', 'doctor', 'driver', 'vision'),
     3: ('action', 'locator', 'fusion', 'sim', 'crossform'),
     4: ('explorer', 'generator', 'diagnose', 'signals', 'runner',
@@ -589,7 +589,6 @@ BROAD_EXCEPT_BASELINE: Dict[str, int] = {
     'tools/ocr_worker.py': 2,
     'tools/preflight.py': 2,
     'tools/sign_hap.py': 3,
-    'tools/stability_telemetry.py': 5,
     'tools/ui_viewer.py': 1,
     'tools/verify_core_flows_real.py': 3,
     'tools/verify_locator_degrade.py': 2,
