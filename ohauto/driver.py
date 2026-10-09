@@ -61,6 +61,9 @@ class Step:
     ok: bool = True
     elapsed_ms: int = 0
     screenshot: Optional[str] = None
+    #: 按截图分级留存策略**有意省略**了本步截图（docs/截图分级留存策略.md）。
+    #: 省略必须留痕 —— 「没有图」要能区分「没拍」和「判了不必拍」。
+    shot_skipped: bool = False
     layout_json: Optional[str] = None
     node_path: Optional[str] = None
     #: 可定位规格（id/text/text_deep/type）—— 挑战 #6 用例沉淀的原料。
@@ -78,6 +81,8 @@ class Step:
             v = getattr(self, k)
             if v:
                 d[k] = v
+        if self.shot_skipped:
+            d['shot_skipped'] = True
         if self.node_spec:
             d['node_spec'] = dict(self.node_spec)
         if self.coords:
@@ -139,6 +144,11 @@ class Driver:
         self._tree_dirty = True
         self.tree_dumps = 0        # 真取了几次树（对外可读，便于量收益）
         self.tree_reuses = 0       # 复用了几次
+        #: 截图账（分级留存策略，docs/截图分级留存策略.md）：
+        #: saved 含 tap 前置图 / 失败补图 / 独立 screenshot() 落盘；
+        #: skipped 只记「判了不必拍」的省略 —— 省略必须可见。
+        self.shots_saved = 0
+        self.shots_skipped = 0
         self._step_no = 0
         self._seq = 0
 
@@ -439,8 +449,16 @@ class Driver:
     # -------------------------------------------------------- 操作
 
     def tap(self, target, timeout: Optional[int] = None,
-            post_idle: bool = True) -> LayoutNode:
-        """点击：target 可为 Matcher 或 LayoutNode。"""
+            post_idle: bool = True,
+            keep_shot: Optional[bool] = None) -> LayoutNode:
+        """点击：target 可为 Matcher 或 LayoutNode。
+
+        `keep_shot` —— 截图分级留存的**调用方判定输入**（docs/截图分级留存策略.md），
+        本方法不猜：`None`（默认）按现行口径留「动作前」图；调用方确知页面已留档
+        且非降级命中时传 `False` 省 2 次 hdc 往返，省略记入 `step.shot_skipped`
+        与 `shots_skipped` 计数。失败路径不受它影响：本步失败且没留过图时，
+        兜底补一张失败现场 —— 失败证据只多不少。
+        """
         step = self._new_step('tap')
         t0 = time.time()
         try:
@@ -450,8 +468,13 @@ class Driver:
             step.node_path, step.coords = node.path, (x, y)
             self._fill_node_spec(step, node)
             if self.artifact_dir:
-                step.screenshot = self._art('before_tap.png')
-                self.hdc.pull(self.hdc.screen_cap(), step.screenshot)
+                if keep_shot is False:
+                    step.shot_skipped = True
+                    self.shots_skipped += 1
+                else:
+                    step.screenshot = self._art('before_tap.png')
+                    self.hdc.pull(self.hdc.screen_cap(), step.screenshot)
+                    self.shots_saved += 1
             self.hdc.click(x, y)
             self._mark_mutated()
             if post_idle:
@@ -460,6 +483,16 @@ class Driver:
         except Exception as e:
             step.ok, step.error = False, str(e)[:400]
             step.target = step.target or str(target)
+            if self.artifact_dir and not step.screenshot:
+                # 失败必留（分级矩阵第二行）：跳过了前置图的失败步，
+                # 补一张失败现场。补图本身失败则放弃 —— 证据尽力而为，
+                # 不能让留痕动作把原本的错误信息顶掉。
+                try:
+                    step.screenshot = self._art('fail_tap.png')
+                    self.hdc.pull(self.hdc.screen_cap(), step.screenshot)
+                    self.shots_saved += 1
+                except Exception:                          # noqa: BLE001
+                    step.screenshot = None
             raise
         finally:
             step.elapsed_ms = int((time.time() - t0) * 1000)
@@ -686,6 +719,7 @@ class Driver:
             os.makedirs(base, exist_ok=True)
             local = os.path.join(base, os.path.basename(local))
         self.hdc.pull(self.hdc.screen_cap(), local)
+        self.shots_saved += 1
         return local
 
     # -------------------------------------------------------- 断言
@@ -797,4 +831,7 @@ class Driver:
             'tree_dumps': self.tree_dumps,
             'tree_reuses': self.tree_reuses,
             'tree_reuse_rate': self.tree_reuse_rate,
+            # 截图账（分级留存）：省略数与留存数并列，省略才可见。
+            'screenshots_saved': self.shots_saved,
+            'screenshots_skipped': self.shots_skipped,
         }

@@ -541,6 +541,11 @@ class CaseResult:
     #: 同一个 driver 被多条用例复用时不会把上一条的账算到下一条头上。
     tree_dumps: int = 0
     tree_reuses: int = 0
+    #: 截图账（分级留存，docs/截图分级留存策略.md）。按用例记增量，
+    #: 口径同 tree_dumps —— 同一 driver 被多条用例复用时不串账。
+    #: skipped 必须与 saved 并列出报告：省略本身是要留痕的行为。
+    screenshots_saved: int = 0
+    screenshots_skipped: int = 0
 
     # ---------------------------------------------------------- 统计
 
@@ -691,6 +696,8 @@ class CaseResult:
             'tree_dumps': self.tree_dumps,
             'tree_reuses': self.tree_reuses,
             'tree_reuse_rate': self.tree_reuse_rate,
+            'screenshots_saved': self.screenshots_saved,
+            'screenshots_skipped': self.screenshots_skipped,
             'failures_by_kind': self.failures_by_kind(),
             'slowest': [s.to_dict() for s in self.slowest()],
             'steps': [s.to_dict() for s in self.steps],
@@ -805,6 +812,18 @@ class SuiteResult:
         """
         return round(self.tree_dumps / self.total, 3) if self.total else 0.0
 
+    # ---- 截图账（分级留存，docs/截图分级留存策略.md）
+
+    @property
+    def screenshots_saved(self) -> int:
+        """整批用例实际落盘的截图合计（tap 前置图 / 失败补图 / 独立截图）。"""
+        return sum(c.screenshots_saved for c in self.cases)
+
+    @property
+    def screenshots_skipped(self) -> int:
+        """整批用例按分级策略**有意省略**的截图合计 —— 省略必须可见。"""
+        return sum(c.screenshots_skipped for c in self.cases)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             'cases': len(self.cases),
@@ -825,6 +844,8 @@ class SuiteResult:
             'tree_reuses': self.tree_reuses,
             'tree_reuse_rate': self.tree_reuse_rate,
             'tree_dumps_per_step': self.tree_dumps_per_step(),
+            'screenshots_saved': self.screenshots_saved,
+            'screenshots_skipped': self.screenshots_skipped,
             'case_results': [c.to_dict() for c in self.cases],
         }
 
@@ -1183,6 +1204,8 @@ class Runner:
         # 调用方会这么做），直接读累计值会把上一条用例的账算到这一条头上。
         _dumps0 = int(getattr(driver, 'tree_dumps', 0) or 0)
         _reuses0 = int(getattr(driver, 'tree_reuses', 0) or 0)
+        _shots0 = int(getattr(driver, 'shots_saved', 0) or 0)
+        _skips0 = int(getattr(driver, 'shots_skipped', 0) or 0)
 
         first_failure: Optional[int] = None      # 首个失败步号，用于级联追溯
 
@@ -1263,6 +1286,9 @@ class Runner:
         # suite_report.json 直接读得到，不必再回会话记录里手工数。
         res.tree_dumps = max(0, int(getattr(driver, 'tree_dumps', 0) or 0) - _dumps0)
         res.tree_reuses = max(0, int(getattr(driver, 'tree_reuses', 0) or 0) - _reuses0)
+        # 截图账同口径增量（分级留存，docs/截图分级留存策略.md）
+        res.screenshots_saved = max(0, int(getattr(driver, 'shots_saved', 0) or 0) - _shots0)
+        res.screenshots_skipped = max(0, int(getattr(driver, 'shots_skipped', 0) or 0) - _skips0)
         if self.artifact_budget:
             self._prune_artifacts(driver, res)
         return res

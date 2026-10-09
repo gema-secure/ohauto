@@ -1135,17 +1135,17 @@ class Explorer:
                 label = f'{node.type}:{node.label}'
                 uid = f'{sig.structural_key}::{control_key(node)}'
 
-                shot = None
-                if self.artifact_dir:
-                    shot = os.path.join(self.artifact_dir,
-                                        f'explore_{cur.sid}_{len(self.graph.transitions)}.png')
+                # 截图分级留存（docs/截图分级留存策略.md）—— 判定输入由探索器
+                # 给，driver 不猜：
+                #   * 新页首达（本页还没登记过页面图）→ 必留，这是页面级证据；
+                #   * 降级命中（视觉通道伪节点）→ 必留，走了视觉通道不留图=隐瞒；
+                #   * 已留档页面上的普通成功交互 → 可省，省略在 Step 上留痕。
+                keep_shot = not cur.screenshot or node.type == 'Vision'
 
                 try:
-                    self.driver.tap(node, post_idle=True)
+                    self.driver.tap(node, post_idle=True, keep_shot=keep_shot)
                     if node.type == 'Vision':
                         self.vision_stats['tapped_ok'] += 1
-                    if shot:
-                        self.driver.screenshot(shot)
                 except Exception as e:
                     self.graph.add_edge(cur.sid, cur.sid, label, spec,
                                         ok=False, note=str(e)[:120])
@@ -1171,6 +1171,20 @@ class Explorer:
                     fresh = st is None
                     # ★ tarpit 判定必须在登记之前：拦截依据是「现有的」同族数量
                     tarpit_reason = self._tarpit_judge(new_sig, sig) if fresh else None
+                    shot = None
+                    if fresh and self.artifact_dir:
+                        # 新页面首次到达 → 页面图必留（分级矩阵第一行）。
+                        # 拿到新签名后再截：wait_idle 已判稳，屏幕内容稳定；
+                        # 与旧实现「签名前先截」的错位窗口同量级，不新增风险。
+                        shot = os.path.join(self.artifact_dir,
+                                            f'explore_{cur.sid}_{len(self.graph.transitions)}.png')
+                        try:
+                            self.driver.screenshot(shot)
+                        except Exception as e:                 # noqa: BLE001
+                            # 证据尽力而为：截不到图就登记为无图新页，
+                            # 不能让留痕动作打断探索主链路。
+                            self.log(f'  新页首图截取失败（不影响探索）: {str(e)[:60]}')
+                            shot = None
                     if fresh:
                         st = self.graph.add_state(
                             new_sig, self._page_title(), shot,
@@ -1233,7 +1247,10 @@ class Explorer:
         self._reenter()
         for i, spec in enumerate(state.path, 1):
             try:
-                self.driver.tap(spec_to_matcher(spec), post_idle=True)
+                # 回溯重放 = 已留档页面上的重复交互 → 前置图可省（分级留存）；
+                # 若此步失败，driver.tap 的失败补图兜底，证据只多不少。
+                self.driver.tap(spec_to_matcher(spec), post_idle=True,
+                                keep_shot=False)
             except Exception as e:
                 self.log(f'  回溯第 {i} 步失败: {str(e)[:70]}')
                 return False

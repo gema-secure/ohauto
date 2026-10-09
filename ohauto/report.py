@@ -88,6 +88,11 @@ def to_markdown(data: Dict[str, Any], path: str,
     rate = s.get('success_rate', 0.0)
     L.append(f"| 成功率 | {rate * 100:.1f}% |")
     L.append(f"| 总耗时 | {s.get('total_elapsed_ms', 0)} ms |")
+    # 截图分级留存的省略必须可见（docs/截图分级留存策略.md）——
+    # 只在数据在场的旧报告上保持原样，不制造空行。
+    if 'screenshots_saved' in s or 'screenshots_skipped' in s:
+        L.append(f"| 截图留存 / 省略 | {s.get('screenshots_saved', 0)}"
+                 f" / {s.get('screenshots_skipped', 0)} |")
     L.append('')
 
     if case:
