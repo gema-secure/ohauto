@@ -23,6 +23,7 @@
 | `waitGone` | 轮询 `assertComponentExist` 至抛 17000003 |
 | `tap` / `doubleTap` / `longPress` | `findComponent(...)` 的对应 click 方法 |
 | `tap_xy` | `driver.click(x, y)` |
+| `swipe` | `getDisplaySize()` + 方向/比例换算 → `driver.swipe(x1,y1,x2,y2)` |
 | `input` | `findComponent(...).inputText(v)` |
 | `back` | `driver.pressBack()` |
 | `screenshot` | `driver.screenCap(path)` |
@@ -30,9 +31,15 @@
 | `assert.gone` | 轮询至 17000003 |
 | `assert.text` | `getText()` + `expect().assertEqual()` |
 
+**`swipe` 的坐标从哪来（C9）**：DSL 的方向滑动是相对屏幕尺寸的，而 hypium 的
+`swipe(x1,y1,x2,y2)` 要绝对坐标。屏幕尺寸在**设备上运行时**用
+`driver.getDisplaySize()` 取，导出期不猜分辨率；换算公式逐字复刻
+`ohauto/driver.py` 的 `Driver.swipe`（同源 `generator.swipe_endpoints`）。
+DSL 里带 `anchor` 时先 `findComponent(...).getBounds()`，在控件矩形内换算。
+
 **不支持的 action**（导出期即抛错，绝不静默生成错误语义）：
-`stop` / `home` / `swipe` / `fling` / `waitIdle` / `scroll` ——
-hypium 无一一对应，或需要屏幕尺寸等运行时信息；报错信息里给出替代建议。
+`stop` / `home` / `fling` / `scroll` / `waitIdle` —— hypium 无一一对应，
+报错信息里给出替代建议。
 
 ## 关键行为差异（来自官方 d.ts 注释，生成代码据此设计）
 
@@ -177,12 +184,68 @@ def _step_to_ts(step: Dict[str, Any], idx: int,
             'hypium 需 triggerKey(键码)，键码依赖 @ohos.KeyCode 常量表，'
             '本导出器 v1 不内置。替代：back 序列，或手动填入键码后改模板。')
 
-    if a in ('swipe', 'fling', 'scroll'):
+    if a == 'swipe':
+        # C9：DSL 的方向滑动是**相对屏幕尺寸**的，hypium 的 swipe 要绝对坐标。
+        # 关键取舍：屏幕尺寸在**设备上运行时**取（`driver.getDisplaySize()`），
+        # 而不是在导出期按某个分辨率猜一组坐标 —— 猜错的分辨率会让滑动要么
+        # 划不动、要么把终点甩出屏幕，而文件里看不出来。
+        # 坐标算法逐字复刻 `driver.Driver.swipe`（`generator.swipe_endpoints`
+        # 是同一份），否则同一条用例在「引擎执行」与「hypium 执行」下终点不一致。
+        if isinstance(arg, str):
+            direction, scale, anchor = arg, 0.6, None
+        elif isinstance(arg, dict):
+            direction = arg.get('direction', 'up')
+            scale = float(arg.get('scale', 0.6))
+            anchor = arg.get('anchor')
+        else:
+            raise ValueError(f'swipe 参数必须是方向字符串或 dict，收到: {arg!r}')
+        d = str(direction).strip().lower()
+        if d not in ('up', 'down', 'left', 'right'):
+            raise ValueError(f'swipe.direction 必须是 up/down/left/right，'
+                             f'收到: {direction!r}')
+
+        if anchor is None:
+            head = (f'const size{idx} = await driver.getDisplaySize();\n'
+                    f'const l{idx} = 0, t{idx} = 0;\n'
+                    f'const w{idx} = size{idx}.x, h{idx} = size{idx}.y;')
+        else:
+            if not isinstance(anchor, dict):
+                raise ValueError(f'swipe.anchor 必须是定位条件 dict，收到: {anchor!r}')
+            # 容器内滑动：先定位控件、取运行时的 bounds，再在其矩形内换算。
+            head = (f'const anc{idx} = await driver.findComponent('
+                    f'{_on_chain(anchor)});\n'
+                    f'const box{idx} = await anc{idx}.getBounds();\n'
+                    f'const l{idx} = box{idx}.left, t{idx} = box{idx}.top;\n'
+                    f'const w{idx} = box{idx}.right - box{idx}.left;\n'
+                    f'const h{idx} = box{idx}.bottom - box{idx}.top;')
+
+        # Python 侧：cx=(left+right)//2 == left+w//2，故此处 Math.floor(l + w/2) 等价
+        cx = f'cx{idx}'
+        cy = f'cy{idx}'
+        calc = [f'const cx{idx} = Math.floor(l{idx} + w{idx} / 2);',
+                f'const cy{idx} = Math.floor(t{idx} + h{idx} / 2);']
+        if d == 'up':
+            calc.append(f'const dy{idx} = Math.floor(h{idx} * {scale} / 2);')
+            p = (cx, f'{cy} + dy{idx}', cx, f'{cy} - dy{idx}')
+        elif d == 'down':
+            calc.append(f'const dy{idx} = Math.floor(h{idx} * {scale} / 2);')
+            p = (cx, f'{cy} - dy{idx}', cx, f'{cy} + dy{idx}')
+        elif d == 'left':
+            calc.append(f'const dx{idx} = Math.floor(w{idx} * {scale} / 2);')
+            p = (f'{cx} + dx{idx}', cy, f'{cx} - dx{idx}', cy)
+        else:
+            calc.append(f'const dx{idx} = Math.floor(w{idx} * {scale} / 2);')
+            p = (f'{cx} - dx{idx}', cy, f'{cx} + dx{idx}', cy)
+        return (f'{desc}\n'
+                f'{head}\n'
+                + '\n'.join(calc) + '\n'
+                f'await driver.swipe({p[0]}, {p[1]}, {p[2]}, {p[3]});')
+
+    if a in ('fling', 'scroll'):
         raise UnsupportedActionError(
-            'hypium 的 swipe(x1,y1,x2,y2[,speed]) 需要绝对坐标，'
-            '而 DSL 的方向滑动是相对屏幕尺寸的 —— 需要运行时屏幕尺寸，'
-            'v1 不生成猜测坐标。替代：在 DSL 里改用 tap_xy 明确坐标，'
-            '或导出后手动按设备分辨率补全。')
+            'hypium 的 fling 用的是 UiDirection 枚举而非 DSL 的 0/1/2/3，'
+            'scroll 更是依赖具体可滚动控件 —— 二者语义都无法一一对应。'
+            '替代：改用 swipe(direction, scale)，它已支持导出。')
 
     if a in ('waitidle', 'wait_idle'):
         raise UnsupportedActionError(
@@ -292,27 +355,22 @@ def _step_to_ts(step: Dict[str, Any], idx: int,
             f'assert.{kind} 不支持。支持: exists / gone / text')
 
     # 已知但**导出器未实现**的 action（DSL 里有、hypium 侧没有一一对应）。
-    # 2026-09-22 修：原报错信息把 `waitIdle` 列进了「已支持」，
-    # 与它**正在报错**的事实自相矛盾 —— 用例作者照那句话去找 waitIdle
-    # 的写法会白费时间。模块头 docstring 本来是对的（明确列了不支持的 6 个），
-    # 是这行消息抄成了 DSL 的全量 action 列表。
+    # `fling` / `scroll` 在更上面单独报错（有各自的替代建议），不重复列在这里。
     known_unsupported = {
         'stop': 'hypium 无停止 ability 的等价 API',
         'home': 'hypium 无返回桌面 API（可改用 back，或 start 目标应用）',
-        'swipe': '需要屏幕尺寸等运行时信息',
-        'fling': '需要屏幕尺寸等运行时信息',
         'waitIdle': 'hypium 无「连续两次控件树一致」的等价判据，'
                     '可改用固定 waitFor，或去掉该步',
-        'scroll': '需要屏幕尺寸等运行时信息',
     }
     if a in known_unsupported:
         raise UnsupportedActionError(
             f'DSL action {a!r} 导出器未实现：{known_unsupported[a]}。'
             f'已实现的 action: start/wait/waitFor/waitGone/tap/doubleTap/'
-            f'longPress/tap_xy/input/back/screenshot/assert')
+            f'longPress/tap_xy/swipe/input/back/screenshot/assert')
     raise UnsupportedActionError(
         f'未知 DSL action: {a!r}。已实现的 action: start/wait/waitFor/'
-        f'waitGone/tap/doubleTap/longPress/tap_xy/input/back/screenshot/assert')
+        f'waitGone/tap/doubleTap/longPress/tap_xy/swipe/input/back/'
+        f'screenshot/assert')
 
 
 # --------------------------------------------------------------- 用例导出

@@ -336,6 +336,30 @@ class TestSafetyPolicy(unittest.TestCase):
             n = LayoutNode(type='Button', text=txt)
             self.assertTrue(pol.is_dangerous(n)[0], txt)
 
+    def test_multilingual_patterns(self):
+        """C6：俄/西/阿三种语言的不可逆操作也要被拦下。
+
+        背景：界面文案是外文时，只写中英文会让整条黑名单**静默失效** ——
+        探索照样点进「Удалить / Eliminar / حذف」。这不报错、也不显眼，
+        正是最该被钉子钉住的类型。
+        """
+        from ohauto.layout import LayoutNode
+        pol = SafetyPolicy()
+        cases = [
+            ('Удалить', 'ru-delete'), ('Очистить', 'ru-clear'),
+            ('Сброс', 'ru-reset'), ('Оплатить', 'ru-pay'),
+            ('Выйти', 'ru-logout'), ('Отвязать', 'ru-unbind'),
+            ('Eliminar', 'es-delete'), ('Borrar', 'es-delete'),
+            ('Restablecer', 'es-reset'), ('Pagar', 'es-pay'),
+            ('Cerrar sesión', 'es-logout'), ('Desinstalar', 'es-uninstall'),
+            ('حذف', 'ar-delete'), ('مسح', 'ar-clear'),
+            ('دفع', 'ar-pay'), ('شراء', 'ar-buy'),
+            ('تسجيل الخروج', 'ar-logout'), ('إلغاء التثبيت', 'ar-uninstall'),
+        ]
+        for txt, tag in cases:
+            n = LayoutNode(type='Button', text=txt)
+            self.assertTrue(pol.is_dangerous(n)[0], f'{tag}: {txt}')
+
 
 # ================================================================ 探索
 

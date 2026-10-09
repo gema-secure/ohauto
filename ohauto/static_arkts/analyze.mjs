@@ -27,9 +27,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** 危险控件文案模式 —— 与 ohauto/explorer.py 的 SafetyPolicy 口径保持一致。 */
+/** 危险控件文案模式（C6：中/俄/西/阿）—— 与 ohauto/explorer.py 的
+ *  SafetyPolicy 口径保持一致。这里是**源码 Text(...) 字面量**级的近似，
+ *  按各语言的「不可逆操作」核心词收；外文界面下漏掉语种等于黑名单静默失效。 */
 const DANGER_PATTERNS = [
   /删除|移除|清空|注销|重置|恢复出厂|支付|付款|转账|下单|提交订单|确认支付/i,
+  // 俄文
+  /удал|очист|сброс|оплат|покуп|заказ|пополн|перевод|выйти|выход|отвяз/i,
+  // 西班牙文
+  /eliminar|borrar|quitar|limpiar|restablecer|formatear|pagar|pago|comprar|compra|pedido|recargar|transferir|transferencia|cerrar\s*sesi|salir|desvincular|desinstalar/i,
+  // 阿拉伯文
+  /حذف|إزالة|مسح|إعادة تعيين|تهيئة|دفع|شراء|إلغاء الطلب|تعبئة|تحويل|تسجيل الخروج|إلغاء الربط|إلغاء التثبيت/,
 ];
 
 const RE_ID = /\.id\(\s*['"]([^'"]+)['"]\s*\)/g;

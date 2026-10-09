@@ -41,7 +41,7 @@ def _tmp_case(case):
 
 
 class TestExportLogin(unittest.TestCase):
-    """真实用例（login.yaml，13 步含 1 个不支持动作）端到端导出。"""
+    """真实用例（login.yaml，13 步）端到端导出。"""
 
     @classmethod
     def setUpClass(cls):
@@ -90,10 +90,11 @@ class TestExportLogin(unittest.TestCase):
                     and s.endswith("');"):
                 self.fail(f'单引号嵌套: {line}')
 
-    def test_unsupported_step_has_placeholder(self):
-        # swipe 无法自动导出 → 占位 + 明确报错，且不阻断后续步骤
-        self.assertIn('步骤 10 (swipe) 未导出', self.src)
-        self.assertIn('⚠️', self.src)
+    def test_swipe_exported_not_placeholder(self):
+        # C9：login.yaml 的 step 10 是 swipe —— 现在应真导出，而不是占位报错。
+        self.assertIn('step 10: swipe', self.src)
+        self.assertIn('await driver.swipe(', self.src)
+        self.assertNotIn('步骤 10 (swipe) 未导出', self.src)
         self.assertIn('step 11: screenshot', self.src)
         self.assertIn('step 13: assert', self.src)
 
@@ -225,6 +226,49 @@ class TestTextContainsIsReachable(unittest.TestCase):
             src = self._read_src(out)
             self.assertNotIn('ON.', src,
                              '产物里不许出现裸的 ON.（非法 .ets）')
+
+
+class TestSwipeExport(unittest.TestCase):
+    """C9：swipe 从「不可导出」变为「可导出」。
+
+    核心契约是**屏幕尺寸运行时取**（`driver.getDisplaySize()`），
+    而不是导出期按某个分辨率猜坐标 —— 猜错的分辨率在产物里看不出来。
+    """
+
+    def _export(self, step):
+        case = {'name': 't', 'bundle': 'b', 'ability': 'A', 'steps': [step]}
+        p, out = _tmp_case(case)
+        r = _run(p, '--out', out)
+        src = ''
+        if os.path.exists(out):
+            with open(out, encoding='utf-8') as f:
+                src = f.read()
+        return r, src
+
+    def test_direction_uses_runtime_display_size(self):
+        r, src = self._export({'swipe': {'direction': 'up', 'scale': 0.6}})
+        self.assertEqual(r.returncode, 0, r.stderr.decode('utf-8', 'replace'))
+        self.assertIn('await driver.getDisplaySize()', src)
+        self.assertIn('await driver.swipe(', src)
+        self.assertNotIn('未导出', src)
+
+    def test_string_form_uses_default_scale(self):
+        r, src = self._export({'swipe': 'left'})
+        self.assertEqual(r.returncode, 0, r.stderr.decode('utf-8', 'replace'))
+        self.assertIn('* 0.6 / 2', src)
+
+    def test_anchor_swipes_inside_component_bounds(self):
+        r, src = self._export({'swipe': {'direction': 'right',
+                                         'anchor': {'id': 'lv'}}})
+        self.assertEqual(r.returncode, 0, r.stderr.decode('utf-8', 'replace'))
+        self.assertIn("await driver.findComponent(ON.id('lv'))", src)
+        self.assertIn('.getBounds()', src)
+
+    def test_bad_direction_is_rejected(self):
+        # 方向拼错属用例级错误：宁可导出失败，也不能生成一条语义跑偏的滑动
+        r, src = self._export({'swipe': {'direction': 'diagonal'}})
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('direction', r.stderr.decode('utf-8', 'replace'))
 
 
 if __name__ == '__main__':
