@@ -27,6 +27,8 @@ CI 若为了 lint 引入一堆重依赖，
 | `T101` | error | tests/ 里 `try` 内含 `self.assert*` 且 `except Exception: pass`——断言被吞，测试空转全绿（本仓库真实踩过） |
 | `NAR001` | 棘轮 | 注释/docstring 里的**纪要语体**（日期戳 / 回执引用 / 修复前叙事）。基线冻结在 `NARRATIVE_BASELINE`：存量→warning，**任何文件超出基线→error**（防反弹；实测清理期间日期戳一度不降反升） |
 | `CONV2` | warning | tools/ 里 `return 2` / `sys.exit(2)` 却没接 `require_device`——退出码 2 约定保留给「设备不在场」 |
+| `LAY001` | error | ohauto/ **分层违例**：低层模块 import 高层模块。层级表见 `LAYERS`（L1 基元 → L2 设备通道 → L3 能力 → L4 编排）—— 规划 1B 成果的机器化固化（S7） |
+| `EXC001` | 棘轮 | **无标记**的 `except Exception`。新增必须带 `# noqa(原因)` 标记；存量冻结在 `BROAD_EXCEPT_BASELINE`：存量→warning，超出基线或新文件→error，只减不增（S15） |
 
 用法
 ----
@@ -467,6 +469,166 @@ def _check_import_boundary(path: str, tree) -> List[Finding]:
     return out
 
 
+# ---------------------------------------------------------------- 分层闸（LAY001）
+
+#: ohauto 包的四层依赖图（规划 1E：把 1B 的归位成果固化成机器校验）。
+#: 规则：layer N 的模块只能 import 同层或更低层，向上即 LAY001 error。
+#:
+#:   L1 基元层    纯数据结构与纯函数（无设备、无 I/O）
+#:   L2 设备通道层 hdc/设备封装、视觉通道、驱动、体检
+#:   L3 能力层    单环能力：操作、定位、融合、跨形态、模拟器
+#:   L4 编排层    跨环编排：探索、生成、诊断、信号、执行、报告
+#:
+#: `ohauto/__init__.py` 是对外门面（re-export 一切），不参与检查；
+#: `static_arkts` 是自包含子包，按 L1 对待。
+#: 层级表改动 = 架构决策，必须同步 docs/发展规划与改进建议.md。
+LAYERS: Dict[int, Tuple[str, ...]] = {
+    1: ('layout', 'identity', 'matcher', 'permission', 'treesum',
+        'llm_transport', 'report', 'static_arkts'),
+    2: ('hdc', 'devices', 'doctor', 'driver', 'vision'),
+    3: ('action', 'locator', 'fusion', 'sim', 'crossform'),
+    4: ('explorer', 'generator', 'diagnose', 'signals', 'runner',
+        'crossform_report'),
+}
+_LAYER_OF: Dict[str, int] = {m: lv for lv, ms in LAYERS.items() for m in ms}
+
+
+def _check_layering(path: str, rel: str, tree) -> List[Finding]:
+    """分层闸：低层模块不得 import 高层模块。
+
+    S7 的教训：locator(L3) 曾反向 import explorer(L4)，导致「定位」这一
+    基础能力背着「探索」这一编排能力 —— 想单独复用定位就得拖上整个
+    探索器。1B 已把身份指纹下沉到 identity.py 归位，本规则防止下一次
+    改动悄悄长回来。覆盖相对导入（`from .xxx`）与绝对导入
+    （`from ohauto.xxx` / `import ohauto.xxx`）两条路。
+    """
+    out: List[Finding] = []
+    if not rel.startswith('ohauto/'):
+        return out
+    parts = rel.split('/')
+    mod = parts[1][:-3] if parts[1].endswith('.py') else parts[1]
+    my_layer = _LAYER_OF.get(mod)
+    if my_layer is None:            # __init__.py 门面 / 未入表的模块
+        return out
+
+    for node in ast.walk(tree):
+        targets: List[Tuple[int, str]] = []
+        if isinstance(node, ast.ImportFrom):
+            if node.level == 1:                        # from .xxx / from . import xxx
+                if node.module:
+                    targets.append((node.lineno, node.module.split('.')[0]))
+                else:
+                    targets.extend((node.lineno, a.name) for a in node.names)
+            elif node.module:                          # from ohauto.xxx import
+                seg = node.module.split('.')
+                if seg[0] == 'ohauto':
+                    if len(seg) > 1:
+                        targets.append((node.lineno, seg[1]))
+                    else:                               # from ohauto import xxx
+                        targets.extend((node.lineno, a.name) for a in node.names)
+        elif isinstance(node, ast.Import):             # import ohauto.xxx
+            for a in node.names:
+                seg = a.name.split('.')
+                if seg[0] == 'ohauto' and len(seg) > 1:
+                    targets.append((node.lineno, seg[1]))
+        for ln, target in targets:
+            tl = _LAYER_OF.get(target)
+            if tl is not None and tl > my_layer:
+                out.append(Finding(
+                    'error', path, ln, 'LAY001',
+                    f'L{my_layer} 模块 {mod} 不得 import L{tl} 的 {target}'
+                    f' —— 依赖只能向下（见 static_check.LAYERS）'))
+    return out
+
+
+# ---------------------------------------------------------------- 宽泛 except 棘轮（EXC001）
+
+_BROAD_EXC_NAMES = frozenset({'Exception', 'BaseException'})
+
+
+def _is_broad_except(t) -> bool:
+    """是否宽泛捕获（含元组里混着 Exception 的情况）。裸 except 由 E722 管。"""
+    if isinstance(t, ast.Name):
+        return t.id in _BROAD_EXC_NAMES
+    if isinstance(t, ast.Attribute):
+        return t.attr in _BROAD_EXC_NAMES
+    if isinstance(t, ast.Tuple):
+        return any(_is_broad_except(x) for x in t.elts)
+    return False
+
+
+#: 棘轮基线（相对路径 → 允许的**无标记**宽泛 except 数）。
+#: 口径：except 行带 `# noqa`（如 `# noqa: BLE001 —— 理由`）即视为已标记。
+#: **规则**：无标记数 ≤ 基线 → warning（存量，逐步清）；> 基线或文件不在
+#: 表内 → error（新增必须带 `# noqa(原因)`）。清理后同步调低/删除基线项，
+#: 故意调高 = 显式接受，必须写明理由。
+BROAD_EXCEPT_BASELINE: Dict[str, int] = {
+    'examples/dump_tree.py': 1,
+    'examples/run_case.py': 1,
+    'examples/run_suite.py': 4,
+    'examples/smoke_test.py': 4,
+    'ohauto/action.py': 1,
+    'ohauto/diagnose.py': 8,
+    'ohauto/doctor.py': 8,
+    'ohauto/driver.py': 13,
+    'ohauto/explorer.py': 7,
+    'ohauto/fusion.py': 6,
+    'ohauto/generator.py': 6,
+    'ohauto/llm_transport.py': 1,
+    'ohauto/locator.py': 2,
+    'ohauto/runner.py': 12,
+    'ohauto/vision.py': 2,
+    'tests/test_attack_surface.py': 1,
+    'tools/case_health.py': 1,
+    'tools/configure_hdc.py': 1,
+    'tools/crossform_run.py': 2,
+    'tools/demo_full_chain.py': 1,
+    'tools/e2e_smoke_real.py': 10,
+    'tools/eval_nl_generation_real.py': 1,
+    'tools/make_handoff_zips.py': 1,
+    'tools/ocr_worker.py': 2,
+    'tools/preflight.py': 2,
+    'tools/sign_hap.py': 3,
+    'tools/stability_telemetry.py': 5,
+    'tools/ui_viewer.py': 1,
+    'tools/verify_core_flows_real.py': 3,
+    'tools/verify_locator_degrade.py': 2,
+}
+
+
+def _check_broad_except(path: str, rel: str, text: str,
+                        tree) -> Optional[Finding]:
+    """宽泛 except 棘轮：无标记的 `except Exception` 只减不增。
+
+    宽泛捕获本身合法（顶层兜底、外部输入解析都要它），失控的是**无标记**
+    的宽泛捕获 —— 三个月后没人说得清哪个是故意的、哪个是懒得写类型。
+    所以治理口径不是禁止，而是**逼作者留痕**：`# noqa(原因)`。
+    """
+    lines = text.splitlines()
+    unmarked: List[int] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ExceptHandler) and _is_broad_except(node.type):
+            ln_text = lines[node.lineno - 1] if node.lineno <= len(lines) else ''
+            if '# noqa' not in ln_text:
+                unmarked.append(node.lineno)
+    if not unmarked:
+        return None
+    base = BROAD_EXCEPT_BASELINE.get(rel, 0)
+    where = ', '.join(f'第{ln}行' for ln in sorted(unmarked)[:8])
+    more = '' if len(unmarked) <= 8 else f'（等共 {len(unmarked)} 处）'
+    if len(unmarked) > base:
+        extra = len(unmarked) - base
+        return Finding(
+            'error', path, sorted(unmarked)[0], 'EXC001',
+            f'无标记的 except Exception 新增 {extra} 处'
+            f'（现 {len(unmarked)}/基线 {base}）：'
+            f'新增宽泛捕获必须带 # noqa(原因) 标记 —— {where}{more}')
+    return Finding(
+        'warning', path, sorted(unmarked)[0], 'EXC001',
+        f'无标记的 except Exception 存量 {len(unmarked)}/基线 {base}'
+        f'（新增会转 error；清零后请从基线表删除该文件）—— {where}{more}')
+
+
 def _check_file(path: str, check_annotations: bool) -> List[Finding]:
     with open(path, encoding='utf-8') as f:
         text = f.read()
@@ -538,6 +700,11 @@ def run(root: str = ROOT, check_annotations: bool = True,
         if ef:
             findings.append(ef)
         findings.extend(_check_swallowed_assert(p, rel, tree))
+        # ---- 治理闸（LAY001 / EXC001，规划 1E）
+        findings.extend(_check_layering(p, rel, tree))
+        bf = _check_broad_except(p, rel, text, tree)
+        if bf:
+            findings.append(bf)
 
     errors = [f for f in findings if f.level == 'error']
     warns = [f for f in findings if f.level == 'warning']
