@@ -42,7 +42,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
@@ -276,45 +275,35 @@ class OpenAICompatibleProvider(LLMProvider):
                 f'LLM 配置不完整，缺少环境变量: {missing}', transient=False)
 
     def complete(self, prompt: str) -> str:
-        import urllib.error
-        import urllib.request
+        """发一次 chat/completions，返回 content 文本。
 
-        body = json.dumps({
+        传输层（含重试、超时、transient 判定）已下沉到
+        `llm_transport.post_chat`（S9：网络坑只修一处）；本方法只负责
+        装配 payload、解析 choices、对业务层错误（choices 空 / 内容空）
+        抛 `ProviderError`。重试用尽后 post_chat 抛出的原始异常在这里被
+        包成 `ProviderError(transient=False)` —— 已重试过，不再让上层重试。
+        """
+        from .llm_transport import post_chat
+
+        payload = {
             'model': self.model,
             'temperature': self.temperature,
             'messages': [{'role': 'user', 'content': prompt}],
-        }).encode('utf-8')
-        url = f'{self.base_url}/chat/completions'
-        last: Optional[BaseException] = None
-
-        for attempt in range(self.max_retries + 1):
-            req = urllib.request.Request(url, data=body, method='POST')
-            req.add_header('Content-Type', 'application/json')
-            req.add_header('Authorization', f'Bearer {self.api_key}')
-            try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                    raw = resp.read().decode('utf-8', 'replace')
-                data = json.loads(raw)
-                choices = data.get('choices') or []
-                if not choices:
-                    raise ProviderError(f'响应里没有 choices: {raw[:200]}')
-                text = (choices[0].get('message') or {}).get('content') or ''
-                if not text.strip():
-                    raise ProviderError('模型返回了空内容')
-                return text
-            except ProviderError as e:
-                last = e
-            except urllib.error.HTTPError as e:
-                last = ProviderError(f'HTTP {e.code}: {e.reason}',
-                                     transient=e.code >= 500 or e.code == 429)
-            except Exception as e:                        # 超时 / 网络 / JSON 解析
-                last = ProviderError(f'{type(e).__name__}: {e}')
-            if not getattr(last, 'transient', True):
-                break
-            if attempt < self.max_retries:
-                time.sleep(0.5 * (attempt + 1))
-
-        raise last or ProviderError('未知的调用失败')
+        }
+        try:
+            body = post_chat(self.base_url, self.api_key, payload,
+                             timeout=self.timeout, max_retries=self.max_retries)
+        except ProviderError:
+            raise
+        except Exception as e:                        # 重试用尽 / non-transient
+            raise ProviderError(f'{type(e).__name__}: {e}', transient=False) from e
+        choices = body.get('choices') or []
+        if not choices:
+            raise ProviderError(f'响应里没有 choices: {json.dumps(body)[:200]}')
+        text = (choices[0].get('message') or {}).get('content') or ''
+        if not text.strip():
+            raise ProviderError('模型返回了空内容')
+        return text
 
 
 def default_provider() -> LLMProvider:

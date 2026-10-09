@@ -163,22 +163,16 @@ bbox 使用截图像素坐标，原点在左上角。
         `disable_thinking` **只在调用方显式传了**才转发：子类可能在自己的
         `__init__` 里自塞 `True`（见工装的 `NoThinkingProvider`），
         无条件带上默认值会把它的开关反向清掉。
-        """
-        def env(*names: str) -> str:
-            for n in names:
-                v = os.environ.get(n, '')
-                if v:
-                    return v
-            return ''
 
-        base_url = kw.get('base_url') or env(
-            'OHAUTO_VISION_BASE_URL', 'OHAUTO_LLM_BASE_URL', 'OH_LLM_BASE_URL')
-        api_key = kw.get('api_key') or env(
-            'OHAUTO_VISION_API_KEY', 'OHAUTO_LLM_API_KEY', 'OH_LLM_API_KEY')
-        model = kw.get('model') or env(
-            'OHAUTO_VISION_MODEL', 'OHAUTO_LLM_MODEL', 'OH_LLM_MODEL')
-        missing = [n for n, v in (('base_url', base_url), ('api_key', api_key),
-                                  ('model', model)) if not v]
+        环境变量读取已下沉到 `llm_transport.env_triple`（S9：逐变量多前缀回退
+        只一份实现）；本方法只保留 vision 专有的报错口径（VisionConfigError）。
+        """
+        from .llm_transport import env_triple
+        base_url, api_key, model, missing = env_triple(
+            ('OHAUTO_VISION_BASE_URL', 'OHAUTO_LLM_BASE_URL', 'OH_LLM_BASE_URL'),
+            ('OHAUTO_VISION_API_KEY', 'OHAUTO_LLM_API_KEY', 'OH_LLM_API_KEY'),
+            ('OHAUTO_VISION_MODEL', 'OHAUTO_LLM_MODEL', 'OH_LLM_MODEL'),
+            overrides=kw)
         if missing:
             raise VisionConfigError(
                 '视觉 Provider 缺少配置: ' + ', '.join(missing) +
@@ -220,16 +214,15 @@ bbox 使用截图像素坐标，原点在左上角。
 
     def _post(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """传输层：只发请求、只解析 body。异常上抛给 locate 统一包裹 ——
-        这样测试替身可以只覆写传输层、复用上层的异常语义。"""
-        import urllib.request
-        req = urllib.request.Request(
-            f'{self.base_url}/chat/completions',
-            data=json.dumps(payload).encode('utf-8'),
-            headers={'Content-Type': 'application/json',
-                     'Authorization': f'Bearer {self.api_key}'},
-        )
-        with urllib.request.urlopen(req, timeout=self.timeout) as r:
-            return json.loads(r.read().decode('utf-8'))
+        这样测试替身可以只覆写传输层、复用上层的异常语义。
+
+        实现已下沉到 `llm_transport.post_chat`（结构债 S9：传输层只一份实现）；
+        本方法保留为实例方法，是因为测试用 `mock.patch.object(..., '_post', ...)`
+        拦截传输层来断言 payload，去掉方法会让那些钉子失去拦截点。
+        """
+        from .llm_transport import post_chat
+        return post_chat(self.base_url, self.api_key, payload,
+                         timeout=self.timeout)
 
     def _build_context(self, hints: Optional[List[Dict[str, Any]]]) -> str:
         if not hints:
@@ -283,19 +276,15 @@ bbox 使用截图像素坐标，原点在左上角。
 
     @staticmethod
     def _parse(text: str) -> List[VisualTarget]:
-        """从模型输出里抠出 JSON 数组。容忍 markdown 代码块包裹。"""
-        m = re.search(r'```(?:json)?\s*(.*?)```', text, re.S)
-        if m:
-            text = m.group(1)
-        m = re.search(r'\[.*\]', text, re.S)
-        if not m:
-            return []
-        try:
-            arr = json.loads(m.group(0))
-        except json.JSONDecodeError:
-            return []
+        """从模型输出里抠出 JSON 数组并翻译成 `VisualTarget`。
+
+        抠数组已下沉到 `llm_transport.extract_json_array`（S9：围栏解析只一份实现）；
+        本方法只负责把每个 dict 翻译成带 `Rect`/`confidence` 的 `VisualTarget` ——
+        这是 vision 专有的口径，不与 generator 的 `parse_json_payload` 共用。
+        """
+        from .llm_transport import extract_json_array
         out = []
-        for item in arr if isinstance(arr, list) else []:
+        for item in extract_json_array(text):
             if not isinstance(item, dict):
                 continue
             bbox = item.get('bbox') or item.get('bounds')
