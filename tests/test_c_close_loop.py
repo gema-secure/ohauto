@@ -1,6 +1,6 @@
 """失败归因闭环回归钉子：失败步 → 归因 → 结果/报告。
 
-背景（2026-09-23）：`diagnose_failed_step()` 早就就绪、`StepResult` 的
+背景：`diagnose_failed_step()` 早就就绪、`StepResult` 的
 `trees` / `locator_id` 字段也早就备好，但**生产链路一次都没调用过** ——
 归因只能靠 examples 手动跑，于是「崩溃 ✅ / 白屏 ✅」拿不出证据链。
 

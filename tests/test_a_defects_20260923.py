@@ -1,4 +1,4 @@
-"""A 侧缺陷修复验收钉子（2026-09-23）。
+"""缺陷修复验收钉子。
 
 对应 C 回执 docs/给A-缺陷回执-2026-09-22.md 与 B 的真机设计输入：
 
@@ -49,7 +49,7 @@ def real_tree(name):
 # ================================================================ C 2.2 幂等
 
 class TestFailureIdempotency(unittest.TestCase):
-    """C 回执 2.2 的验收原文：locate() 落空 + 执行器回写后
+    """验收原文：locate() 落空 + 执行器回写后
     consecutive_failures == 1（修复前是 2）。"""
 
     def _manager_and_spec(self):
@@ -68,7 +68,7 @@ class TestFailureIdempotency(unittest.TestCase):
         m, spec = self._manager_and_spec()
         empty = node('root')
         self.assertIsNone(m.locate('支付按钮', empty, page_signature='P1'))
-        # B 的执行器按契约回写同一次失败
+        # 执行器按契约回写同一次失败
         m.record_locator_failure(spec.locator_id, '执行器回写：定位失败')
         h = m.health(spec.locator_id)
         self.assertEqual(h.consecutive_failures, 1,
@@ -117,7 +117,7 @@ class TestFailureIdempotency(unittest.TestCase):
 # ================================================================ C 2.1 真回滚
 
 class TestRepairRollback(unittest.TestCase):
-    """C 回执 2.1：验证失败必须把 spec 恢复原状。
+    """验证失败必须把 spec 恢复原状。
     用 monkeypatch 强制验证环节判不中（_lv_id_exact / _lv_path_type 都
     返回空），专测「验证失败分支」的回滚不变量。"""
 

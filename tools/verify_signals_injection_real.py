@@ -10,7 +10,7 @@
 | `crash` | `kill -11 <pid>`（SIGSEGV）杀被测应用 | `CRASH` —— **1.0**（系统落 cppcrash 日志）+ 0.9（进程消失） |
 | `no_window` | `power-shell suspend` 息屏 → 锁屏不进无障碍树 | `NO_WINDOW` |
 
-> **为什么用 `-11` 而不是 `-9`**：实测（2026-09-23）`kill -9`（SIGKILL）**不会**让
+> **为什么用 `-11` 而不是 `-9`**：实测 `kill -9`（SIGKILL）**不会**让
 > `faultlogger` 落日志 —— 它只杀了进程，判据只能给 0.35 的「进程消失」弱证据。
 > `kill -11`（SIGSEGV）会被系统当作真实崩溃捕获，落一份
 > `cppcrash-<bundle>-<uid>-<时间戳>`，判据走到 1.0 那条路。

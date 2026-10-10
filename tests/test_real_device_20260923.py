@@ -16,7 +16,7 @@
 | `sample_calc` | ohos.samples.distributedcalc | 计算器（20 个可交互、19 个只有 id） |
 | `sample_music` | ohos.samples.media | 播放器 |
 
-★ 为什么值得单独一个文件：**这些缺陷只有真机能暴露**。本轮（2026-09-23）
+★ 为什么值得单独一个文件：**这些缺陷只有真机能暴露**。本轮
 用它抓到两条，都是模拟设备上永远不会红的：
 
   1. `detect_dialog` 的「多窗口」判据在真机上**恒为真** ——
@@ -88,7 +88,7 @@ class _StubDriver:
 
 
 class TestRealTreesParse(unittest.TestCase):
-    """真机控件树能解析，且节点数与 C 的 meta 一致 —— 夹具没被改坏。"""
+    """真机控件树能解析，且节点数与 meta 一致 —— 夹具没被改坏。"""
 
     def test_all_samples_parse(self):
         for name in SAMPLES:
@@ -225,7 +225,7 @@ class TestUsabilityOnRealTrees(unittest.TestCase):
     `opacity=0.7` 的节点（`Row`，列表项主色/禁用态），`sample_calc` 的
     `result` 甚至是 `0.38`。
 
-    于是 C 复核的那条缺陷在真机上**真的会误判**：
+    于是 复核的那条缺陷在真机上**真的会误判**：
     原判据 `opacity < 1.0 → 不可用` 会把所有这些节点判成「点不动」，
     再顺着推到 `CASE_DEFECT`。
     """

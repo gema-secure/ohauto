@@ -1,4 +1,4 @@
-"""系统权限弹窗识别与处置（C3）的单元测试。
+"""系统权限弹窗识别与处置的单元测试。
 
 两类输入：
   * **真机夹具** `tests/fixtures/permission/multi_device_dialog_1009.json`

@@ -759,7 +759,7 @@ class TestTreeAccounting(unittest.TestCase):
 class TestFiftyStepKpi(unittest.TestCase):
     """执行引擎 验收标准：50 步连续执行**成功**率 ≥ 95%。
 
-    ⚠️ 2026-09-23 口径更正（来源：外部评审 + C 复核）。
+    ⚠️ 2026-09-23 口径更正（来源：外部评审 + 复核）。
 
     本类原来用 `independent_success_rate`（非级联失败率）当「成功率」断言，
     **名字与语义不符**：50 步里挂 45 步、其中 44 步判 cascade 时，
@@ -1011,7 +1011,7 @@ class TestContractEntry(unittest.TestCase):
 
 
 class TestFailureSnapshots(unittest.TestCase):
-    """失败步必须留下控件树快照（B 交付包的 C-2）。
+    """失败步必须留下控件树快照（存档记录）。
 
     为什么值得单测守住：归因引擎判「定位失败」靠的是「目标控件在**所有**快照里
     都不存在」这条硬证据。没有快照时它不只是置信度从 0.85 掉到 0.6 ——

@@ -35,7 +35,7 @@ def make_recording_hdc():
     h.verbose = False
     h.calls = []
     # 手工构造必须与 `Hdc.__init__` 对齐：写动作现在经 backend 派发，
-    # 少了这个属性 `input_text` 会直接 AttributeError（C8）。
+    # 少了这个属性 `input_text` 会直接 AttributeError。
     h._backend = _UitestBackend(h)
 
     def fake_run(args, timeout=None, check=False, binary=False, retries=0):

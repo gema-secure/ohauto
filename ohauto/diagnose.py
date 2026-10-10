@@ -1,14 +1,14 @@
 """
-B4 —— 失败归因引擎（四分类）
+失败归因引擎（四分类）
 ============================
 
 对外契约：`diagnose(record) -> Verdict`（category + evidence + suggestion）。
 
-这是本项目的**三个真空白之一**（另外两个是 C3 跨形态、A3 定位器自愈）：
+这是本项目的**三个真空白之一**（另外两个是跨形态比对、定位器自愈）：
 调研过的同类项目都只报「失败」，没有一个做归因。所以这个模块的价值不在于
 「跑得出结果」，而在于**每一步结论都能拿出客观证据、并且能被证伪**。
 
-四分类（任务卡第三章 B4）
+四分类
 ------------------------
     LOCATOR      定位失败      目标控件不在树、但页面指纹符合预期
     TIMING       时序问题      控件存在，等一等/重试就能过
@@ -22,10 +22,10 @@ B4 —— 失败归因引擎（四分类）
 
 `FOUR_CATEGORIES` 就是上面那四类，**归因准确率只在这四类上统计**。
 
-与 C4 的分工（这条边界不能越）
+与信号采集的分工（这条边界不能越）
 ------------------------------
 `collect_signals()` 只输出「客观证据 + 异常识别 + 置信度」，**不做归因判断**；
-本模块才下结论。所以这里绝不能反过来要求 C4 告诉我们「这是应用缺陷」。
+本模块才下结论。所以这里绝不能反过来要求信号采集告诉我们「这是应用缺陷」。
 
 判定顺序（先看严重的、排除性的，再看解释性的）
 ----------------------------------------------
@@ -38,7 +38,7 @@ B4 —— 失败归因引擎（四分类）
 
 一条重要纪律：**弱证据不参与定案**
 ------------------------------------------------
-C4 明确标注过几类低置信度证据（进程不在但无崩溃日志 0.35、hilog 关键词 0.45、
+信号采集明确标注过几类低置信度证据（进程不在但无崩溃日志 0.35、hilog 关键词 0.45、
 无响应的多轮探测 0.3 等），并特意说明「别把它单独当结论用」。
 因此应用缺陷的判定有一条 `APP_CONFIDENCE_FLOOR` 门槛：低于它的异常证据
 只会进 `evidence` 作为参考，**不会**单独把一次失败判成应用缺陷。
@@ -63,7 +63,7 @@ from .signals import collect_signals
 class Category(str, Enum):
     """归因输出：**四分类**（对被测应用/用例的归因）+**两类非归因**。
 
-    四分类是任务卡的验收口径，也是答辩差异表的那一条：
+    四分类是本模块的验收口径，也是差异表的那一条：
 
         LOCATOR / TIMING / APP_DEFECT / CASE_DEFECT
 
@@ -72,7 +72,7 @@ class Category(str, Enum):
         ENVIRONMENT  环境/链路问题（设备掉线、hdc 超时、应用拉不起来）
         UNKNOWN      证据不足（不硬扣帽子）
 
-    为什么要有 ENVIRONMENT（C 复核提出的缺陷，2026-09-23 补）：
+    为什么要有 ENVIRONMENT（复核发现的缺陷，此处补上）：
     原来只有四类 + UNKNOWN，于是「设备掉线」这种**根本没到被测应用**的失败
     全部落到 `UNKNOWN @ 0.00`，还被建议「请补做结果信号采集」——
     **设备都没连上，采不到任何东西**，建议方向是错的。
@@ -88,7 +88,7 @@ class Category(str, Enum):
     UNKNOWN = 'UNKNOWN'            # 证据不足（不硬扣帽子）
 
 
-#: 任务卡口径的「四分类」—— 归因准确率只在这四类上统计，
+#: 本模块口径的「四分类」—— 归因准确率只在这四类上统计，
 #: ENVIRONMENT / UNKNOWN 是「非归因结论」，不计入归因命中率的分母。
 FOUR_CATEGORIES: Tuple[Category, ...] = (
     Category.LOCATOR, Category.TIMING, Category.APP_DEFECT, Category.CASE_DEFECT)
@@ -125,11 +125,11 @@ _STACK_PATTERNS = (
     r'SIGBUS', r'SIGILL', r'SIGFPE', r'abort', r'backtrace', r'stacktrace',
     r'FATAL EXCEPTION', r'Out of memory', r'\boom\b', r'ANR',
 )
-# ⚠️ `oom` 必须带词边界（C 复核）：这些模式是 `re.I` 下 `re.search` 的，
+# ⚠️ `oom` 必须带词边界（复核）：这些模式是 `re.I` 下 `re.search` 的，
 #    裸 `r'oom'` 会把 **Zoom / room / boom / zoomIn** 全部当成 OOM 崩溃痕迹
 #    —— 而「缩放失败」「进入房间」在真机应用里到处都是，等于给应用缺陷塞假证据。
 
-# 目标控件「在树里但用不了」的判据（C1 报告建议纳入的字段）
+# 目标控件「在树里但用不了」的判据（实测建议纳入的字段）
 _OCCLUSION_KEYS = ('zIndex', 'opacity', 'hitTestBehavior')
 
 #: `opacity` 低于此值才谈得上「点不着」。半透明（0.9）照样可点，判死是过度归因。
@@ -139,7 +139,7 @@ OPACITY_MIN_USABLE = MIN_INTERACTIVE_OPACITY
 
 # 可用性判定的三态 —— 故意不用 bool：
 # 「确定不可用」和「有点可疑」是两回事，混成一个 False 会把应用的渲染属性
-# 说成用例写错了（C 复核的原始缺陷）。
+# 说成用例写错了（复核发现的原始缺陷）。
 USABLE = 'usable'
 SUSPECT = 'suspect'
 BLOCKED = 'blocked'
@@ -160,7 +160,7 @@ class Verdict:
     suggestion: str = ''
     step_index: Optional[int] = None
     signals_used: List[str] = field(default_factory=list)
-    locator_id: str = ''            # 仅定位失败才有：回写给 A 的定位器自愈
+    locator_id: str = ''            # 仅定位失败才有：回写给定位器自愈
     scores: Dict[str, float] = field(default_factory=dict)   # 各类别的置信度快照
 
     @property
@@ -193,12 +193,12 @@ class Verdict:
 class ExecutionRecord:
     """一次失败执行的全部可归因材料。
 
-    刻意**兼容 C 的 runner**：`step` / `steps` 直接收 `runner.StepResult`
+    刻意**兼容 runner**：`step` / `steps` 直接收 `runner.StepResult`
     （它已经带了 kind / attempts / rescued_by_retry / cascade），
     这里只补齐 runner 不产出、而归因需要的三类东西：
 
       * 控件树快照（失败前后的 `dumpLayout` 结果，dict / JSON 文本 / LayoutNode 均可）
-      * 结果信号（C4 的 `collect_signals()` 产物）
+      * 结果信号（`collect_signals()` 的产物）
       * 用例的预期（目标控件规格、期望页面、前置条件）
 
     `started_at` 是**设备时钟域**的 epoch（与 `CrashRecord.timestamp_epoch` 同一时基），
@@ -217,7 +217,7 @@ class ExecutionRecord:
     expected_target: Optional[Any] = None  # 匹配器规格（dict / str / Matcher）
     expected_page: str = ''                # 期望页面：PageSignature 的任一 key，或 pagePath
     precondition: Optional[Any] = None     # 前置条件控件的匹配器规格
-    # ★ A 的 LocateResult.locator_id —— 由 A 的 LocatorManager 统一生成（形如 `L3_登录按钮`），
+    # ★ LocateResult.locator_id —— 由 LocatorManager 统一生成（形如 `L3_登录按钮`），
     #   **归因侧不自己拼**。执行时 locate 返回什么，这里就填什么；执行失败时原样回写。
     locator_id: str = ''
     hilog: Any = None                      # 文本或行列表
@@ -240,7 +240,7 @@ class ExecutionRecord:
         挑「独立失败」而不是「第一个失败」：级联失败（cascade=True）是前面某步
         带崩的，拿它做归因只会得到重复结论 —— 归因要打在病灶上。
 
-        ★ 2026-09-23 修（C 在集成时抓到的缺陷，见 `docs/给B-回执-2026-09-23.md` §2.2）：
+        ★ 2026-09-23 修（集成时抓到的缺陷）：
         **必须继承失败步的快照**，否则走这条路的归因永远「没有快照」，
         定位失败只能给 0.6（置信度阶梯的最低档）。
 
@@ -424,7 +424,7 @@ def _usability(node: LayoutNode, root: Optional[LayoutNode] = None
                ) -> Tuple[str, str]:
     """控件「在树里但点不动」的判据。返回 (`USABLE`/`SUSPECT`/`BLOCKED`, 原因)。
 
-    ★ zIndex / opacity 的语义方向（C 复核，2026-09-23 修）：
+    ★ zIndex / opacity 的语义方向（复核，2026-09-23 修）：
 
     原来写的是「`zIndex > 0` → 被上层覆盖」——**方向是反的**。
     zIndex 越大表示这个控件**在上层**，它恰恰说明控件没被盖住。
@@ -568,7 +568,7 @@ def _page_expectation(rec: ExecutionRecord,
 def locator_id_note(rec: ExecutionRecord) -> str:
     """定位失败但没有 locator_id 时，说明为什么回写不了。
 
-    ⚠️ 口径已与 A 对齐（2026-09-22）：`locator_id` **由 A 的 LocatorManager 统一生成**，
+    ⚠️ 口径已与定位器模块对齐：`locator_id` **由 LocatorManager 统一生成**，
     形如 `L3_登录按钮`，归因侧**不自己拼**。所以这里只做一件事：
     记录里带了 `locate()` 返回的 `locator_id` 就原样用它回写；没带就说明缺什么。
 
@@ -585,7 +585,7 @@ def locator_id_note(rec: ExecutionRecord) -> str:
 def _crash_matches(rec: ExecutionRecord, crash: Any) -> Tuple[bool, str]:
     """这条崩溃日志能不能解释本次失败。返回 (是否采纳, 不采纳的原因)。"""
     mod = str(getattr(crash, 'module_name', '') or '').strip()
-    # C4 明确说过：module_name 可能是空串（文件名和正文都没给），**不能**当成
+    # 信号采集明确说过：module_name 可能是空串（文件名和正文都没给），**不能**当成
     # 「不是这个应用」—— 丢证据比多一条可疑证据更糟。
     if mod and rec.bundle and mod != rec.bundle:
         return False, f'崩溃的应用是 {mod}，不是被测应用 {rec.bundle}'
@@ -635,7 +635,7 @@ def _app_defect(rec: ExecutionRecord) -> Tuple[float, List[str], List[str]]:
         for why in rejected:
             ev.append(f'（已排除一条崩溃日志：{why}）')
 
-    # ---- ② 其余异常：按 C4 的置信度门槛过滤，弱证据只记不判
+    # ---- ② 其余异常：按信号采集的置信度门槛过滤，弱证据只记不判
     for kind in ('WHITE_SCREEN', 'NO_RESPONSE', 'NO_WINDOW'):
         score = _anomaly_score(sig, kind)
         if score >= APP_CONFIDENCE_FLOOR:
@@ -763,7 +763,7 @@ def _timing(rec: ExecutionRecord, trees: Sequence[Optional[LayoutNode]],
         return 0.0, ev
 
     # ---- ② 超时，但目标控件在超时之后的快照里出现了
-    #   ★ A6 扩容样例（2026-09-27）抓到的空真缺陷：单快照记录下
+    #   ★ 扩容样例抓到的空真缺陷：单快照记录下
     #   `present_early = any(trees[:-1])` 对**空序列**恒为 False，
     #   于是「目标就在唯一的快照里」被误读成「失败后才出现 → 界面没稳定」，
     #   把「控件在树里但 disabled」这类失败误判成时序问题(0.75)。
@@ -883,7 +883,7 @@ _ENV_PATTERNS = (
 def _environment(rec: ExecutionRecord) -> Tuple[float, List[str]]:
     """设备掉线 / hdc 断链 / 应用拉不起来 → **环境问题**（非归因结论）。
 
-    C 复核的缺陷（2026-09-23 补）：没有这一类时，上面几种失败全部落到
+    复核发现的缺陷（2026-09-23 补）：没有这一类时，上面几种失败全部落到
     `UNKNOWN @ 0.00`，还被建议「请补做结果信号采集」——
     **设备都没连上，采不到任何东西**。归因的价值一半在结论、
     一半在「把结论交给对的人」；环境问题该去重跑，不该去应用开发者那里。
@@ -927,8 +927,8 @@ def _suggest(cat: Category, rec: ExecutionRecord, verdict_locator_id: str) -> st
     if cat is Category.LOCATOR:
         if verdict_locator_id:
             return ('按**定位失败**处理：回写 `record_locator_failure(locator_id, reason)` '
-                    f'给 A 的定位器自愈（locator_id={verdict_locator_id}，'
-                    '由 A 的 LocatorManager 生成，我们原样回写）；'
+                    f'给定位器自愈（locator_id={verdict_locator_id}，'
+                    '由 LocatorManager 生成，我们原样回写）；'
                     '同时检查该控件的定位策略是否过于依赖 id。')
         return ('按**定位失败**处理：检查该控件的定位策略是否过于依赖 id。'
                 '⚠️ 这次**没能回写**定位器自愈 —— 记录里缺 locator_id，'
@@ -945,7 +945,7 @@ def _suggest(cat: Category, rec: ExecutionRecord, verdict_locator_id: str) -> st
             '再重新归因；在此之前不要直接判给某一方。')
 
 
-# ================================================================ 接入辅助（给 C 的闭环用）
+# ================================================================ 接入辅助（闭环接入用）
 
 #: 产物目录里优先当成控件树快照的文件名特征
 _SNAPSHOT_HINTS = ('layout', 'dump', 'tree', 'snapshot')
@@ -962,12 +962,12 @@ def load_snapshots(artifact_dir: Any, *, step_index: Optional[int] = None,
                    limit: int = 8) -> List[LayoutNode]:
     """从产物目录里捞控件树快照，按**采集序号**升序返回。
 
-    这是为 C 的「闭环接入」补的：`ExecutionRecord.trees` 需要失败步前后的
+    这是为闭环接入补的：`ExecutionRecord.trees` 需要失败步前后的
     `dumpLayout` 快照，而产物目录里混着报告 / 用例 / 图等一堆 json，
     **不能盲读** —— 所以这里逐个尝试解析，只有能解析出带 bounds 的控件树才采用，
     其余静默跳过（坏文件不该让归因失败）。
 
-    ⚠️ **`step_index` 不是文件名过滤器**（09-29 按 C 的实测更正，移植人 B）
+    ⚠️ **`step_index` 不是文件名过滤器**（09-29 按实测更正）
     ---------------------------------------------------------------
     产物文件名来自 `driver._art()`：`f'{seq:04d}_{ext}'`，`seq` 是
     **全局递增的采集计数器**（截图与控件树共用一个），**一步可产生 0..N 张** ——
@@ -975,7 +975,7 @@ def load_snapshots(artifact_dir: Any, *, step_index: Optional[int] = None,
     永远匹配不到真名（真名是 `0003_layout.json`），还会误中无关序号。
 
     参数保留只为兼容调用方：给了也**不筛名、不参与任何判定**。
-    要精确定位失败步的快照请走 `runner.StepResult.trees`（C 的权威通道）；
+    要精确定位失败步的快照请走 `runner.StepResult.trees`（权威通道）；
     本函数是它的兜底。
 
     取哪几张
@@ -984,7 +984,7 @@ def load_snapshots(artifact_dir: Any, *, step_index: Optional[int] = None,
     此时离现场最近的快照才有用 —— 取最早那几张会把失败现场整个漏掉。
 
     仓库侧保留 `_SNAPSHOT_EXCLUDE` 过滤（报告/用例等非快照 json 的黑名单，
-    本文件 09-22 起的既有防护，B 交付版基线里没有——移植时保留）。
+    本文件 09-22 起的既有防护，旧基线里没有——移植时保留）。
 
     Parameters
     ----------
@@ -1058,9 +1058,9 @@ def diagnose_failed_step(step: Any, *, bundle: str = '', ability: str = 'EntryAb
                          ) -> Verdict:
     """**给执行器用的一步到位入口**：一个失败步结果 → 一个 `Verdict`。
 
-    C 的复核说得对：「闭环没闭上」和「三个自证式 KPI」是同一件事的两面 ——
+    复核结论：「闭环没闭上」和「三个自证式 KPI」是同一件事的两面 ——
     `diagnose()` 一旦接进失败分支，就同时得到真实失败快照上的分类数字。
-    他要的落点在 `runner.py`（**那是 C 的文件**，我不动），所以我把
+    落点在 `runner.py`（**该文件不在本模块范围内**），所以我把
     「构造记录」这段最容易写错、也最容易漏参的部分做成了这个函数：
 
         报告 / 执行器侧只需要三行
@@ -1116,12 +1116,12 @@ def diagnose(record: Any, *, locator_sink: Optional[Callable[[str, str], None]] 
     record:
         `ExecutionRecord` / dict / `runner.StepResult` / `runner.CaseResult`。
     locator_sink:
-        可选。判定为**定位失败**时用它回写 A 的定位器自愈，签名为
+        可选。判定为**定位失败**时用它回写定位器自愈，签名为
         `sink(locator_id, reason)`，与 A 的 `record_locator_failure(locator_id, reason)` 对齐。
 
-        口径已与 A 对齐（2026-09-22）：**`locator_id` 由 A 的 LocatorManager 统一生成**
+        口径已与定位器模块对齐：**`locator_id` 由 LocatorManager 统一生成**
         （形如 `L3_登录按钮`），归因侧不自己拼，只把 `LocateResult.locator_id`
-        原样带回去。记录里没带这个 id 时**不会调用 sink**（免得在 A 的健康度台账里
+        原样带回去。记录里没带这个 id 时**不会调用 sink**（免得在定位器健康度台账里
         塞进一条空 id 的假账），并在 evidence 里写明缺什么。
 
     Returns

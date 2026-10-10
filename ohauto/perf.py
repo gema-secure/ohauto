@@ -1,8 +1,8 @@
 """
-L1 基元 —— 性能 / 资源采样原语（2C【C4】）
+L1 基元 —— 性能 / 资源采样原语
 ==========================================
 
-从 tools/stability_telemetry.py 收编进包（2C【C4】）：
+从 tools/stability_telemetry.py 收编进包：
 hidumper PSS / loadavg 负载 / pidof 存活 / 宿主内存的**采样与分析**单源在这里，
 该工具退化为薄 CLI 壳。周期采样与趋势曲线的编排入口在
 `ohauto.signals.PerfChannel`。

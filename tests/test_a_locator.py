@@ -136,7 +136,7 @@ class TestAcceptance5Ids(unittest.TestCase):
 
 
 class TestAcceptance10Ids(unittest.TestCase):
-    """★ A6 扩容验收（2026-09-27）：同一场景把样本量翻倍——
+    """★ 扩容验收：同一场景把样本量翻倍——
     人为改 10 个控件 id，不人工干预自动恢复，成功率 ≥ 80%。
 
     与 TestAcceptance5Ids 的关系：机制完全相同，只是舞台从 5 个控件

@@ -329,7 +329,7 @@ class TestTiming(unittest.TestCase):
         self.assertTrue(any('才出现' in e for e in v.evidence), v.evidence)
 
     def test_single_snapshot_cannot_claim_late_appearing(self):
-        """★ A6 扩容样例抓到的空真缺陷回归（2026-09-27）。
+        """★ 扩容样例抓到的空真缺陷回归。
 
         只有一张快照时，「目标在失败后的快照里才出现」无从谈起：
         `present_early = any(trees[:-1])` 对**空序列**恒为 False，原实现把
@@ -370,7 +370,7 @@ class TestLocator(unittest.TestCase):
 
     def test_missing_control_on_expected_page_is_locator(self):
         rec = self._record()
-        rec.locator_id = 'L3_提交订单'          # 由 A 的 LocateResult 带过来
+        rec.locator_id = 'L3_提交订单'          # 由 LocateResult 带过来
         v = diagnose(rec)
         self.assertEqual(v.category, Category.LOCATOR, v.evidence)
         self.assertGreaterEqual(v.confidence, 0.85)
@@ -404,7 +404,7 @@ class TestLocator(unittest.TestCase):
         self.assertTrue(any('线索' in e for e in v.evidence), v.evidence)
 
     def test_locator_sink_is_called_with_the_id_from_locate(self):
-        """定位失败要回写 A 的定位器自愈；id **原样用 locate 给的那个**。"""
+        """定位失败要回写定位器自愈；id **原样用 locate 给的那个**。"""
         rec = self._record()
         rec.locator_id = 'L7_刷新按钮'
         calls = []
@@ -416,7 +416,7 @@ class TestLocator(unittest.TestCase):
         self.assertTrue(calls[0][1])
 
     def test_sink_not_called_when_locator_id_is_missing(self):
-        """★ 没有 locator_id 时**不要**调用 sink —— 免得在 A 的台账里塞一条空 id 假账。"""
+        """★ 没有 locator_id 时**不要**调用 sink —— 免得在定位器台账里塞一条空 id 假账。"""
         calls = []
         rec = self._record()                     # 没带 locator_id
         v = diagnose(rec, locator_sink=lambda lid, why: calls.append(lid))
@@ -494,7 +494,7 @@ class TestCaseDefect(unittest.TestCase):
     def test_overlay_covering_the_click_point_is_case_defect(self):
         """★ 真遮挡：另一个节点 zIndex 更高**且盖住了点击落点** → 用例该先关掉弹窗。
 
-        旧版这条测试用的是「单节点 zIndex>0」，而那正是 C 复核出来的反向判据
+        旧版这条测试用的是「单节点 zIndex>0」，而那正是 复核出来的反向判据
         （zIndex 大表示它**在上层**，恰好说明没被盖住）。现在按真实机制判：
         uiInput 打的是控件中心坐标，中心被上层节点接走，这一击才会打到别人身上。
         """
@@ -584,7 +584,7 @@ class TestInjectedSamples20(_TmpCase):
     样例全部在 `FakeHdc` 上造，**不需要真机** —— 这也是「B 不碰真机」这条
     分工约定下唯一可行的做法。
 
-    ★ A6 扩容（2026-09-27）：原 20 条**原样保留**（对应验收原文，动一条
+    ★ 扩容：原 20 条**原样保留**（对应验收原文，动一条
     对比基线就断了），另增 `_extra_samples()` 四类各 5 例——机制不变、
     表面参数变化（故障类型 / 动作形态 / 快照序列），由
     `test_accuracy_of_40_expanded_samples` 跑 4×10 = 40 条的扩容验收。
@@ -727,7 +727,7 @@ class TestInjectedSamples20(_TmpCase):
         return out
 
     def _extra_samples(self):
-        """A6 扩容：四类各 5 例（2026-09-27）。
+        """扩容：四类各 5 例。
 
         与原 20 条的关系是「同一机制的表面参数变化」，不是新机制 ——
         故障类型（jscrash / appfreeze / OOM / SIGABRT）、动作形态（input）、
@@ -934,7 +934,7 @@ class TestInjectedSamples20(_TmpCase):
         self.assertGreaterEqual(acc, 0.80, f'归因准确率未达 80%{report}')
 
     def test_accuracy_of_40_expanded_samples(self):
-        """★ A6 扩容验收（2026-09-27）：四类各 10 例，准确率 ≥ 80%。
+        """★ 扩容验收：四类各 10 例，准确率 ≥ 80%。
 
         样例 = 原 20 条 + `_extra_samples()` 20 条。分类明细随测试输出打印，
         离线 KPI 工具（tools/eval_kpi_offline.py）复用同一份样例集出报告。
@@ -971,7 +971,7 @@ class TestInjectedSamples20(_TmpCase):
             self.assertEqual(locator_id_note(rec), '')
 
 
-# ================================================================ 真机缺陷回归（2026-09-22）
+# ================================================================ 真机缺陷回归
 #
 # ⚠️ `unittest.main()` 只允许出现在**文件末尾**（见文件最后几行）。
 # 曾经它被写在这里，后面定义的那 6 个测试类在「单文件直跑」时全部不会被执行，
@@ -1023,10 +1023,10 @@ class TestNoSnapshotRegression(_TmpCase):
         self.assertEqual(diagnose(rec).category, Category.CASE_DEFECT)
 
 
-# ================================================================ C 复核缺陷回归（2026-09-23）
+# ================================================================ 复核缺陷回归
 
 class TestZIndexSemantics(unittest.TestCase):
-    """★ C 复核缺陷（原 `diagnose.py:309-314`）：zIndex / opacity 判据**语义反**。
+    """★ 复核发现的缺陷（原 `diagnose.py:309-314`）：zIndex / opacity 判据**语义反**。
 
     原文：
 
@@ -1095,7 +1095,7 @@ class TestZIndexSemantics(unittest.TestCase):
 
 
 class TestOomWordBoundary(unittest.TestCase):
-    """★ C 复核缺陷（原 `diagnose.py:92`）：裸 `r'oom'` 命中 Zoom / room。
+    """★ 复核发现的缺陷（原 `diagnose.py:92`）：裸 `r'oom'` 命中 Zoom / room。
 
     这些模式是 `re.I` 下 `re.search` 的，裸 `oom` 会把应用里常见的
     「缩放」「房间」相关日志当成 OOM 崩溃痕迹 —— 给应用缺陷塞假证据。
@@ -1125,7 +1125,7 @@ class TestOomWordBoundary(unittest.TestCase):
 
 
 class TestEnvironmentCategory(unittest.TestCase):
-    """★ C 复核缺陷（原 `diagnose.py:53-60`）：五类里没有「环境问题」。
+    """★ 复核发现的缺陷（原 `diagnose.py:53-60`）：五类里没有「环境问题」。
 
     没有这一类时，设备掉线 / hdc 断链 / 应用拉不起来 → 全部落到
     `UNKNOWN @ 0.00`，还被建议「请补做结果信号采集」——**设备都没连上，
@@ -1188,7 +1188,7 @@ class TestEnvironmentCategory(unittest.TestCase):
         self.assertEqual(CATEGORY_CN[Category.ENVIRONMENT], '环境问题')
 
 
-# ================================================================ 闭环接入辅助（2026-09-23）
+# ================================================================ 闭环接入辅助
 
 class TestSnapshotLoader(unittest.TestCase):
     """`load_snapshots()` —— 闭环接入要用的「从产物目录捞控件树快照」。
@@ -1249,7 +1249,7 @@ class TestSnapshotLoader(unittest.TestCase):
 
         原实现拿 `3` / `03` / `step3` 去匹配文件名，而真名是
         `0001_layout.json`：既匹配不到，又会误中无关序号。
-        现在它只是兼容占位，给不给结果一样（B 交付 09-29）。
+        现在它只是兼容占位，给不给结果一样（此处补上）。
         """
         self._write('0001_layout.json', _good_page())
         self._write('0002_layout.json', _good_page())
@@ -1260,7 +1260,7 @@ class TestSnapshotLoader(unittest.TestCase):
 
     def test_limit_keeps_the_most_recent_snapshots(self):
         """★ 取**序号最大**的那几张：本函数在「失败发生的那一刻」被调用，
-        离现场最近的快照才有用 —— 取最早几张会把失败现场整个漏掉（B 交付 09-29）。
+        离现场最近的快照才有用 —— 取最早几张会把失败现场整个漏掉（此处补上）。
         """
         self._write('0001_layout.json', _good_page())
         for i in range(2, 6):
@@ -1370,7 +1370,7 @@ class TestDiagnoseFailedStepEntry(unittest.TestCase):
                                  expected_target={'id': 'btn_missing'},
                                  locator_sink=lambda lid, why: calls.append(lid))
         self.assertEqual(v.locator_id, '', '没有 id 就保持空，别自己拼一个')
-        self.assertEqual(calls, [], '没有 id 就不许在 A 的台账里塞假账')
+        self.assertEqual(calls, [], '没有 id 就不许在定位器台账里塞假账')
         self.assertIn('locator_id', v.suggestion + ' '.join(v.evidence),
                       '要明说「这次回写不了」')
 

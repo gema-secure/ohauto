@@ -5,7 +5,7 @@
  *
  * 为什么要用 Node 而不是 Python 来做这一件事
  * ------------------------------------------
- * 调研（2026-09-23）发现业界做 HarmonyOS/OpenHarmony 应用分析的项目都落在
+ * 调研发现业界做 HarmonyOS/OpenHarmony 应用分析的项目都落在
  * **Node/TypeScript 生态**上：
  *   * HapTest（SMAT-Lab）的 `--policy static_guided` 走静态分析模块；
  *   * HmTest（南方科大，JCST 2025）用 `arkanalyzer`（npm 包）做 Targeted Exploration；
@@ -27,7 +27,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** 危险控件文案模式（C6：中/俄/西/阿）—— 与 ohauto/explorer.py 的
+/** 危险控件文案模式（中/俄/西/阿）—— 与 ohauto/explorer.py 的
  *  SafetyPolicy 口径保持一致。这里是**源码 Text(...) 字面量**级的近似，
  *  按各语言的「不可逆操作」核心词收；外文界面下漏掉语种等于黑名单静默失效。 */
 const DANGER_PATTERNS = [

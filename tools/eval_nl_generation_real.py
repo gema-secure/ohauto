@@ -177,7 +177,7 @@ PAGE_HOPS = (('Index', 'btn_go_second', 'Second'),
 def _collect_pages(hdc: Hdc, first: Any, out_dir: str) -> List[Tuple[str, Any]]:
     """沿 `PAGE_HOPS` 走一遍，收集**每一页**的控件树。
 
-    ★ 为什么必须多页（B8 实测）：只喂一张树时，模型拿第一页的控件去写
+    ★ 为什么必须多页（实测依据）：只喂一张树时，模型拿第一页的控件去写
     「导航之后」的断言 —— 两条真机用例都在 `tap btn_go_second` 之后断言
     `tv_probe_always`，而该 id 只在 Index 页定义，真机必然失败（用例级 0/2）。
     """

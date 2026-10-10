@@ -129,7 +129,7 @@ def _tree_brief(root: LayoutNode, limit: int = 6) -> str:
 def _play_buttons(root: LayoutNode) -> List[LayoutNode]:
     """找播放控制按钮：可点击的 Image，按 x 排序。
 
-    为什么不按 id 找：真机上这 4 个按钮**一个 id 都没有**（实测），
+    为什么不按 id 找：真机上这 4 个按钮**一个 id 都没有**（实测依据），
     只能靠「type=Image + clickable + 位于屏幕下半部」这三个客观特征圈定。
     """
     h = max((n.rect.bottom for n in root.walk()), default=1280)

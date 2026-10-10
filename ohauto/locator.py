@@ -1,11 +1,11 @@
-"""A3 —— 定位器健康度与自愈（主攻方向★）
+"""定位器健康度与自愈
 ==========================================
 
-分工卡对这一条的定位：同类项目只有「换策略重试」，**没有健康度模型 +
-自动替换**——这是答辩三大差异点之一，验收标准是「人为改 5 个控件 id，
+同类项目只有「换策略重试」，**没有健康度模型 +
+自动替换**——这是三大差异点之一，验收标准是「人为改 5 个控件 id，
 不人工干预自动恢复，成功率 ≥ 80%」。
 
-对外接口（分工卡接口总表，W2 冻结，签名不可改）::
+对外接口（对外接口，签名不可改）::
 
     locate(target, page) -> LocateResult
     record_locator_failure(locator_id, reason) -> None
@@ -35,17 +35,17 @@
 - 不缓存坐标（红线第 5 条）：L5 的兜底坐标只是 spec 里的一次性记录，
   每次定位都基于**当次**传入的新鲜控件树；
 - 失败自动记账（幂等口径，2026-09-23 定稿 / 2026-09-27 A-0 修正）：
-  locate 全链路落空时内部也会 record_locator_failure，B 的执行器按契约
+  locate 全链路落空时内部也会 record_locator_failure，执行器按契约
   回写是第二重保险。去重键 = **(来源, 代次, locator_id)** ——
   内部 locate 路径用 `_locate_seq`，执行器回写路径用 runner 传进来的
   `attempt`（A-0 之后新增的可选参数）。2026-09-23 那版只认 `_locate_seq`，
   而执行器**从不调 locate()**，代次恒为 0 → 回写被全量误判成重复记账 →
-  连续失败停在 1 → 自愈在生产链路上永不触发（挑战 #5 断点）。
-  B 侧调用签名不变（新参数可选、有缺省），A3 阈值不会被翻倍触发；
+  连续失败停在 1 → 自愈在生产链路上永不触发（归因链路断点）。
+  调用方签名不变（新参数可选、有缺省），A3 阈值不会被翻倍触发；
 - 自愈换代必须**先快照、验证通过才提交**：验证失败时恢复快照、
   generation 不自增、consecutive_failures 不清零 —— 账本与真实状态
-  必须一致（C 回执 2.1，修复前是「报已回滚但没回滚」）；
-- 复用 B 的 type_fingerprint / control_key，不另造指纹——
+  必须一致（修复前是「报已回滚但没回滚」）；
+- 复用 type_fingerprint / control_key，不另造指纹——
   同一个控件在覆盖度统计（B）和自愈（A）里必须是同一个身份。
 """
 
@@ -143,7 +143,7 @@ class LocatorHealth:
 
 @dataclass
 class LocateResult:
-    """分工卡契约类型：rect / channel / confidence / health 四个字段必须有。"""
+    """契约类型：rect / channel / confidence / health 四个字段必须有。"""
     rect: Rect
     channel: str                     # 'tree' | 'vision' | 'hybrid' | 'coordinate'
     confidence: float
@@ -182,7 +182,7 @@ class LocatorManager:
     vision:
         可选的 HybridLocator（vision.py）。不传则 L4 自动跳过。
     failure_threshold:
-        连续失败达到该值即触发自愈（任务卡验收场景：改 id 后连续落空
+        连续失败达到该值即触发自愈（验收场景：改 id 后连续落空
         到阈值，自动换新一代定位器，不人工干预）。
     clock:
         时间源，测试可注入假时钟。
@@ -202,7 +202,7 @@ class LocatorManager:
         self._by_key: Dict[Tuple[str, str], str] = {}
         self._last_root: Optional[LayoutNode] = None
         self._counter = 0
-        # 失败记账幂等闸（C 回执 2.2；A-0 扩了执行器来源）：
+        # 失败记账幂等闸（已扩执行器来源）：
         # _locate_seq 每次 locate() 自增；_fail_seq 记录每个 locator 最近一次
         # 「真正计入」的失败属于哪个 (来源, 代次) —— 来源 0 = 内部 locate，
         # 1 = 执行器回写（带 attempt）。两条路径各自单调、互不干扰。
@@ -221,7 +221,7 @@ class LocatorManager:
 
         注意：`_count_failure` 刻意**不走**这里，仍然用 `.get()` 判空后
         直接返回 False（未知 id 的失败回写必须是无副作用的 no-op，
-        不能顺手把账本建出来，否则 B 侧「缺 id 不调」的契约就形同虚设）。
+        不能顺手把账本建出来，否则 「缺 id 不调」的契约就形同虚设）。
         """
         h = self._health.get(locator_id)
         if h is None:
@@ -586,12 +586,12 @@ class LocatorManager:
 
     def record_locator_failure(self, locator_id: str, reason: str,
                                attempt: Optional[int] = None) -> None:
-        """契约接口：B 的执行器在定位失败时回写。
+        """契约接口：执行器在定位失败时回写。
 
-        幂等口径（2026-09-23 定稿，C 回执 2.2）：以 **(定位尝试代次,
+        幂等口径：以 **(定位尝试代次,
         locator_id)** 为去重键 —— 同一次定位尝试内，内部记账与执行器
         回写谁先到谁生效，重复调用不累加；下一次代次推进后照常记账。
-        B 侧签名与调用方式不变（B 已承诺「定案失败只调一次、缺 id 不调」；
+        签名与调用方式不变（调用方只调一次、缺 id 不调；
         即便重复回写也不会重复计数）。
 
         Parameters
@@ -599,7 +599,7 @@ class LocatorManager:
         attempt:
             **可选**（A-0，C 2026-09-25 P0）。执行器侧的执行尝试序号，
             由 runner 维护、单调递增，每次回写自带一个新值。
-            不传（内部 locate 路径以及 B 的旧式两参调用）时行为与修复前
+            不传（内部 locate 路径以及旧式两参调用）时行为与修复前
             **完全一致**，用 `_locate_seq` 当代次 —— 契约签名向后兼容，
             所以分工卡的 W2 冻结签名不受影响。
         """
@@ -699,7 +699,7 @@ class LocatorManager:
                 continue
 
             # 生成下一代定位器：以实况节点回填线索。
-            # 先留快照，验证通过才提交（C 回执 2.1）—— 修复前的顺序是
+            # 先留快照，验证通过才提交 —— 修复前的顺序是
             # 「先改写 spec + generation+1 + 清零失败计数，验证失败只报告
             # 不回滚」，后果是 spec 被静默污染、账本多出没通过的一代、
             # 自愈被推迟（阈值被清零）。

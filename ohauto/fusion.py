@@ -566,7 +566,7 @@ def source_vision(image_path: str, *, instruction: str = VISION_READ_TEXT,
 
     所以**不建议用视觉模型去替代 OCR**（花着钱做本地免费能做的事），
     而是让它干 OCR 干不了的：回答「这个图标是什么」「这一页是干什么的」
-    —— 那正是命题挑战 #1「理解页面意图」要的东西。
+    —— 那正是「理解页面意图」要的东西。
 
     换 `instruction` 就换用途；默认只读文字，是为了让产出能与其它源对齐。
 

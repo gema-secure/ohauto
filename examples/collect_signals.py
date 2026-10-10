@@ -4,7 +4,7 @@
 
 把「设备上发生了什么」采下来：崩溃日志 / 截图 / 控件树 / hilog，
 客观识别异常（崩溃 / 白屏 / 无响应 / 无窗口）并标注置信度，
-结果结构化落盘成 JSON，交给下游 B4 归因引擎。
+结果结构化落盘成 JSON，交给下游归因引擎。
 
 **本命令不做归因判断** —— 它只输出证据，不下「这是应用缺陷」这种结论。
 
@@ -163,7 +163,7 @@ def main() -> int:
     path = os.path.join(os.path.abspath(args.out), 'signals.json')
     sig.to_json(path)
     print(f'\n已写出: {path}')
-    print('（这份 JSON 就是喂给 B4 归因引擎的输入）')
+    print('（这份 JSON 就是喂给归因引擎的输入）')
     return 0
 
 

@@ -1,4 +1,4 @@
-"""A5 —— 控件树摘要器
+"""控件树摘要器
 =====================
 
 把 `dumpLayout` 导出的几百节点控件树压成**人工可读的骨架**，供全组使用：
@@ -7,7 +7,7 @@
 - C 出报告时，摘要可以直接贴进 Markdown；
 - A（我自己）做定位器自愈时，用它肉眼核对「降级链最后落在哪个控件上」。
 
-保留规则（分工卡 A5 原文）：
+保留规则：
     只保留「有 text / 有 contentDescription(即 descr) / 有 id」或
     「可交互（clickable / longClickable / scrollable / focusable / enabled）」
     的节点，其余节点不占行、子节点缩进不上移；限制最大深度防爆栈。
@@ -27,7 +27,7 @@
     **借子节点文案**（LayoutNode.text_deep）：
     - 摘要行 `_node_line`：自身无 id/text/descr/hint 的可交互容器，
       行尾追加 `deep="…"`（借来的子树文案，截断展示）；
-    - 新增 `control_catalog()`：给 B3 `Generator(catalog_fn=…)` 的正式版
+    - 新增 `control_catalog()`：给 `Generator(catalog_fn=…)` 的正式版
       控件清单，签名与 B 的最小实现一致（page, limit=60) -> str，换一行
       即可替换 —— 区别正是上面两条：双向产出 + 借文案（截断）而不是丢弃。
 """
@@ -42,7 +42,7 @@ __all__ = ['summarize_tree', 'summary_lines', 'count_nodes',
            'is_summary_worthy', 'control_catalog']
 
 # LayoutNode 没有单独的 longClickable / focusable 字段，这两个语义
-# 存在 attributes 里（真机字段名见 C1-真机适配报告）。
+# 存在 attributes 里（真机字段名如下）。
 _ATTR_TRUE = ('true', '1', 'yes')
 
 
@@ -134,7 +134,7 @@ def summary_lines(root: LayoutNode, max_depth: Optional[int] = None,
         None 表示不限制深度（树的递归由 walk 顺序驱动，迭代实现不炸栈）。
 
     keep_enabled:
-        严格按任务卡字面，把 enabled 当作可交互信号。默认 False，理由见模块 docstring。
+        严格按字面要求，把 enabled 当作可交互信号。默认 False，理由见模块 docstring。
 
     keep_invisible:
         是否保留不可见节点。默认 False —— 摘要服务于「人看当前界面」，
@@ -191,7 +191,7 @@ def summarize_tree(root: LayoutNode, max_depth: Optional[int] = None,
 
 def control_catalog(page: Any, limit: int = 60,
                     text_limit: int = 30) -> str:
-    """A5 正式版控件清单 —— B3 `Generator(catalog_fn=…)` 的替换件。
+    """控件清单 —— `Generator(catalog_fn=…)` 的替换件。
 
     签名与 B 的最小实现完全一致（``control_catalog(page, limit=60) -> str``），
     B 侧 ``Generator(catalog_fn=ohauto.treesum.control_catalog)`` 换一行即可。

@@ -10,7 +10,7 @@
 1. **覆盖污染** —— ImageGrab 抓的是桌面合成结果，任何盖在模拟器上面的
    窗口都会被录进去（实测抓到过 ChatGPT 登录页）。
 2. **PrintWindow 抓不到 GL** —— 模拟器手机屏是 OpenGL 渲染，
-   PrintWindow 只能抓到窗口边框和工具栏，内容区全白（实测）。
+   PrintWindow 只能抓到窗口边框和工具栏，内容区全白（实测依据）。
 3. **前台抢不过** —— 脚本进程没有前台权限，SetForegroundWindow
    会被 Windows 拒绝（实测 AttachThreadInput 也救不回来）。
 

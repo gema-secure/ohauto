@@ -55,7 +55,7 @@ atexit.register(shutil.rmtree, _SIGNALS_TMP_ROOT, True)
 #: 而样本文件名里的时间戳是**写死的**。于是窗口起点会随时间推移
 #: 逐渐逼近并越过样本时刻 —— 测试会**自己过期**。
 #:
-#: 实测踩坑（2026-09-19）：这组测试写于 9/17，用 `lookback_s=3*86400`。
+#: 实测踩坑：这组测试写于 9/17，用 `lookback_s=3*86400`。
 #: 到 9/19 21:59 时窗口起点变成 9/16 21:59，
 #: 越过了样本的 9/16 15:14:46 → 3 个测试开始失败。
 #: **上午 15:05 还是全绿，晚上就红了** —— CI 里最难查的那类问题。
@@ -104,7 +104,7 @@ class TestParseRealCrashLog(unittest.TestCase):
         self.assertEqual(self.rec.signal, 'SIGSEGV')
 
     def test_stack_head_is_collected(self):
-        """栈顶几帧够 B4 判断崩在系统库还是应用自己的代码。"""
+        """栈顶几帧够归因判断崩在系统库还是应用自己的代码。"""
         head = self.rec.stack_head
         self.assertTrue(head, '必须采到调用栈')
         self.assertLessEqual(len(head), 6)
@@ -143,7 +143,7 @@ class TestParseTempCrashLog(unittest.TestCase):
         """★ temp 文件名里只有 pid，没有 bundle 段。
 
         这时**不能猜**：`module_name` 留空，把不确定写在明面上，
-        让 B4 知道这条证据不能当铁证用。用「看起来合理的默认值」填
+        让归因知道这条证据不能当铁证用。用「看起来合理的默认值」填
         （比如从 Process name 反推）就等于编造了归因依据。
         """
         self.assertEqual(self.rec.module_name, '')
@@ -604,7 +604,7 @@ class TestNoWindow(unittest.TestCase):
 
 
 class TestNoResponse(unittest.TestCase):
-    """设计要求：多信号叠加，每信号标注来源与置信度，不要单信号硬判。"""
+    """多信号叠加，每信号标注来源与置信度，不要单信号硬判。"""
 
     def test_freeze_file_is_a_high_confidence_signal(self):
         """★ freeze/ 出现窗口内文件 —— 客观判据（尽管命名格式未实测验证）。"""

@@ -2,13 +2,13 @@
 L4 应用层 —— 结果信号采集（信号采集）
 ================================
 
-把「设备上发生了什么」**客观**地采集下来，交给下游归因引擎（B4）判断
+把「设备上发生了什么」**客观**地采集下来，交给下游归因引擎判断
 「为什么失败」。本模块只输出：
 
     客观证据  +  客观异常识别  +  置信度
 
-它**不下结论**。不会说「这是应用缺陷」——那是 B4 的事。一旦 信号采集 自己下结论，
-B4 的归因规则就没有输入可用了。
+它**不下结论**。不会说「这是应用缺陷」——那是归因的事。一旦 信号采集 自己下结论，
+归因的规则就没有输入可用了。
 
 对外契约（签名冻结）::
 
@@ -75,7 +75,7 @@ FIELD_PROCESS_NAME = 'Process name'
 
 _STACK_MARKER = 'Fault thread info:'
 
-# 栈顶留几帧：`#00`–`#05` 够 B4 判断「崩在系统库还是应用自己的代码」。
+# 栈顶留几帧：`#00`–`#05` 够归因判断「崩在系统库还是应用自己的代码」。
 CRASH_STACK_FRAMES = 6
 
 # 日志里的 key:value 行。键允许出现空格（`Module name` / `Process life time`）。
@@ -113,7 +113,7 @@ HILOG_FILTER = (
 _PNG_BPP_SOLID = 0.006        # ≤ 这个值：强烈怀疑纯色页
 _PNG_BPP_NORMAL = 0.06        # ≥ 这个值：体积完全正常，不报白屏
 _DOMINANT_COLOR_MIN = 0.95    # 单一颜色占比 ≥ 此值：判定为空白页
-# 交叉验证（2026-09-23）：控件树节点数超过此值 → 与「空白页」矛盾，判据降级为疑似。
+# 交叉验证：控件树节点数超过此值 → 与「空白页」矛盾，判据降级为疑似。
 # 为什么是 5：真机的真空白页控件树是空的（实测 377 字节 / 0 节点），
 # 而「内容少但有结构」的页面（如纯文本页）通常在 10 个节点以上，5 是安全的分界。
 WHITE_SCREEN_NODE_CONTRADICT = 5
@@ -193,7 +193,7 @@ class Anomaly:
 
 @dataclass
 class Signals:
-    """一次采集的全部结果 —— 喂给 B4 归因引擎的输入。"""
+    """一次采集的全部结果 —— 喂给归因引擎的输入。"""
 
     bundle: str = ''
     captured_at: str = ''                 # 本机时间（ISO 8601）
@@ -210,7 +210,7 @@ class Signals:
     process_alive: Optional[bool] = None  # pidof 是否还有该进程；None = 没测到
     layout_nodes: Optional[int] = None    # 采集到的控件树节点数
     faults_in_window: List[str] = field(default_factory=list)   # 窗口内该目录的全部文件名
-    # 2C【C4】性能采样（collect_perf=True 或 PerfChannel.attach 时才有）。
+    # 性能采样（collect_perf=True 或 PerfChannel.attach 时才有）。
     # None = **没开启采集** —— 与「采到了但缺样本」（perf['pss_kb'] is None）
     # 必须能区分，见 ohauto/perf.py 的「缺样本 ≠ 正常」约定。
     perf: Optional[Dict[str, Any]] = None
@@ -269,7 +269,7 @@ class Signals:
         return text
 
 
-# ================================================================ 性能 / 资源通道（2C【C4】）
+# ================================================================ 性能 / 资源通道
 
 class PerfChannel:
     """性能 / 资源采样通道 —— hidumper PSS + loadavg 负载 + 进程存活的周期采样。
@@ -713,7 +713,7 @@ def _window_start_epoch(since: Any, lookback_s: float,
                         offset_s: float) -> float:
     """把调用方给的窗口起点换算到**设备时钟域**。
 
-    窗口的**长度**用本机时钟度量（设计要求：不要用设备时间做窗口判断），
+    窗口的**长度**用本机时钟度量（不要用设备时间做窗口判断），
     只把锚点平移到设备时钟域，以便和文件时间戳比较。
     """
     now = time.time()
@@ -1017,7 +1017,7 @@ def collect_signals(
     # ---- 2. 进程存活（辅证据）
     sig.process_alive = _probe_process_alive(hdc, bundle, sig)
 
-    # ---- 2.5 性能采样（2C【C4】，默认关 —— 见参数说明）
+    # ---- 2.5 性能采样（默认关 —— 见参数说明）
     if collect_perf:
         PerfChannel(hdc, bundle).attach(sig)
 
@@ -1122,7 +1122,7 @@ def _collect_crashes(hdc, bundle: str, sig: Signals, out_dir: str,
         if not rec.module_name:
             # 文件名和正文都没给出模块名 —— 无法确认是不是我们的应用。
             # 仍然采纳（丢证据比多一条可疑证据更糟），但把不确定**写在明面上**，
-            # 让 B4 知道这条不能当铁证用。module_name 保持空串，不猜。
+            # 让归因知道这条不能当铁证用。module_name 保持空串，不猜。
             sig.warnings.append(
                 f'崩溃日志 {name} 的文件名与正文都未给出 Module name，'
                 f'无法确认归属（module_name 留空，未做推测）')
@@ -1184,7 +1184,7 @@ def _collect_screenshot(hdc, sig: Signals, out_dir: str,
 def _judge_white_screen(sig: Signals) -> None:
     """用控件树节点数**交叉验证**白屏判据，节点多就降级为「疑似」。
 
-    ★ 2026-09-23 新增（来源：外部评审 + B 的复核建议）。
+    ★ 2026-09-23 新增（来源：外部评审 + 复核建议）。
 
     **缺陷原来的样子**：白屏判据是「单一颜色占比 ≥ 阈值」单一证据，
     触发后以 ≥0.95 的置信度一票否决。但同一次采集里 `layout_nodes` 就在手边 ——
@@ -1444,9 +1444,9 @@ def _judge_no_response(hdc, sig: Signals, win_start: float,
                        device_now: Optional[float] = None) -> None:
     """无响应的多信号叠加 —— 每条信号独立成 Anomaly，各带来源与置信度。
 
-    设计要求**不要单信号硬判**。「无响应」（ANR / 卡死）本身没有
+    **不做单信号硬判**。「无响应」（ANR / 卡死）本身没有
     一个可靠的单一判据，`freeze/` 的文件名格式甚至还没实测验证过，
-    所以这里只叠加证据，由 B4 去综合。
+    所以这里只叠加证据，由归因综合。
 
     窗口判定与 `_collect_crashes` 一致：下界 + 「未来」上界，
     两处任缺一个都会让设备时钟回跳后的旧文件冒充本轮证据。

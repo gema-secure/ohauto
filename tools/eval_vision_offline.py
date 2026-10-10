@@ -3,7 +3,7 @@
 
 为什么有这个东西
 ----------------
-设计目标是「支持多模态大模型理解应用截图和布局结构」，而我们的
+目标是「支持多模态大模型理解应用截图和布局结构」，而我们的
 现状是：`ohauto/vision.py` 的 Provider 抽象、HybridLocator、TieredVisionLocator
 全都写完了，**一次真实推理都没跑过** —— 没有 key，也没有评测口径。
 
@@ -593,7 +593,7 @@ def read_page(provider: OpenAICompatibleProvider, image: str,
     不一致、界面已变、目标被遮挡）。两者的修法完全相反，而定位接口
     只回一个空数组，分不出来。
 
-    实测（2026-09-22）：`app_settings` 的「蓝牙」在三次运行里稳定返回 `[]`，
+    实测：`app_settings` 的「蓝牙」在三次运行里稳定返回 `[]`，
     而控件树说它就在 `[36,156][684,213]`。到底谁对？——问模型「这页有哪些字」
     就能定论：若念出来的清单里有「蓝牙」，说明是定位 prompt 的问题；
     若没有，说明那一行在画面上不是「蓝牙」，是**控件树与界面不一致**。
@@ -712,7 +712,7 @@ def page_intent(provider: OpenAICompatibleProvider, image: str,
                 screen: Tuple[int, int]) -> Dict[str, Any]:
     """让模型输出**页面意图 / 核心操作入口 / 潜在测试路径**。
 
-    这是设计目标的后半句：「识别页面意图、核心操作入口、潜在测试路径」。
+    这是该目标的后半句：「识别页面意图、核心操作入口、潜在测试路径」。
     前半句「理解截图和布局结构」已由 bbox 定位落地（见本工装主流程），
     但后半句是**另一个问题** —— 不是「某某控件在哪」，而是「这个页面上
     值得测什么、从哪进去」。两者的答案结构不同，所以用独立的提问。
@@ -1579,7 +1579,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                          '用于诊断定位失败是「模型没认出」还是「画面里没有」')
     ap.add_argument('--page-intent', metavar='SAMPLE', default='',
                     help='让模型输出该页面的意图、核心操作入口、潜在测试路径'
-                         '（对应设计目标的后半句）')
+                         '（对应该目标的后半句）')
     ap.add_argument('--no-thinking', action='store_true',
                     help='关掉模型思考模式（\u4ec5 openai 生效）。DeepSeek 默认'
                          '开着思考，定位任务不需要，关掉省时间省钱且让 '

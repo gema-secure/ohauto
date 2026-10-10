@@ -52,7 +52,7 @@ class VisionConfigError(VisionError):
 class VisualTarget:
     """视觉通道给出的定位结果。
 
-    uncertain 的语义（任务卡 A2）：该结果**没有**得到另一个通道的交叉印证。
+    uncertain 的语义：该结果**没有**得到另一个通道的交叉印证。
     - 视觉命中但与控件树候选不重叠（IoU < 阈值）→ uncertain=True，
       仍然返回（「不盲点」），但调用方应视为低可信，只在无其他选择时采用；
     - 与控件树候选重叠 ≥ 阈值 → 采用控件树精确边界，uncertain=False。
@@ -110,14 +110,14 @@ class OpenAICompatibleProvider(VisionProvider):
     """任意 OpenAI 兼容的多模态接口。
 
     只需配置 base_url / api_key / model，即可适配绝大多数云端或自建服务。
-    不绑定单一供应商 —— 这正是命题「避免强绑定单一模型」的要求。
+    不绑定单一供应商 —— 避免强绑定单一模型。
 
-    **密钥纪律（任务卡 A1 红线）**：key 一律走环境变量，绝不写进代码。
+    **密钥纪律（红线）**：key 一律走环境变量，绝不写进代码。
     环境变量（按组优先级，任一组配齐即可）：
         OHAUTO_VISION_BASE_URL  /  OHAUTO_VISION_API_KEY  /  OHAUTO_VISION_MODEL
         OHAUTO_LLM_BASE_URL     /  OHAUTO_LLM_API_KEY     /  OHAUTO_LLM_MODEL
         OH_LLM_BASE_URL         /  OH_LLM_API_KEY         /  OH_LLM_MODEL   （旧）
-    第二组是 B3 定的全组统一口径（2026-09-23 对齐）：视觉与用例生成共用
+    第二组是全组统一口径：视觉与用例生成共用
     一份 key 时，全组只需配一组 OHAUTO_LLM_*；视觉专用配置仍以
     OHAUTO_VISION_* 优先。
     """
@@ -384,7 +384,7 @@ class HybridLocator:
                     matched = True
                     break
             if not matched:
-                # A2：视觉有命中、但控件树不背书 —— 不盲点，照常返回，
+                # 视觉有命中、但控件树不背书 —— 不盲点，照常返回，
                 # 但标记 uncertain，调用方可以按置信度决定是否采用。
                 # raw 里带上「它没跟谁重叠」，报告里能解释为什么标记。
                 raw = dict(v.raw) if v.raw else {}
@@ -414,10 +414,10 @@ class HybridLocator:
         return None
 
 
-# ---------------------------------------------------------------- A4 分层成本控制
+# ---------------------------------------------------------------- 分层成本控制
 
 class TieredVisionLocator:
-    """三层成本递增的视觉定位（任务卡 A4）。
+    """三层成本递增的视觉定位。
 
     L1  静态候选筛选   —— 只在控件树 hints 里按关键词匹配，约 50ms，**不调模型**
     L2  候选区域送模型 —— 只把目标附近的候选 + 区域上下文喂给模型（1–2s）
@@ -427,7 +427,7 @@ class TieredVisionLocator:
     页面指纹由调用方传（B1 的 content signature，或任意能区分页面的稳定串）——
     摘要器 treesum / explorer 的 PageSignature.content 都可以。
 
-    「裁剪」的诚实说明：纯标准库没有图像裁剪能力（不引新依赖是分工卡约束）。
+    「裁剪」的诚实说明：纯标准库没有图像裁剪能力（不引新依赖是项目约束）。
     L2 在无 PIL 环境下的实现是**候选区域上下文注入**：只送区域内的 hints，
     并在 prompt 上下文里写明目标区域，引导模型把注意力放在局部；
     如果宿主环境装了 PIL，可通过 crop_fn 钩子注入真正的像素裁剪，

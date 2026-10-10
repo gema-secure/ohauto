@@ -250,7 +250,7 @@ def step3_sign_haps(java, lib, sign_dir, haps: list, out_dir: str) -> list:
 def device_udid(hdc: str = '', target: str = '') -> str:
     """取本机 UDID 用于 profile。
 
-    ★ 这一步**不能省**。实测（2026-09-22）：UDID 取空时 profile 会保留
+    ★ 这一步**不能省**。实测：UDID 取空时 profile 会保留
     SDK 模板里的**旧 device-ids**，设备直接拒绝安装：
 
         error: failed to install bundle. code:9568322

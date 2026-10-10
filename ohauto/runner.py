@@ -467,14 +467,14 @@ class StepResult:
     # 为什么需要：归因定案为「定位失败」后要调 `A.record_locator_failure(locator_id)`
     # 回写健康度台账 —— 没有 id 就回写不了，那条链路等于断的。
     # 为什么不在归因侧现拼：id 是定位器**自己**的身份，拼出来的是假账
-    # （会在 A 的台账里塞空 id 记录）。所以由执行器在定位后原样写入。
-    # 2026-09-23 新增，见 docs/给B-回执-2026-09-23.md §6.1。
+    # （会在定位器台账里塞空 id 记录）。所以由执行器在定位后原样写入。
+    # 新增。
     locator_id: Optional[str] = None
     # 失败归因结论（`diagnose.Verdict`）。**仅当 Runner 开启 `diagnose_failures` 时才有**，
     # 默认 None 表示「没做归因」而不是「归因结论为空」—— 两者必须能区分。
     #
     # 为什么标注成 Any 而不是 `diagnose.Verdict`：runner 不该硬依赖归因引擎
-    # （B 的模块），而且测试里要能注入替身。真实类型由 `Runner.diagnoser` 决定。
+    # （本模块），而且测试里要能注入替身。真实类型由 `Runner.diagnoser` 决定。
     # 为什么放在 StepResult 上：归因的输入就是「一个失败步」，结论天然属于它 ——
     # 放在 CaseResult 上就得再维护一份 step_index 映射，多一个能对错的地方。
     verdict: Optional[Any] = None
@@ -546,7 +546,7 @@ class CaseResult:
     #: skipped 必须与 saved 并列出报告：省略本身是要留痕的行为。
     screenshots_saved: int = 0
     screenshots_skipped: int = 0
-    #: 内存趋势曲线（2C【C4】，`collect_perf` 开启时才有）。
+    #: 内存趋势曲线（`collect_perf` 开启时才有）。
     #: None = 本次**没采**；「采了但缺样本」看 `analysis['pss_missing']`
     #: —— 后者必须如实留痕，不能退回 None 伪装成没采过。
     perf: Optional[Dict[str, Any]] = None
@@ -591,7 +591,7 @@ class CaseResult:
         | `success_rate` | 这次跑通了没有（含级联影响） |
         | `ok` / `health_ok` | 用例整体是否通过 |
 
-        ⚠️ **反例（外部评审算过、C 复核成立）**：50 步全部因同一原因失败 →
+        ⚠️ **反例（外部评审算过、复核成立）**：50 步全部因同一原因失败 →
         49 步被判 cascade → 本值 = 0.98。但 `ok` 仍然是 False。
         所以它**必须与 `ok` / `all_failed` / `health_ok` 一起展示**，
         禁止单独当作通过依据。
@@ -835,7 +835,7 @@ class SuiteResult:
         return sum(c.screenshots_skipped for c in self.cases)
 
     def refresh_perf(self) -> None:
-        """从各用例曲线重算汇总级内存曲线（2C【C4】）。
+        """从各用例曲线重算汇总级内存曲线。
 
         `Runner.run_suite` 自动调；**增量拼装 suite 的调用方**（逐轮
         `run_suite` 再把 `cases` 并进来，如 examples/run_suite.py 的长稳
@@ -921,7 +921,7 @@ class Runner:
                       默认 False = 只用产物目录里已有的控件树快照做离线归因（无设备往返）。
                       置 True 才会调 `collect_signals()` —— 每步失败多一次设备往返，
                       真机批量时明显变慢，所以单独开关。
-    diagnose_locator_sink: 归因为「定位失败」时回写 A 的自愈台账，签名
+    diagnose_locator_sink: 归因为「定位失败」时回写自愈台账，签名
                       `(locator_id, reason)`。⚠️ 与上面的 `locator_sink` **不是同一个东西**
                       （那个递的是 DSL 原始规格，这个递的是定位器 id）—— 见下面注释。
                       ⚠️ 更要紧的一条：**不要和 `locator_sink` 同时接** ——
@@ -929,7 +929,7 @@ class Runner:
                       集成层目前选的是执行侧那条（`locator_sink`）。
     locator_id_resolver: 规格 → locator_id 的反查（集成层注入）。**只给归因结论补 id**，
                       不回写。不接也能跑，只是归因结论里 locator_id 为空。
-    collect_perf:     是否在每步之后采一轮设备内存/负载（2C【C4】）。**默认 False**
+    collect_perf:     是否在每步之后采一轮设备内存/负载。**默认 False**
                       —— 开启后每步多两次设备往返（pidof + hidumper），
                       诊断链路不该背它；长稳场景（note_stability）才显式开。
                       曲线挂 `CaseResult.perf` / `SuiteResult.perf`，随报告落盘。
@@ -957,7 +957,7 @@ class Runner:
         self.artifact_budget = artifact_budget or 0
         self.verbose = verbose
         self._sleep = sleep_fn
-        # 定位失败回写钩子（分工卡第五章契约：执行失败要回写，让 A 的自愈有输入）。
+        # 定位失败回写钩子（分工卡第五章契约：执行失败要回写，让自愈有输入）。
         # 签名为 sink(target_spec, reason)，target_spec 是 DSL 里那个原始规格
         # （如 {'id': '7'}），reason 是失败原因。
         #
@@ -979,22 +979,22 @@ class Runner:
         # ⚠️ 与 self.locator_sink **不是同一个东西**，签名也不同：
         #     self.locator_sink(spec, reason)        ← 执行器递「DSL 原始规格」
         #     diagnose_locator_sink(locator_id, reason) ← 归因递「定位器 id」
-        # 直接复用会把规格当 id 传出去，在 A 的健康度台账里塞假账 —— 所以分成两个参数。
+        # 直接复用会把规格当 id 传出去，在定位器健康度台账里塞假账 —— 所以分成两个参数。
         self.diagnose_locator_sink = diagnose_locator_sink
-        # ── 自愈喂料（2026-09-25）：给 sink 递「执行尝试序号」──────────
+        # ── 自愈喂料：给 sink 递「执行尝试序号」──────────
         # A 的幂等键是 (定位代次, locator_id)，而代次只在 locate() 推进；
         # 执行器走 matcher，从不调 locate() → 代次恒 0，第 2 次回写起
         # 全被 A 判成「同一次定位的重复记账」丢弃 → 连续失败停在 1，
         # 自愈阈值永远够不着（tools/wire_locator_sink.py 自测诊断段有证据）。
-        # 修法：runner 每次回写递增一个单调序号随 sink 传出；A 侧把它
-        # 当幂等键（locator.py 需加可选参数，见 docs/派活-给A-自愈幂等代次）。
+        # 修法：runner 每次回写递增一个单调序号随 sink 传出；调用方把它
+        # 当幂等键（locator.py 需加可选参数）。
         # sink 侧做签名自适应：旧的两参 sink 照常工作（A 修完前不炸）。
         self._attempt_seq = 0
         self._sink_takes_attempt = self._probe_sink_signature(locator_sink)
         # 规格 → locator_id 的反查（集成层注入）。**只用于给归因结论补 id**，
         # 不回写 —— 回写只有 `_report_locator_failure` 一条路，见那里。
         self.locator_id_resolver = locator_id_resolver
-        # ---- 内存趋势采集（2C【C4】并入报告）--------------------------------
+        # ---- 内存趋势采集（并入报告）--------------------------------
         # **默认关**：每步多两次设备往返（pidof + hidumper），诊断链路不该背它，
         # 长稳场景才显式开。开启后每步采一轮，曲线挂 CaseResult.perf，
         # 由 SuiteResult 合并后进 Markdown 报告（验收原句「产出内存趋势曲线
@@ -1027,7 +1027,7 @@ class Runner:
         try:
             if self.diagnoser is not None:          # 注入的替身（测试/自定义）
                 return self.diagnoser(sr, driver)
-            # 延迟导入：runner 不硬依赖归因引擎（B 的模块），也避免包级导入顺序问题。
+            # 延迟导入：runner 不硬依赖归因引擎（本模块），也避免包级导入顺序问题。
             from .diagnose import diagnose_failed_step
             adir = getattr(driver, 'artifact_dir', None)
             # 只有显式开了 diagnose_signals 才把 hdc 传下去 —— 传了它就会去采
@@ -1085,7 +1085,7 @@ class Runner:
                     sr.kind = kind
                     # 判定失败之前先留现场 —— 归因引擎靠它把置信度从 0.6 提到 0.85
                     self._capture_trees(driver, sr)
-                    # 定位失败要回写，否则 A 的定位器自愈永远拿不到输入
+                    # 定位失败要回写，否则 定位器自愈永远拿不到输入
                     self._report_locator_failure(sr)
                     break
 
@@ -1207,7 +1207,7 @@ class Runner:
             return ''
 
     def _report_locator_failure(self, sr: StepResult) -> None:
-        """定位失败时回写，供 A 的定位器健康度与自愈使用（分工卡第五章契约）。
+        """定位失败时回写，供定位器健康度与自愈使用。
 
         **只在 `kind is LOCATE` 时回写。** 设备掉线、应用崩溃同样会让步骤失败，
         但它们不是「这个定位器找不到了」—— 混进去会污染健康度账本，
@@ -1266,7 +1266,7 @@ class Runner:
         _shots0 = int(getattr(driver, 'shots_saved', 0) or 0)
         _skips0 = int(getattr(driver, 'shots_skipped', 0) or 0)
 
-        # ---- 内存趋势采集通道（2C【C4】）------------------------------------
+        # ---- 内存趋势采集通道------------------------------------
         # 延迟导入：signals 与 runner 同层，但不让执行器硬依赖它。
         perf_ch = None
         if self.collect_perf:
@@ -1295,7 +1295,7 @@ class Runner:
 
             action, arg = next(iter(st.items()))
             sr = self.run_step(driver, i, action, arg)
-            # 每步跑完看一眼内存/负载水位（2C【C4】）。sample() 是旁路，
+            # 每步跑完看一眼内存/负载水位。sample() 是旁路，
             # 采不到只记警告绝不中断 —— 「缺样本 ≠ 正常」的降级纪律
             # 在 ohauto/perf.py，这里只负责按步推进时序。
             if perf_ch is not None:

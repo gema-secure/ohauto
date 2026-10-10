@@ -9,10 +9,10 @@ L4 应用层 —— 自动探索与页面状态图
     探索会真的点击 UI，因此内置**危险控件黑名单**。默认拦截含
     「删除 / 支付 / 退出 / 注销 / 卸载 / 格式化」等语义的控件，
     避免自动探索造成不可逆影响。可通过 allow_dangerous=True 放开。
-    黑名单覆盖中/英/俄/西/阿五种语言（C6）—— 界面文案是外文时，
+    黑名单覆盖中/英/俄/西/阿五种语言—— 界面文案是外文时，
     只写中英文会让整条黑名单**静默失效**（探索照样点进「Удалить」）。
 
-B1/B2 改造（2026-09-21）：
+改造说明：
     ★ 页面双签名    content_sig 精确去重 / structural_sig 返回栈回溯
     ★ 覆盖度度量    已访可交互 / 全部可交互，按**结构签名**归并页面
     ★ 四档优先级    弹窗内控件置顶；危险控件默认拦截，放开后置顶
@@ -58,7 +58,7 @@ DEFAULT_DENY_PATTERNS = [
     # —— 英文
     r'delete', r'remove', r'pay', r'purchase', r'logout',
     r'sign\s*out', r'uninstall', r'reset', r'format',
-    # —— 俄文（C6）
+    # —— 俄文
     r'удал',            # удалить / удаление（删除）
     r'очист',           # очистить / очистка（清除）
     r'сброс',           # сброс / сбросить（重置）
@@ -69,14 +69,14 @@ DEFAULT_DENY_PATTERNS = [
     r'перевод',         # перевести / перевод（转账）
     r'выйти|выход',     # 退出登录
     r'отвяз',           # отвязать（解绑）
-    # —— 西班牙文（C6）
+    # —— 西班牙文
     r'eliminar', r'borrar', r'quitar', r'limpiar',
     r'restablecer', r'formatear',
     r'pagar|pago', r'comprar|compra', r'pedido',
     r'recargar', r'transferir|transferencia',
     r'cerrar\s*sesi', r'salir',
     r'desvincular', r'desinstalar',
-    # —— 阿拉伯文（C6）
+    # —— 阿拉伯文
     r'حذف',             # 删除
     r'إزالة',           # 移除
     r'مسح',             # 清除
@@ -141,7 +141,7 @@ class SafetyPolicy:
 
 # ================================================================ ★ 页面双签名
 #
-# 为什么必须要两个签名（任务卡 B1 补注）：
+# 为什么必须要两个签名：
 #   页面里的文案会随数据变化（列表首项、未读计数、时间戳）。只用内容签名，
 #   探索器会把同一个页面反复「发现」成新页面 —— 覆盖率统计虚高、还会绕圈。
 #   结构签名只看控件类型序列，文案怎么变都不影响。
@@ -150,7 +150,7 @@ class SafetyPolicy:
 #   页面状态图直接塌掉。所以：内容签名管「这页我访问过没有」，
 #   结构签名管「返回后是不是回到了原页」。
 
-# 节点自带的页面归属字段（真机实测有，见 C1-真机适配报告）
+# 节点自带的页面归属字段（真机实测有）
 PAGE_ATTR_KEYS = ('pagePath', 'PagePath', 'page_path', 'page', 'routerPath')
 ABILITY_ATTR_KEYS = ('abilityName', 'AbilityName', 'ability', 'abilityInfo')
 BUNDLE_ATTR_KEYS = ('bundleName', 'BundleName', 'bundle')
@@ -208,7 +208,7 @@ def build_page_signature(root: LayoutNode, bundle: str = '',
                          ability: str = '') -> PageSignature:
     """从控件树算双签名。
 
-    真机优先用节点自带的 `pagePath` / `abilityName` / `bundleName`（C1 报告实测存在），
+    真机优先用节点自带的 `pagePath` / `abilityName` / `bundleName`（真机实测存在），
     取不到才回落到 Driver 上配置的 bundle / ability。
     """
     ctx_bundle = _first_attr(root, BUNDLE_ATTR_KEYS) or bundle or ''
@@ -241,7 +241,7 @@ from .identity import control_key, type_fingerprint
 
 # ================================================================ ★ 优先级
 #
-# 任务卡给的是固定档位，不是「权重」—— 固定值才好测试、好解释、好回归。
+# 档位是固定值，不是「权重」—— 固定值才好测试、好解释、好回归。
 # 卡里叫「四档」但列了 5 个取值，这里按列出的取值实现。
 
 class Priority:
@@ -256,7 +256,7 @@ HIGH_KEYWORDS = ('登录', '登陆', '搜索', '查询', '详情', '提交', '�
                  '确认', '确定', '下一步', '开始', '进入', '查看',
                  'login', 'sign in', 'search', 'submit', 'detail')
 
-# 弹窗识别线索。真机实测可用的字段见 C1-真机适配报告：
+# 弹窗识别线索。真机实测可用字段
 # hostWindowId（多窗口/弹窗）、zIndex / opacity（遮挡）、hitTestBehavior（点不动）。
 DIALOG_TYPE_HINTS = ('dialog', 'popup', 'modal', 'sheet', 'alert', 'picker',
                      'menu', 'overlay', 'toast')
@@ -264,7 +264,7 @@ WINDOW_ID_KEYS = ('hostWindowId', 'windowId', 'HostWindowId', 'WindowId')
 
 #: 交互可用判定的不透明度下限。**全项目只留这一个小数** ——
 #: `detect_dialog` 的遮挡线引用它，`diagnose._usability` 也引它。
-#: 0.9 的半透明照样能点，判死是过度归因（C 复核 `diagnose` 那条时的同源问题）。
+#: 0.9 的半透明照样能点，判死是过度归因（复核 `diagnose` 时的同源问题）。
 MIN_INTERACTIVE_OPACITY = 0.5
 
 #: 「多窗口叠加」判为弹窗时，两窗重叠面积至少要占屏幕的多少。
@@ -303,7 +303,7 @@ def detect_dialog(root: Optional[LayoutNode]) -> DialogVerdict:
       ② 两个窗口**互相重叠**（弹窗压在应用上）—— 不是「存在多个窗口」
       ③ 存在近似全屏的遮挡节点（面积盖住 90% 屏幕，且 zIndex>0 或 opacity 不透明）
 
-    不先处理弹窗，后续所有点击都会打在遮罩上 —— 这是 B2 把它提到最高优先级的理由。
+    不先处理弹窗，后续所有点击都会打在遮罩上 —— 这是把它提到最高优先级的理由。
 
     ★ 线索②的判据在 2026-09-23 被重写（用 C 给的真机样本抓到的**真机缺陷**）：
 
@@ -313,7 +313,7 @@ def detect_dialog(root: Optional[LayoutNode]) -> DialogVerdict:
 
     后果不是「偶尔误报」而是**每一张真机页面都被判成弹窗**：
     弹窗置顶（HIGH 档）永远生效 → 四档优先级排序整体失效；
-    B4 拿这条当证据时也会一直看到「多窗口叠加」。**7/7 真机样本全中。**
+    归因拿这条当证据时也会一直看到「多窗口叠加」。**7/7 真机样本全中。**
 
     改成几何判据后（重叠面积 ≥ 屏幕 5%，见 `DIALOG_WINDOW_OVERLAP_MIN` 的实测数字），
     7 张真机样本里只有真正的那个弹窗页被判为弹窗。
@@ -461,7 +461,7 @@ class CoverageReport:
 
         为什么：本体例的「页面」粒度就是结构签名。用内容签名会把
         「点一下、正文文字变了」算成一个新页面 —— 真机计算器（单页应用）
-        点 5 次就被算成 6 个页面，数字虚高。这正是 B1 里警告过的
+        点 5 次就被算成 6 个页面，数字虚高。这正是早先警告过的
         「内容签名太敏感」，只不过它体现在报告的页数上而不是探索逻辑上。
         `pages`（状态数）仍然有用，它衡量的是**界面状态**的覆盖面，
         报告里两个都出，别混用。
@@ -498,7 +498,7 @@ class CoverageReport:
 # 项目内部调研档案（仓库外）§三）。
 #
 # 问题的形态：列表翻页、开关切换、「加一」按钮这类操作，每次点击都让文案
-# 变一点 —— 内容签名体系下每点一次都是一个「新页面」。B1 的双签名解决了
+# 变一点 —— 内容签名体系下每点一次都是一个「新页面」。双签名解决了
 # 「返回栈回溯被文案变化骗走」的问题，但 BFS 队列仍然会把这些同族小变体
 # 逐个入队探索：预算被「同一页的影子」吃光，覆盖率虚高、状态图被灌水。
 # 这就是 tarpit（焦油坑）—— 探索器看得见出口，却总在同一段路上打转。
@@ -562,7 +562,7 @@ class PageState:
     title: str = ''
     # 设备自报的页面路由（PageSignature.page_path 原样带出）。
     # 签名层早就有它（参与双签名哈希），但状态层之前没带出来 ——
-    # 覆盖率工具想做「页级归并」时读不到（B 复核；C 于 09-28 B7 实测补全）。
+    # 覆盖率工具想做「页级归并」时读不到（复核时发现，后续实测补全）。
     page_path: str = ''
     first_seen: float = field(default_factory=time.time)
     visits: int = 0
@@ -746,7 +746,7 @@ class Explorer:
         self.back_verdicts: List[str] = []
         self.last_budget: Optional[Budget] = None
         self.dialog: DialogVerdict = DialogVerdict()
-        # C3 权限弹窗：策略（record / allow / deny，默认 deny）+ 台账。
+        # 权限弹窗：策略（record / allow / deny，默认 deny）+ 台账。
         # 台账必须留：替用户作答是**有副作用的动作**，不能只在日志里一闪而过。
         self.permission_policy = resolve_policy(permission_policy)
         self.permission: PermissionDialogVerdict = PermissionDialogVerdict()
@@ -918,7 +918,7 @@ class Explorer:
                     prioritized: bool = True) -> List[LayoutNode]:
         """当前页面的可点击候选控件，按档位降序排列。
 
-        排序规则（任务卡 B2）：先榨干当前页未执行过的事件（档位降序），
+        排序规则：先榨干当前页未执行过的事件（档位降序），
         再跳到最近的未访问页面 —— 这个「局部穷尽 + 全局 BFS」的混合结构
         比纯 BFS 少走回头路，也天然避免页面间来回弹跳。
         """
@@ -1127,13 +1127,13 @@ class Explorer:
                 self.log(f'  {cur.sid} 返回栈回溯失败，标记不可达并跳过')
                 continue
 
-            # ★ 刷新后的签名必须接住（C 复核发现：原来写成 `root, _ =`，
+            # ★ 刷新后的签名必须接住（复核发现：原来写成 `root, _ =`，
             #   于是整个内层循环用的都是**入口页**的 `sig`）。
             #   后果不是崩溃而是四层静默偏差：
             #     ① `_done` 按入口页记账 → 跨页同 key 控件被误合并 → 后续页面少探索；
             #     ② 「点了没反应就降档」在非入口页静默失效；
             #     ③ 覆盖度明细里每页 `visited` 恒为 0；
-            #     ④ 状态图（挑战 #3）可信度受影响。
+            #     ④ 状态图（自动探索）可信度受影响。
             #   它不显眼，是因为现有测试的无效控件恰好落在入口页 —— 见
             #   `tests/test_explorer_b1.py::TestRefreshSignatureRegression`。
             try:
@@ -1355,7 +1355,7 @@ class Explorer:
         （结构签名）—— **KPI「发现页面数」以后者为准**，理由见 CoverageReport 文档串。
 
         ★ `per_page` 里的 `total` / `visited` 是**读时算出来的**，不是观察页面时
-        拍下的快照（C 复核缺陷，2026-09-23 修）。快照那个写法必然恒为 0：
+        拍下的快照（复核发现的缺陷，2026-09-23 修）。快照那个写法必然恒为 0：
         `_note_page()` 是在**刚进入某页、还没点任何控件**时调用的，
         那一刻这一页当然一个已访控件都没有，而之后再没人回头更新它。
         `visited` 本来就是 `_done` 的派生量，派生的东西不该被存成快照。
@@ -1420,7 +1420,7 @@ class Explorer:
     def generate_case(self, path: str, name: str = '自动探索轨迹') -> str:
         """把探索轨迹串成一条**可重放**的用例（只串首尾相接的连续边）。
 
-        ★ C 派活 B-1（2026-09-26，高危）：原实现把 `graph.transitions`
+        ★ 缺陷修复（高危）：原实现把 `graph.transitions`
         （**边集**）按列表顺序当成一条线性轨迹串。边与边之间没有顺序保证，
         最简反例就是同一个来源页扇出两条边：
 
@@ -1532,18 +1532,18 @@ def _dedup_skipped(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 # ================================================================ 探索图 → 用例
 #
-# C 派活 B-1（2026-09-26）：`transitions` 是**边集**，不是轨迹。
+# 缺陷修复：`transitions` 是**边集**，不是轨迹。
 # 下面这组函数负责把边集切成「首尾相接的路径」，并把接不上的边**显式记账**。
 
 def _nav_steps_to(graph: Any, sid: str) -> List[Dict[str, Any]]:
     """返回「从入口页走到 `sid` 这一页」的控件序列步骤。
 
-    用的是 B1 那套返回栈回溯记录下来的 `PageState.path` —— 同一份数据，
+    用的是返回栈回溯记录下来的 `PageState.path` —— 同一份数据，
     探索时用来回退、生成用例时用来当导航前缀，不必另造一套。
 
     做成**模块级函数**而不是方法：`generate_case` 会被单测用
     `SimpleNamespace` 桩以「未绑定方法」的方式直接调用（见
-    `C交付-给B-2026-09-27/verify_b_fixes.py`），那时 `self` 上没有别的方法。
+    当时的复核脚本），那时 `self` 上没有别的方法。
 
     拿不到路径（没有 states / 该页就是入口页 / 桩对象）时返回空 list ——
     退化成「直接从入口开始」，不猜。

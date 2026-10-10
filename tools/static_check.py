@@ -585,7 +585,6 @@ BROAD_EXCEPT_BASELINE: Dict[str, int] = {
     'tools/demo_full_chain.py': 1,
     'tools/e2e_smoke_real.py': 10,
     'tools/eval_nl_generation_real.py': 1,
-    'tools/make_handoff_zips.py': 1,
     'tools/ocr_worker.py': 2,
     'tools/preflight.py': 2,
     'tools/sign_hap.py': 3,

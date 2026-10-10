@@ -124,7 +124,7 @@ class TestCompatWithB(unittest.TestCase):
         d = _make_driver()
         d.tap(ON.id('username'))
         d.input(ON.id('username'), 'alice')
-        # B 的库内路径
+        # 库内路径
         legacy = action.trace_to_steps(d)
         blob = repr(legacy)
         self.assertNotIn('tap_xy', blob)

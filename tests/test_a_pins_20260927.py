@@ -1,6 +1,6 @@
-"""A 侧验收钉子（2026-09-27）：A-0 自愈幂等代次 / A-1 within 两洞 / A-2 未注册 spec。
+"""验收钉子：自愈幂等代次 / within 边界 / 未注册 spec。
 
-对应 C 的整合派活包 `C交付-给A-2026-09-27.zip`（取代 09-25、09-26 两份）：
+兼容整合派活包 `C交付-给A-2026-09-27.zip`（取代 09-25、09-26 两份）：
 
 - A-0（P0）：`locator.py::_count_failure` 的幂等键只用 `_locate_seq`，
   而执行器走 matcher/layout **从不调 locate()** → 代次恒 0 → 回写全被
@@ -117,7 +117,7 @@ class TestA0AttemptIdempotency(unittest.TestCase):
         self.assertEqual(mgr.health(lid).consecutive_failures, 2)
 
     def test_a0f_legacy_two_arg_path_unchanged(self):
-        """旧式两参调用 + locate 内部记账：C 回执 2.2 的幂等口径不变。
+        """旧式两参调用 + locate 内部记账的幂等口径不变。
 
         `locate()` 全链路落空会内部记一次；同一次定位里 B 再按老签名
         回写一次，必须仍被去重（修复前是 2，这是 09-23 那条钉子）。

@@ -31,7 +31,7 @@ ohauto — OpenHarmony 应用 UI 自动化能力层
     g = DeviceGuard(d.hdc)
     Runner(guard=g).run_case(d, case)
 
-★ 分工卡接口总表约定的 C 对外接口（A、B、CI 请统一走这个）：
+★ 对外接口（统一走这个）：
     from ohauto import run
     rep = run(cases, device)          # -> RunReport
     rep.ok                            # 契约字段
@@ -54,15 +54,14 @@ from .runner import (Runner, DeviceGuard, RetryPolicy, FailureKind,
                      run, run_case, run_suite)
 from .signals import (collect_signals, Signals, CrashRecord, Anomaly,
                       parse_crash_log, parse_fault_filename, PerfChannel)
-# C4 性能/资源采样原语（2C 收编自 tools/stability_telemetry.py，单源 ohauto/perf.py）
+# 性能/资源采样原语（收编自 tools/stability_telemetry.py，单源 ohauto/perf.py）
 from .perf import (device_sample, host_sample, take_sample, analyze_samples,
                    PSS_SLOPE_THRESHOLD, MIN_PSS_SAMPLES)
 from .diagnose import (diagnose, diagnose_all, summarize, Verdict, Category,
                        ExecutionRecord, CATEGORY_CN)
-# 2026-09-23 追加（B 闭环接入 API）：失败步 → Verdict 的一站式入口。
-# ⚠️ 这是**追加**，不是覆盖 —— B 交付包里的 __init__.py 基线是 9-22 之前的，
-#    整文件覆盖会丢掉下方 A 模块（locator/treesum/vision）的全部导出。
-#    见 docs/给B-回执-2026-09-23.md §2.1。
+# 失败步 → Verdict 的一站式入口。
+# ⚠️ 这些导出是**追加**，不是覆盖 —— 整文件覆盖会丢掉下方
+#    locator / treesum / vision 的全部导出。
 from .diagnose import diagnose_failed_step, load_snapshots
 from .generator import (Generator, Case, TestPoint, GenerationReport,
                         GenerationOutcome, GenerationError, RejectReason,
@@ -74,24 +73,22 @@ from .generator import (Generator, Case, TestPoint, GenerationReport,
                         split_stress_cases, check_swipe_safety,
                         swipe_endpoints, swipe_safe_scale, stress_safety_report,
                         pick_stress_target, SWIPE_EDGE_MARGIN_PX)
-# A 模块（定位与感知）—— 分工卡接口总表：A -> B/C 的 locate / 自愈
+# 定位与感知：locate / 自愈
 from .locator import (LocatorManager, LocateResult, LocatorSpec,
                       LocatorHealth, RepairReport, LocatorMissError)
-# 2026-09-23 追加（A5 正式版）：B3 的 Generator(catalog_fn=...) 控件清单。
-# ⚠️ 同样是**追加**而非覆盖 —— A 交付包按边界声明没带 __init__.py，
-#    避免用旧版基线覆盖这里的合并版导出。
+# Generator(catalog_fn=...) 用的控件清单。
+# ⚠️ 同样是**追加**而非覆盖 —— 避免用旧版基线覆盖这里的合并版导出。
 from .treesum import (summarize_tree, summary_lines, count_nodes,
                       control_catalog)
-# ⚠️ 集成时发现的重名：vision.py:99 与 generator.py:211 **各有一个
+# ⚠️ 包级导出重名：vision.py 与 generator.py **各有一个
 #    OpenAICompatibleProvider**，基类不同（VisionProvider vs LLMProvider）、
-#    用途不同（看图出 bbox vs 文本生成用例）。两者单独开发时都无感，
-#    只有三方合并后在**包级导出**这里才会互相覆盖。
-#    处理：给 A 的那个起别名，B 的保持原名不动（不破坏已有引用）。
+#    用途不同（看图出 bbox vs 文本生成用例），在**包级导出**这里会互相覆盖。
+#    处理：给视觉的那个起别名，文本生成的那个保持原名不动（不破坏已有引用）。
 #    模块内继续用原名即可 —— 全仓测试都是全限定导入（from ohauto.vision import …）。
 from .vision import (MockProvider, OpenAICompatibleProvider as VisionOpenAIProvider,
                      HybridLocator, TieredVisionLocator, VisualTarget,
                      VisionError, VisionConfigError, build_provider)
-# C3 权限弹窗：识别 + 策略（默认点「禁止」，见 ohauto/permission.py）
+# 权限弹窗：识别 + 策略（默认点「禁止」，见 ohauto/permission.py）
 from .permission import (PermissionDialogVerdict, detect_permission_dialog,
                          resolve_policy, POLICIES, DEFAULT_POLICY, ENV_POLICY,
                          POLICY_RECORD, POLICY_ALLOW, POLICY_DENY)
@@ -136,29 +133,29 @@ __all__ = [
     'Runner', 'DeviceGuard', 'RetryPolicy', 'FailureKind',
     'CaseResult', 'SuiteResult', 'StepResult', 'StepAttempt',
     'run', 'run_case', 'run_suite',
-    # C4 信号采集
+    # 信号采集
     'collect_signals', 'Signals', 'CrashRecord', 'Anomaly',
     'parse_crash_log', 'parse_fault_filename',
-    # C4/C5 性能与资源采集（2C）：采样原语 + 通道 + 斜率判据
+    # 性能与资源采集：采样原语 + 通道 + 斜率判据
     'PerfChannel', 'device_sample', 'host_sample', 'take_sample',
     'analyze_samples', 'PSS_SLOPE_THRESHOLD', 'MIN_PSS_SAMPLES',
-    # B4 失败归因（分工卡接口总表：B -> C 的 diagnose）
+    # 失败归因
     'diagnose', 'diagnose_all', 'summarize',
     'Verdict', 'Category', 'CATEGORY_CN', 'ExecutionRecord',
-    # B4 闭环接入（2026-09-23 追加）
+    # 闭环接入
     'diagnose_failed_step', 'load_snapshots',
-    # B3 自然语言转用例（分工卡接口总表：B -> C 的 generate）
+    # 自然语言转用例
     'generate', 'generate_many',
     'Generator', 'Case', 'TestPoint', 'RejectReason', 'ValidationIssue',
     'GenerationReport', 'GenerationOutcome', 'GenerationError',
     'LLMProvider', 'ScriptedProvider', 'NullProvider', 'OpenAICompatibleProvider',
-    # B5 压测用例生成
+    # 压测用例生成
     'generate_stress', 'stress_cases', 'build_stress_case', 'split_stress_cases',
     'StressKind', 'StressSpec', 'STRESS_KIND_CN', 'SwipeSafety',
     'check_swipe_safety', 'swipe_endpoints', 'swipe_safe_scale',
     'stress_safety_report', 'pick_stress_target', 'SWIPE_EDGE_MARGIN_PX',
-    # A 定位与感知（分工卡接口总表：A 的 locate / record_locator_failure /
-    # repair_locators；A5 控件树摘要器；视觉 Provider）
+    # 定位与感知：locate / record_locator_failure /
+    # repair_locators；控件树摘要器；视觉 Provider）
     # 注意 'VisionOpenAIProvider' 是别名 —— 见上方 import 处的重名说明
     'LocatorManager', 'LocateResult', 'LocatorSpec', 'LocatorHealth',
     'RepairReport', 'LocatorMissError',
@@ -166,7 +163,7 @@ __all__ = [
     'MockProvider', 'VisionOpenAIProvider', 'HybridLocator',
     'TieredVisionLocator', 'VisualTarget', 'VisionError',
     'VisionConfigError', 'build_provider',
-    # C3 权限弹窗识别与处置（策略默认 deny）
+    # 权限弹窗识别与处置（策略默认 deny）
     'PermissionDialogVerdict', 'detect_permission_dialog', 'resolve_policy',
     'POLICIES', 'DEFAULT_POLICY', 'ENV_POLICY',
     'POLICY_RECORD', 'POLICY_ALLOW', 'POLICY_DENY',

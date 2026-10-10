@@ -53,7 +53,7 @@ def _json_fallback(o: Any) -> Any:
     runner 的 `StepResult.trees` 设计上允许两种形态（文件路径 str 或
     内存态 `LayoutNode`——真机 pull 偶发竞态时快照落不了盘就退内存），
     JSON 层必须兜得住，否则**执行跑完了、报告写崩了**，100 步的现场
-    全丢（B5 真机首跑实测踩到）。
+    全丢（真机首跑实测踩到）。
     """
     if hasattr(o, 'to_dict'):
         return o.to_dict()
@@ -116,7 +116,7 @@ def to_markdown(data: Dict[str, Any], path: str,
         L.append(f"- 结论：**{'通过' if case.get('ok') else '未通过'}**")
         L.append('')
 
-    # ---- 内存趋势（2C【C4】：note_stability 类用例的内存曲线并入报告）
+    # ---- 内存趋势（note_stability 类用例的内存曲线并入报告）
     # 没采（`perf is None`）就不出这一节 —— 不制造空标题；采了但缺样本
     # 会照实写「缺 N 个」，绝不因为缺数据就把整节吞掉（缺样本 ≠ 正常）。
     for _line in _perf_lines(_pick_curve(data)):

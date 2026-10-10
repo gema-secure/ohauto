@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""把执行失败回写接到 A 的定位器自愈上（分工卡第五章契约的最后一环）。
+"""把执行失败回写接到 定位器自愈上（分工卡第五章契约的最后一环）。
 
 契约原文
 --------
@@ -26,7 +26,7 @@ runner 手里根本没有那个号。A 交付说明里写的路径是「执行�
 由本模块负责反查成 `locator_id`。
 
     lm = LocatorManager()
-    lm.register({'id': '7'}, page)          # A 侧照常注册
+    lm.register({'id': '7'}, page)          # 调用方照常注册
 
     sink = make_locator_sink(lm)            # 本模块
     runner = Runner(locator_sink=sink)      # C 侧照常跑
@@ -77,9 +77,9 @@ def make_locator_sink(lm, *, verbose: bool = False):
     target_spec: DSL 里那个原始规格字典（runner 原样递出）
     reason:      失败原因串
     attempt:     执行尝试序号（2026-09-25 新增，runner 递增传入）——
-                 透传给 A 的 `record_locator_failure(lid, reason, attempt)`，
+                 透传给 `record_locator_failure(lid, reason, attempt)`，
                  作为幂等键，让执行器路径的连续失败能真正累加（自愈才有输入）。
-                 A 侧还没加该参数时（旧签名）自动退回两参调用，行为不变。
+                 调用方还没加该参数时（旧签名）自动退回两参调用，行为不变。
 
     反查不到就**静默跳过** —— 那个控件本来就没注册过定位器，
     没什么可回写的，报错只会制造噪音。
@@ -98,7 +98,7 @@ def make_locator_sink(lm, *, verbose: bool = False):
                 lm.record_locator_failure(lid, reason, attempt)
                 stats['with_attempt'] += 1
             except TypeError:
-                # A 侧还是旧签名（不收 attempt）——退回两参，行为不变；
+                # 调用方还是旧签名（不收 attempt）——退回两参，行为不变；
                 # A 按 docs/派活-给A-自愈幂等代次 修复后自动带上 attempt。
                 lm.record_locator_failure(lid, reason)
         else:
@@ -119,7 +119,7 @@ def make_locator_id_resolver(lm, *, verbose: bool = False):
     让归因能指认「该修哪个定位器」，而不是笼统地说「定位失败了」。
 
     ⚠️ 为什么单独要这么一个函数、而不是复用 `make_locator_sink`：
-    回写**只能有一条路**（否则同一次失败被计两遍，把 A 的幂等破坏掉）。
+    回写**只能有一条路**（否则同一次失败被计两遍，把幂等破坏掉）。
     集成层选的是执行侧那条（`locator_sink`），所以这里只做只读反查。
     """
     def resolver(spec: dict) -> str:
@@ -203,7 +203,7 @@ def _selftest() -> int:
     v_lid = getattr(sr.verdict, 'locator_id', '') if sr.verdict is not None else ''
     print('  verdict.locator_id    : %s' % (v_lid or '(空)'))
     after = lm.health(lid0).consecutive_failures
-    print('  A 侧连续失败          : %d -> %d' % (before, after))
+    print('  调用方连续失败          : %d -> %d' % (before, after))
 
     checks = {
         '失败步被识别为 LOCATE': sr.kind is not None
@@ -212,7 +212,7 @@ def _selftest() -> int:
         '归因结论带 locator_id': bool(v_lid),
         '归因建议不再说「没能回写」': bool(sr.verdict_cn)
                                  and '没能回写' not in sr.verdict_cn,
-        'A 侧连续失败 +1（回写生效）': after == before + 1,
+        '调用方连续失败 +1（回写生效）': after == before + 1,
     }
 
     print('\n  --- 诊断：连续失败能不能累加（决定自愈会不会被触发）---')
@@ -221,7 +221,7 @@ def _selftest() -> int:
     cnt = lm.health(lid0).consecutive_failures
     print('  又失败 5 次后连续失败 : %d（期望接近 6）' % cnt)
     if cnt <= 1:
-        print('  ⚠️ **已知断点（A 侧）**：连续失败停在 %d 不再增长。' % cnt)
+        print('  ⚠️ **已知断点（调用方）**：连续失败停在 %d 不再增长。' % cnt)
         print('     原因：A 的幂等键是 (locate 代次, locator_id)，'
               '代次只在 `locate()` 时推进；')
         print('     而执行器走 matcher/layout，**从不调 `locate()`** → 代次恒为 0，')
@@ -252,7 +252,7 @@ def _selftest() -> int:
     print('[PASS] 接线已通：locator_id 送达 + 归因结论带 id + 回写生效'
           if ok else '[FAIL] 接线仍有断点')
     if ok and cnt <= 1:
-        print('[注] 闭环**下一环**卡在 A 的幂等代次上（见上面诊断），'
+        print('[注] 闭环**下一环**卡在幂等代次上（见上面诊断），'
               '已记录待 A 收口 —— 不在本模块范围。')
     return 0 if ok else 1
 

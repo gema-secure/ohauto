@@ -34,7 +34,7 @@ import zlib
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .layout import Rect
-# C8：备用输入通路的执行器**直接复用** `hdc` 里那三个 backend 类 ——
+# 备用输入通路的执行器**直接复用** `hdc` 里那三个 backend 类 ——
 # 手写第二份命令拼装迟早会与真机分叉。它们以下划线开头（包内实现细节），
 # 但 sim 与 hdc 同属本包、sim 是 L3 可依赖 L2，故此处引用是合规的。
 from .hdc import (Hdc, InputUnavailable, _NullBackend, _parse_axis_ranges,
@@ -176,7 +176,7 @@ NON_RESPONSIVE_PAGES: frozenset = frozenset({'static_fixed'})
 # 密码框里的虚拟文本（用于校验 input 是否真的落到目标控件）
 TYPED: Dict[str, str] = {}
 
-# ---- C8 备用输入通路（uinput / sendevent）在模拟侧的常量
+# ---- 备用输入通路（uinput / sendevent）在模拟侧的常量
 #
 # `uinput --help` 的探测输出：真机 `Hdc._probe_backend('uinput')` 认的是
 # 「rc==0 且输出含 usage」，这里照抄同一判据，否则备用通路在离线环境里
@@ -490,7 +490,7 @@ class FakeHdc:
         self.fault_meta: Dict[str, Dict[str, Any]] = {}
         self.hilog_text = hilog_text
         self.dead_bundles = set(dead_bundles or ())
-        # 2C 性能采样（ohauto/perf.py）需要的设备侧资源水位，均可按需改写：
+        # 性能采样（ohauto/perf.py）需要的设备侧资源水位，均可按需改写：
         # pss_kb —— `hidumper --mem <pid>` 里的 PSS 合计（真机 DAYU200 实测口径）；
         # loadavg —— `/proc/loadavg` 原文（1/5/15 分钟负载）。
         self.pss_kb = 41322
@@ -509,7 +509,7 @@ class FakeHdc:
         self.faultlog_denied = faultlog_denied       # 模拟非 root 读不到崩溃日志
         self._frozen_tree: Optional[Dict[str, Any]] = None
 
-        # ---- C8 备用输入通路（uinput / sendevent）模拟所需状态
+        # ---- 备用输入通路（uinput / sendevent）模拟所需状态
         # 默认 uitest，与 `Hdc.__init__` 一致（未探测）；`detect_backend()` 后
         # 才反映真实可用通路。三者皆无时置 'none'（不可交互档）。
         self._backend_name = 'uitest'
@@ -701,7 +701,7 @@ class FakeHdc:
                      epoch: Optional[float] = None) -> str:
         """注入一次崩溃：落一份崩溃日志，并把该 bundle 的进程标记为已消失。
 
-        这是 `kill -11 <pid>` 那条真机验证路径的模拟版。真实用法见任务卡
+        这是 `kill -11 <pid>` 那条真机验证路径的模拟版。真实用法见 examples/collect_signals.py。
         第三章四；这里只用来让「注入崩溃 → 采集 → 能捕获」在无真机时也能验证。
         """
         epoch = self.device_time if epoch is None else float(epoch)
@@ -716,7 +716,7 @@ class FakeHdc:
                       epoch: Optional[float] = None) -> str:
         """注入一次 ANR（往 `freeze/` 落文件）。
 
-        ⚠️ `freeze/` 的真实文件名格式**尚未实测验证**（任务卡第三章五），
+        ⚠️ `freeze/` 的真实文件名格式**尚未实测验证**，
         这里按 `appfreeze-<bundle>-<uid>-<时间戳>` 推测。凡依赖它的判据
         都必须能优雅降级。
         """
@@ -741,7 +741,7 @@ class FakeHdc:
             return None
         if self.faultlog_denied:
             # 非 root 设备读不到 faultlogger/（权限 drwxr-x--- hiview log）。
-            # 任务卡第三章第五节把这条列为**未验证项**，所以采集必须能降级。
+            # 该条已被列为**未验证项**，所以采集必须能降级。
             return '', 1, f'ls: {d}: Permission denied'
         names = None
         for key, path in FAULTLOG_DIRS.items():
@@ -749,7 +749,7 @@ class FakeHdc:
                 names = key
                 break
         if names is None:
-            # 根目录：列出四个子目录（真机结构，任务卡第三章二）
+            # 根目录：列出四个子目录（真机结构）
             if d == '/data/log/faultlog':
                 return ('drwxr-x--- 2 root root 4096 {ts} debug\n'
                         'drwxr-x--- 2 root log 4096 {ts} faultlogger\n'
@@ -1009,7 +1009,7 @@ class FakeHdc:
             if _parts:
                 self._ui_input(*_parts[2:])
             return self._R('No Error')
-        # ★ C8 备用通路**同构**：真机上写操作可能经 `uinput` / `sendevent`
+        # ★ 备用通路**同构**：真机上写操作可能经 `uinput` / `sendevent`
         #   下发（`Hdc.detect_backend()` 选了备用通路时），模拟侧必须认这两种
         #   命令，否则备用通路在离线环境里静默变成空操作 —— 又一例
         #   「模拟器不保真 = 测试全绿反而危险」。
@@ -1143,7 +1143,7 @@ class FakeHdc:
                 self.current = 'login'
             self._log(f'keyEvent {key} -> {self.current}')
 
-    # ---- C8：按当前通路派发写动作（与真机 `Hdc._backend` 派发同构）
+    # ---- 按当前通路派发写动作（与真机 `Hdc._backend` 派发同构）
     #
     # 默认 uitest —— 与改动前**逐字一致**（既有测试与调用方零迁移）。
     # `detect_backend(force='uinput')` 之后，同一个 `click()` 会下发 uinput
@@ -1170,7 +1170,7 @@ class FakeHdc:
                 f'{action} 仅在 uitest 通路可用（当前 {self._backend_name}）')
 
     def _apply_alt_input(self, cmd: str) -> None:
-        """C8 备用通路（uinput / sendevent）命令的解析 —— 与真机同构。
+        """备用通路（uinput / sendevent）命令的解析 —— 与真机同构。
 
         只认**真机实测有效**的形态（`-d` / `-u` 分两次下发实测不生效，
         这里也照做「无动作」，不假装成功）：
@@ -1320,7 +1320,7 @@ class FakeHdc:
     def back(self): self.key_event('Back')
     def home(self): self.key_event('Home')
 
-    # ---- C8：输入通路探测（与真机 `Hdc.detect_backend` 同构）
+    # ---- 输入通路探测（与真机 `Hdc.detect_backend` 同构）
     #
     # 结论照抄真机 DAYU200 的实测事实：uitest ✔ / uinput ✔ / sendevent ✘
     # （真机没有 `getevent`，读不到 evdev 轴范围 → sendevent 无法校准）。

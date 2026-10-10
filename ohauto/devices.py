@@ -22,9 +22,9 @@ UI 自动化在换一种设备形态（手机 → 折叠展开 → 平板）后�
 > 而 DevEco 的产品配置里连三折屏（Mate XT）的形态都有。
 > 所以「配置当档案、dump 当校验」才是可靠的分工。
 
-## 与任务卡的关系
+## 数据来源与设计取舍
 
-任务卡第六章（二·补）原本写「用 `hidumper -s DisplayManagerService -a -a` 采形态档案」。
+最初的设计稿写「用 `hidumper -s DisplayManagerService -a -a` 采形态档案」。
 实测该命令**在真机上报 arguments are illegal**，且真机上根本没有折叠字段。
 本模块改用「产品配置 + 正确 hidumper 命令核对」两条腿走路，
 真实数据的来源与实测结论见 `实测-跨形态测试.md`。

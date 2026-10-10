@@ -8,7 +8,7 @@ L3 语义层 —— Driver 门面
     操作：uiInput 注入坐标事件
     等待：waitFor 轮询 / waitForIdle 界面稳定判定
     断言：assert_exists / assert_text / assert_gone
-            assert.checked / assert.enabled / assert.count / assert.memory_below（2C【C5】）
+            assert.checked / assert.enabled / assert.count / assert.memory_below
     留痕：每步自动记录（截图 + 控件树 + 操作），供报告与脚本生成
 
 这是整个能力层唯一需要「懂业务」的地方，其余各层都是纯机械转换。
@@ -771,7 +771,7 @@ class Driver:
             step.elapsed_ms = int((time.time() - t0) * 1000)
             self._record(step)
 
-    # -- 2C【C5】断言原语扩展 ------------
+    # -- 断言原语扩展 ------------
 
     def assert_checked(self, m: Matcher, expected: bool = True,
                        timeout: Optional[int] = None) -> LayoutNode:
@@ -830,7 +830,7 @@ class Driver:
 
     def assert_memory_below(self, max_pss_kb: int,
                             bundle: Optional[str] = None) -> Dict[str, Any]:
-        """断言被测应用 PSS 低于阈值 —— 性能采样进断言原语的桥（2C【C4+C5】）。
+        """断言被测应用 PSS 低于阈值 —— 性能采样进断言原语的桥。
 
         **缺样本不判通过**：采不到 PSS 就算失败 —— 「没采到」绝不能伪装成
         「采到了且达标」（ohauto/perf.py 的「缺样本 ≠ 正常」约定）。
@@ -917,7 +917,7 @@ class Driver:
             'total_elapsed_ms': sum(s.elapsed_ms for s in self.steps),
             'failed_steps': [s.to_dict() for s in failed],
             # 取树效率（10-08 落地「合并往返 + 只读步骤复用」后必须能自动量到，
-            # 之前只能靠会话记录手工数；B6 的口径讨论全靠这两个数）
+            # 之前只能靠会话记录手工数；延迟口径讨论全靠这两个数）
             'tree_dumps': self.tree_dumps,
             'tree_reuses': self.tree_reuses,
             'tree_reuse_rate': self.tree_reuse_rate,

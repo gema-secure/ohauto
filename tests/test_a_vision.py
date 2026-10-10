@@ -1,4 +1,4 @@
-"""A1 视觉 Provider + A2 双通道融合 + A4 分层成本控制 的单元测试。
+"""A1 视觉 Provider + A2 双通道融合 + 分层成本控制 的单元测试。
 
 不依赖真网络：OpenAICompatibleProvider 的 HTTP 出口已抽成 _post，
 测试用子类覆写模拟服务端。不依赖真机：控件树用构造的 LayoutNode。

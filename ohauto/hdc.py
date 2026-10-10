@@ -120,7 +120,7 @@ class HdcLike(Protocol):
 
 # ---------------------------------------------------------------- 输入通路
 #
-# C8：写动作原先把 `uitest uiInput` 焊死在 `Hdc._ui_input` 上 —— 设备没有
+# 写动作原先把 `uitest uiInput` 焊死在 `Hdc._ui_input` 上 —— 设备没有
 # uitest 命令行通路时，引擎从「可用」直接掉到「零」，中间没有缓冲档。
 # 这里把写动作收敛到一个窄契约 `InputBackend`，`Hdc` 持一个实例并派发；
 # 探测顺序 uitest → uinput → sendevent，首个可用者胜出（`Hdc.detect_backend`）。
@@ -135,7 +135,7 @@ class InputUnavailable(HdcError):
 
 @runtime_checkable
 class InputBackend(Protocol):
-    """写动作注入通路 —— **窄契约**（C8）。
+    """写动作注入通路 —— **窄契约**。
 
     只声明上层（`Driver`）真正会调的写动作；`fling / drag / dircFling`
     是 uitest 专有扩展，不进契约。契约纪律与 `HdcLike` 同法：
@@ -743,7 +743,7 @@ class Hdc:
 
     def detect_backend(self, force: Optional[str] = None,
                        verbose: bool = False) -> Dict[str, Any]:
-        """探测可用输入通路并设为当前通路，返回探测报告（C8）。
+        """探测可用输入通路并设为当前通路，返回探测报告。
 
         顺序 uitest → uinput → sendevent，首个可用者胜出。`force` 指定
         'uitest'/'uinput'/'sendevent' 时只探该通路（用于验证备用通路，等价于

@@ -38,7 +38,7 @@ ATTR_ALIASES: Dict[str, Tuple[str, ...]] = {
     'type':      ('type', 'Type', 'componentType', 'cls', 'class'),
     'id':        ('id', 'Id', 'ID', 'componentId'),
     'text':      ('text', 'Text', 'content', 'Content', 'label'),
-    # A6（任务卡）：不同鸿蒙版本 / 不同导出工具里，「这个控件在屏幕上的矩形」
+    # 不同鸿蒙版本 / 不同导出工具里，「这个控件在屏幕上的矩形」
     # 可能叫五种名字。越具体的名字放越后面——_pick 按顺序取第一个存在的键，
     # 'bounds' 是真机实测的标准键，必须保持第一优先。
     'bounds':    ('bounds', 'Bounds', 'bound', 'rect', 'frame',
@@ -137,10 +137,10 @@ class Rect:
                     return cls(*(int(float(n)) for n in nums))
                 return cls()          # 完全无法解析：退化为空矩形而非抛异常
         if isinstance(raw, dict):
-            # A6 加固：字典形态要做「缺角补全」而不是静默取 0。
+            # 加固：字典形态要做「缺角补全」而不是静默取 0。
             # 旧实现 raw.get('right', raw.get('x2', 0)) 在只给 left+width 时
             # 会把 right 当成 0，得到一个负宽矩形且无任何告警 —— 这类
-            # 「测试全绿但结论是假的」事故分工卡第一章第（六）节点名过两次。
+            # 「测试全绿但结论是假的」这类事故出现过两次。
             # 规则：
             #   left  ← left / x / startX
             #   top   ← top / y / startY

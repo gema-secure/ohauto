@@ -1,8 +1,8 @@
 """
-B3 —— 自然语言转用例（两阶段生成）
+自然语言转用例（两阶段生成）
 ====================================
 
-任务卡 B3 的流程（**两阶段**，比一步到位可控）：
+两阶段生成流程（比一步到位可控）：
 
     自然语言描述
         ──①──> 测试点清单（功能 / 边界 / 异常 / UI / 性能 / 兼容性）
@@ -19,7 +19,7 @@ B3 —— 自然语言转用例（两阶段生成）
 DSL 是机器能校的（控件存不存在、有没有踩红线）。**出错时能定位到阶段。**
 这一步拆分是这个模块唯一的设计重点，其余都是工程细节。
 
-三条工程约束（任务卡对 B 的硬要求）
+三条工程约束
 -----------------------------------
 1. **LLM 返回的 JSON 要强 schema + 正则兜底。**
    模型不听话是常态：带 ```json 围栏、结尾多个逗号、用单引号、在 JSON 前后加解释。
@@ -54,7 +54,7 @@ from .layout import LayoutNode, flatten, parse_layout
 # ================================================================ 常量
 
 class TestPointKind(str, Enum):
-    """测试点的六个维度（任务卡指定的分组）。"""
+    """测试点的六个维度。"""
     FUNCTION = '功能'
     BOUNDARY = '边界'
     EXCEPTION = '异常'
@@ -82,7 +82,7 @@ _KIND_ALIASES: Dict[str, TestPointKind] = {
 
 
 class RejectReason(str, Enum):
-    """生成不出来 / 生成出来不可执行的原因分类（任务卡要求给出原因分类）。"""
+    """生成不出来 / 生成出来不可执行的原因分类。"""
     PROVIDER = 'PROVIDER'                  # LLM 调用失败（超时/网络/空回复）
     SCHEMA = 'SCHEMA'                      # 输出不合 schema，且兜底解析也失败
     NO_TEST_POINT = 'NO_TEST_POINT'        # 第一阶段没产出可用测试点
@@ -141,7 +141,7 @@ _WAIT_ACTIONS = ('sleep', 'wait', 'pause', 'delay', 'waitms')
 
 # ---------------------------------------------------------------- 用例级总闸
 #
-# C 派活 B-0（2026-09-25，P0）：校验器原先只有**逐步**检查，没有一条
+# 缺陷修复（P0）：校验器原先只有**逐步**检查，没有一条
 # 「用例整体必须做事」的总闸 —— 只含 start / waitIdle / screenshot 的空壳用例
 # 每一步都合法、顺利放行。L3 真机实测把后果钉死了：**空壳 2/2 全过、
 # 真引用控件 0/3**。「可执行」≠「做了事」。
@@ -527,9 +527,9 @@ class ValidationIssue:
 
 # ================================================================ 控件清单
 
-# A5 的控件树摘要器（treesum.py）还没交付，这里先给一份**最小**可读清单。
+# 控件树摘要器（treesum.py）尚未落地，这里先给一份**最小**可读清单。
 # 它只服务于「让模型知道有哪些控件」，不是给人看的摘要；
-# A5 落地后把 Generator.catalog_fn 换成它即可，不必改其它代码。
+# treesum 落地后把 Generator.catalog_fn 换成它即可，不必改其它代码。
 def control_catalog(page: Any, limit: int = 60) -> str:
     """把控件树压成一个紧凑清单：`#id<Tab>text`，只列可交互或带标识的节点。"""
     if page is None:
@@ -568,7 +568,7 @@ def _page_name(root: LayoutNode) -> str:
 def control_catalog_pages(pages: Sequence[Any], limit: int = 40) -> str:
     """**多页**控件清单：按页分块，每块标出这是哪一页。
 
-    为什么需要它（B8 实测）：生成期只喂一张树时，模型会拿第一页的控件去写
+    为什么需要它（实测依据）：生成期只喂一张树时，模型会拿第一页的控件去写
     「导航之后」的断言 —— 实测两条真机用例都在 `tap btn_go_second` 之后断言
     `tv_probe_always`，而该 id **只在 Index 页定义**（`Index.ets:56`），
     真机上必然失败，用例级因此 0/2。
@@ -597,7 +597,7 @@ _MULTI_PAGE_RULE = """
 
 # ================================================================ 外部内容隔离
 #
-# C 复核缺陷（2026-09-23）：`build_case_prompt` 把 `catalog`（**来自被测应用的
+# 复核发现的缺陷：`build_case_prompt` 把 `catalog`（**来自被测应用的
 # 控件文案**）直接 f-string 拼进 prompt。事后有动作白名单兜底（执行面是安全的），
 # 但「防注入」这一层原本不成立 —— 被测应用可以在自己的界面文案里夹带指令，
 # 而这份 prompt 是**我们主动递给模型**的。
@@ -807,7 +807,7 @@ def validate_case(case: Case, page: Any = None, *,
     （干跑那一关会再看实际情况）。
 
     `pages`（可选）是**已采集的全部页面**：给了它就按「控件在任一页上出现即算存在」
-    校验（控件池取**并集**）。为什么需要这条 —— B8 多页上下文实测（10-08）：
+    校验（控件池取**并集**）。为什么需要这条 —— 多页上下文实测：
     把每一页的清单喂给模型后，它开始正确引用**第二页**的控件
     （`tv_second_title` / `input_second`），而只对照入口页的校验器把它们一律判成
     CONTROL_MISSING，于是 L2 从 2/3 掉到 **0/3** ——
@@ -892,7 +892,7 @@ def validate_case(case: Case, page: Any = None, *,
                         f'第 {idx} 步引用的控件 {spec} {where}',
                         step_index=idx))
 
-    # ---- ★ 用例级总闸：「必须至少做一件会失败的事」（C 派活 B-0）
+    # ---- ★ 用例级总闸：「必须至少做一件会失败的事」
     #
     # 逐步检查抓不到它 —— 空壳用例的每一步都是合法的、**无从证伪**。
     # 判据见 `SUBSTANTIVE_ACTIONS` 的说明：能不能失败、失败原因指不指向应用。
@@ -929,7 +929,7 @@ class DryRunResult:
 def dry_run(case: Case, driver: Any, *, stop_on_error: bool = True) -> DryRunResult:
     """干跑：**只执行无副作用的步骤**，有副作用的全部跳过。
 
-    任务卡说的是「无副作用步骤直接执行」—— 也就是 waitFor / assert / waitIdle
+    「无副作用步骤直接执行」—— 也就是 waitFor / assert / waitIdle
     这类只读动作真的跑一遍，验证「等得到吗、断得住吗」；
     而 tap / input / swipe 这些会改变应用状态的动作**一步都不许跑**
     （跑了就不叫干跑了，那是在拿真实应用试错）。
@@ -1117,7 +1117,7 @@ class GenerationOutcome:
 
 @dataclass
 class GenerationReport:
-    """批量生成报告：可执行率 + **原因分类**（任务卡明确要「不可执行的给出原因分类」）。"""
+    """批量生成报告：可执行率 + **原因分类**（不可执行的要给出原因分类）。"""
     outcomes: List[GenerationOutcome] = field(default_factory=list)
 
     @property
@@ -1148,7 +1148,7 @@ class GenerationReport:
         return {RejectReason(k).cn: v for k, v in self.reasons().items()}
 
     def ok(self, target: float = 0.80) -> bool:
-        """任务卡验收：可执行率 ≥ 80%。"""
+        """验收：可执行率 ≥ 80%。"""
         return self.executable_rate >= target
 
     def to_dict(self) -> Dict[str, Any]:
@@ -1174,7 +1174,7 @@ class Generator:
     max_repair:      允许的修复轮数（先本地启发式，再回 LLM）。
     max_consecutive_failures: 连续失败到这个数就停批量
                      （「LLM 失败必须能降级」，但也不能无声地刷 200 次失败）。
-    catalog_fn:      控件清单生成函数；A5 的 treesum 落地后换成它即可。
+    catalog_fn:      控件清单生成函数；treesum 落地后换成它即可。
     """
 
     def __init__(self, provider: Optional[LLMProvider] = None,
@@ -1365,17 +1365,17 @@ class Generator:
                         f'{f0.get("error", "")}')
         return case, issues, None, ''
 
-    # ------------------------------------------------------------ B5 压测
+    # ------------------------------------------------------------ 压测
 
     def generate_stress(self, kind: Any = None,
                         *, page: Any = None, driver: Any = None, **kw) -> Case:
-        """造一条压测用例（B5）。屏幕尺寸按「实测 → 默认」的顺序取，见下。
+        """造一条压测用例。屏幕尺寸按「实测 → 默认」的顺序取，见下。
 
         造出来之后走**和普通用例同一套**校验与入库路径 ——
         压测用例也是用例，不另开一条旁路。
 
         `kind` 默认值写成 None 而不是 `StressKind.REPEAT_TAP`：`StressKind` 定义在
-        本类之后（B5 整块在文件末尾），写在签名里会在导入时直接 NameError。
+        本类之后（整块在文件末尾），写在签名里会在导入时直接 NameError。
         """
         kind = StressKind.REPEAT_TAP if kind is None else _as_stress_kind(kind)
         screen = kw.pop('screen', None)
@@ -1421,7 +1421,7 @@ class Generator:
         """批量生成，**默认开启预取**：处理第 i 条的同时已经在请求第 i+1 条。
 
         不预取的话，N 条描述就是 N 次串行的模型延迟（每次几秒），
-        批量生成慢到没法用 —— 这与任务卡对 LLM 调用的要求一致。
+        批量生成慢到没法用 —— 这与对 LLM 调用的要求一致。
         """
         rep = GenerationReport()
         if not prefetch:
@@ -1527,7 +1527,7 @@ def _prefetch(descriptions: Sequence[str], fetch: Callable[[str], str],
     `executor_factory` 可注入 —— 单测里塞一个"同步立刻完成"的假执行器，
     就能在**不开线程**的前提下断言预取确实发生了（提交数领先于消费数）。
 
-    ★ 异常处理（C 复核缺陷，2026-09-23）：这里**必须把异常当值传出去**，
+    ★ 异常处理（复核发现的缺陷，2026-09-23）：这里**必须把异常当值传出去**，
     不能让它从 `fut.result()` 直接抛出去。原因是调用方的写法是
 
         for desc, reply in _prefetch(...):
@@ -1562,9 +1562,9 @@ def _prefetch(descriptions: Sequence[str], fetch: Callable[[str], str],
             yield desc, reply
 
 
-# ================================================================ B5 压测用例生成
+# ================================================================ 压测用例生成
 #
-# 任务卡 B5：重复点击 / 连续滑动 / 页面反复进出 / 长时间运行。
+# 重复点击 / 连续滑动 / 页面反复进出 / 长时间运行。
 #
 # ★ 唯一的硬约束：**swipe 起止点离屏幕左右边缘各留 150–200px**，
 #   否则会误触系统返回手势（左右边缘向内滑 = 系统级返回）。
@@ -1590,7 +1590,7 @@ STRESS_KIND_CN: Dict[StressKind, str] = {
     StressKind.LONG_RUN: '长时间运行',
 }
 
-# 任务卡给的是区间 150–200px，取中值当默认，越界会被夹回区间并留 note
+# 区间 150–200px，取中值当默认，越界会被夹回区间并留 note
 SWIPE_EDGE_MARGIN_PX = 180
 SWIPE_EDGE_MARGIN_MIN = 150
 SWIPE_EDGE_MARGIN_MAX = 200
@@ -1700,7 +1700,7 @@ def check_swipe_safety(direction: str, scale: float, screen: Tuple[int, int],
 
 
 def clamp_margin(margin: Any, notes: Optional[List[str]] = None) -> int:
-    """把边缘留白夹到任务卡给的 150–200px 区间，越界要留痕。"""
+    """把边缘留白夹到 150–200px 区间，越界要留痕。"""
     try:
         m = int(margin)
     except (TypeError, ValueError):
@@ -1836,7 +1836,7 @@ def build_stress_case(spec: StressSpec, *, bundle: str = '',
     """按方案造一条**可执行**的压测用例。
 
     为什么是「展开成显式步骤」而不是引入一个 `repeat` 动作：
-    DSL 现在没有循环结构，加一个等于改对外接口（还要拉上 C5 的 hypium 导出一起改），
+    DSL 现在没有循环结构，加一个等于改对外接口（还要拉上 hypium 导出一起改），
     冻结前不值得。所以这里把 N 轮**展开**成 N 组步骤，并用 `max_steps` 封顶 ——
     真正的长时间运行交给「多条同构用例顺序跑」（见 `split_stress_cases`）。
 
@@ -1993,7 +1993,7 @@ def generate_many(descriptions: Sequence[str], **kw) -> GenerationReport:
 
 
 def generate_stress(kind: Any = StressKind.REPEAT_TAP, **kw) -> Case:
-    """B5 入口：造一条压测用例。
+    """压测入口：造一条压测用例。
 
         generate_stress('重复点击', rounds=30, bundle='com.demo.app', page=tree)
         generate_stress('连续滑动', rounds=20, directions=('up', 'down'))

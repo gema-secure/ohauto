@@ -2,7 +2,7 @@
 
 全部基于 `FakeHdc` / 纯控件树字典，**不需要真机**（约定：全部在模拟设备上自测）。
 
-这里刻意把「双签名」当成一号被测对象：设计上它是「最先要定下来的东西，
+这里刻意把「双签名」当成一号被测对象：它是最先要定下来的东西，
 定错了后面全白做」，所以它的行为必须有测试钉住，而不是靠注释解释。
 """
 import json
@@ -230,7 +230,7 @@ class TestDialogDetection(unittest.TestCase):
         self.assertTrue(any('弹窗语义' in e for e in v.evidence), v.evidence)
 
     def test_dialog_by_multi_window_requires_overlap(self):
-        """★ 真机缺陷回归（2026-09-23）：判据是「窗口**互相重叠**」，不是「有多个窗口」。
+        """★ 真机缺陷回归：判据是「窗口**互相重叠**」，不是「有多个窗口」。
 
         真机 `dumpLayout` 返回的是**整个窗口栈**：状态栏 `[0,0][720,72]`、
         系统窗 `[0,0][720,32]`、导航栏 `[0,1208][720,1280]`、应用 `[0,72][720,1208]`
@@ -399,7 +399,7 @@ class TestCoverage(unittest.TestCase):
         self.assertEqual(ex.coverage.ratio, 0.0)
 
     def test_dialog_controls_all_go_high(self):
-        """设计要求是「弹窗内可交互控件**一律**提为最高优先级」——
+        """弹窗内可交互控件**一律**提为最高优先级——
         一律就是不看关键词，普通控件在弹窗里也是 HIGH。"""
         ex = Explorer(_StubDriver(), verbose=False)
         ex.dialog = detect_dialog(parse_layout(_tree([
@@ -686,7 +686,7 @@ def ON_id(cid):
     return ON.id(cid)
 
 
-# ================================================================ 真机缺陷回归（2026-09-22）
+# ================================================================ 真机缺陷回归
 #
 # ⚠️ `unittest.main()` 只允许出现在**文件末尾**（见文件最后几行）。
 # 曾经它写在这里，后面那 3 个测试类在「单文件直跑」时全部不执行，
@@ -727,7 +727,7 @@ class TestPageTitleExcludesStatusBar(_SimCase):
 
 
 class TestCoveragePagesSemantics(_SimCase):
-    """★ 口径订正（2026-09-22）：`pages` 是界面**状态**数，`pages_structural` 才是**页面**数。
+    """★ 口径订正：`pages` 是界面**状态**数，`pages_structural` 才是**页面**数。
 
     真机计算器是单页应用，点 5 次 → 报告说「发现页面数 6」。
     根因是 `pages=len(graph.states)`，而 states 按**内容签名**去重 ——
@@ -769,10 +769,10 @@ class TestCoveragePagesSemantics(_SimCase):
         self.assertEqual(ex.coverage.pages_structural, 1)
 
 
-# ================================================================ C 复核缺陷回归（2026-09-23）
+# ================================================================ 复核缺陷回归
 
 class TestRefreshSignatureRegression(_SimCase):
-    """★ C 复核缺陷（原 `explorer.py:795`）：**刷新后的页面签名被丢弃**。
+    """★ 复核发现的缺陷（原 `explorer.py:795`）：**刷新后的页面签名被丢弃**。
 
     原写法：
 

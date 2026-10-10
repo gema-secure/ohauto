@@ -331,7 +331,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # ---- 拉起应用（**先清干净**再起）
     #
-    # ⚠️ 真机踩坑（2026-09-23）：`com.ohos.settings` 的 MainAbility 会**恢复上次
+    # ⚠️ 真机踩坑：`com.ohos.settings` 的 MainAbility 会**恢复上次
     # 停留的页面**。只 `aa start` 的话，第二轮就会停在上一轮进去的子页，
     # 于是「拉不回入口页」而提前终止（实测只采到 2 页甚至 1 页）。
     # 所以：force-stop → 回桌面 → 再 start，入口页才是干净的。
