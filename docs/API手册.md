@@ -52,7 +52,7 @@
 | `Generator` | 两阶段生成（测试点→用例）。`generate(description, *, page=None, pages=None)`；多页时控件池取并集，导航后断言只能引用目标页控件 |
 | `generate` / `generate_many` | 模块级便捷入口 |
 | `LLMProvider` / `ScriptedProvider` / `NullProvider` / `OpenAICompatibleProvider` / `MockProvider` | Provider 抽象与实现（环境变量 `OHAUTO_LLM_BASE_URL` / `OHAUTO_LLM_MODEL` / `OHAUTO_LLM_API_KEY`） |
-| `Case` / `TestPoint` / `RejectReason` / `ValidationIssue` / `GenerationReport` | 用例对象与校验产物（空壳闸 `NO_SUBSTANCE` / 测试点闸 `NO_TEST_POINT`） |
+| `Case` / `TestPoint` / `RejectReason` / `ValidationIssue` / `GenerationReport` | 用例对象与校验产物（实质内容闸 `NO_SUBSTANCE` / 测试点闸 `NO_TEST_POINT`） |
 | `generate_stress` / `stress_cases` / `SwipeSafety` | 压测用例生成与滑动安全检查 |
 
 ### 失败归因与自愈
