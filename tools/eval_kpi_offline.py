@@ -5,7 +5,7 @@
 ------------------
 KPI 表（项目规划 §三）里有一批指标不需要真机：**归因准确率**与**自愈成功率**
 的验收本来就是「注入式」的（FakeHdc 造故障、人工改 id），单测里已经各有验收
-（`test_diagnose.TestInjectedSamples20`、`test_a_locator.TestAcceptance5Ids`）。
+（`test_diagnose.TestInjectedSamples20`、`test_locator_health.TestAcceptance5Ids`）。
 但单测只给 PASS/FAIL，**KPI 汇报要的是数字** —— 这个工具把验收跑一遍，
 把数字、明细与口径写成结构化报告（JSON + Markdown），真机到位前就能进
 指标汇总；真机到位后由 `verify_*_real.py` / `explore_coverage.py` 出真值。
@@ -14,7 +14,7 @@ KPI 表（项目规划 §三）里有一批指标不需要真机：**归因准�
 --------
 1. 归因准确率   四类故障各 10 例（复用 test_diagnose 的 40 条注入样例，
                 2026-09-27 A6 扩容），硬门槛 ≥ 80%
-2. 自愈成功率   10 个控件 id 全改 + 结构突变触发换代（复用 test_a_locator
+2. 自愈成功率   10 个控件 id 全改 + 结构突变触发换代（复用 test_locator_health
                 的验收场景，A6 扩容 5→10），硬门槛 ≥ 80%
 3. 探索冒烟     模拟设备上跑 Explorer（含 tarpit 防粘滞），出覆盖度/页数/步数
                 （信息项，不做硬门槛 —— 覆盖率 KPI 的口径是「对照静态声明页面」，
@@ -103,13 +103,13 @@ def eval_diagnose_accuracy() -> Tuple[Dict[str, Any], List[str]]:
 # ================================================================ 2. 自愈成功率
 
 def eval_selfheal_rate() -> Tuple[Dict[str, Any], List[str]]:
-    """两个验收场景（复用 test_a_locator 的舞台与判据）：
+    """两个验收场景（复用 test_locator_health 的舞台与判据）：
 
     A. 10 个控件 id 全改、结构不动 → 降级链接住（A6 扩容自 5 例；验收原文
        5 例版「成功率 ≥80%」在 TestAcceptance5Ids 原样保留）；
     B. 结构突变（降级链全灭）→ 连续失败到阈值**就地自愈换代**，新一代直连命中。
     """
-    import test_a_locator as tal
+    import test_locator_health as tal
 
     detail: List[str] = []
 

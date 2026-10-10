@@ -1135,7 +1135,7 @@ class Explorer:
             #     ③ 覆盖度明细里每页 `visited` 恒为 0；
             #     ④ 状态图（自动探索）可信度受影响。
             #   它不显眼，是因为现有测试的无效控件恰好落在入口页 —— 见
-            #   `tests/test_explorer_b1.py::TestRefreshSignatureRegression`。
+            #   `tests/test_explorer_signatures.py::TestRefreshSignatureRegression`。
             try:
                 root, sig = self._observe()
             except DriverError as e:

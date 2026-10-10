@@ -237,7 +237,7 @@ class TestDialogDetection(unittest.TestCase):
         —— 四个 `hostWindowId`，但彼此只是把屏幕切成几块。
 
         原判据「≥2 个 hostWindowId 即多窗口叠加」在真机上**恒为真**，
-        7/7 张真机样本全部被误判成弹窗（见 `test_real_device_20260923.py`）。
+        7/7 张真机样本全部被误判成弹窗（见 `test_real_device_smoke.py`）。
         """
         # ① 真机窗口栈的常态：互不重叠 → **不能**判弹窗
         stack = parse_layout(_tree([

@@ -97,7 +97,7 @@ class TestWaitIdleSemantics(unittest.TestCase):
         这是 wait_idle 种子策略安全性的另一半：哪怕 wait_idle 在带外
         变更前一刻返回 True，页面签名也不吃缓存树。砍掉
         _page_signatures 的无条件 refresh，本条立刻红（159988c 试过，
-        test_explorer_b1 两条同样红）。
+        test_explorer_signatures 两条同样红）。
         """
         ex = Explorer(self.d, verbose=False)
         self.d.refresh()                                   # 基线 X

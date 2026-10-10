@@ -8,7 +8,7 @@
     #8  generator.py  prompt 原样插值（含被测应用的控件文案）
     #10 action.py     沉淀路径吐 tap_xy 且丢断言
 
-#2（explorer 丢刷新签名）的回归补在 `test_explorer_b1.py` 里，与 B1 用例同处。
+#2（explorer 丢刷新签名）的回归补在 `test_explorer_signatures.py` 里，与 B1 用例同处。
 #1 / #6 / #9 落在 `runner.py` / `signals.py`（**C 新增的文件，归属 C**），
 这里不含，处理意见见 `docs/B-回复C-2026-09-23.md`。
 

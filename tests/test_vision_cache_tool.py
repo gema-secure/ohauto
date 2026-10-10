@@ -10,7 +10,7 @@ force-stop + 重启 → 相同页面集合重现，视觉页缓存跨轮留存 �
 第二次 ``explore()`` 会因状态图已满（``len(states) < max_pages`` 不成立）
 而空转；缓存若被重置，则退回单遍口径、命中恒 0。本文件钉住这对行为。
 
-复现：``python -m unittest tests.test_c_b14_vision_cache_tool -q``
+复现：``python -m unittest tests.test_vision_cache_tool -q``
 """
 import unittest
 from types import SimpleNamespace

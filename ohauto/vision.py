@@ -199,7 +199,7 @@ bbox 使用截图像素坐标，原点在左上角。
         `OHAUTO_LLM_MODEL`）会出现「`from_env()` 装配成功、`available()`
         却说不可用」→ 上层据此**静默跳过视觉通道**，而用户明明配好了。
         复现脚本：`_out/probe_env_consistency.py`（2/5 场景矛盾）；
-        回归钉子：`tests/test_c_env_consistency.py`。
+        回归钉子：`tests/test_llm_env_consistency.py`。
         """
         def has(*names: str) -> bool:
             return any(os.environ.get(n, '') for n in names)
