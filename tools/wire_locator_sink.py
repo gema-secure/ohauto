@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""把执行失败回写接到 定位器自愈上（分工卡第五章契约的最后一环）。
+"""把执行失败回写接到定位器自愈上。
 
 契约原文
 --------
@@ -99,7 +99,7 @@ def make_locator_sink(lm, *, verbose: bool = False):
                 stats['with_attempt'] += 1
             except TypeError:
                 # 调用方还是旧签名（不收 attempt）——退回两参，行为不变；
-                # A 按 docs/派活-给A-自愈幂等代次 修复后自动带上 attempt。
+                # 修复后自动带上 attempt。
                 lm.record_locator_failure(lid, reason)
         else:
             lm.record_locator_failure(lid, reason)

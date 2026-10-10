@@ -143,7 +143,7 @@ def render(summary: Dict[str, Any]) -> str:
 def measure_round(hdc: Any, tree: str, matcher: Any = None) -> Dict[str, Any]:
     """测一轮两段耗时。需要真机在线，设备预检由调用方负责。
 
-    **两段不是三段**：引擎自 最初把 `dumpLayout` 与 `cat` 合并成一次往返
+    **两段不是三段**：引擎最初把 `dumpLayout` 与 `cat` 合并成一次往返
     （`driver.refresh` 非留痕分支，实测省约 150ms/次），**测量必须与引擎同一条路径**，
     否则量出来的是一条已经不存在的旧路径。
 

@@ -224,7 +224,7 @@ class TestUsabilityOnRealTrees(unittest.TestCase):
     `opacity=0.7` 的节点（`Row`，列表项主色/禁用态），`sample_calc` 的
     `result` 甚至是 `0.38`。
 
-    于是 复核的那条缺陷在真机上**真的会误判**：
+    于是复核的那条缺陷在真机上**真的会误判**：
     原判据 `opacity < 1.0 → 不可用` 会把所有这些节点判成「点不动」，
     再顺着推到 `CASE_DEFECT`。
     """

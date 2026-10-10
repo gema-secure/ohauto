@@ -1,4 +1,4 @@
-"""A1 视觉 Provider + A2 双通道融合 + 分层成本控制 的单元测试。
+"""视觉 Provider + 双通道融合 + 分层成本控制 的单元测试。
 
 不依赖真网络：OpenAICompatibleProvider 的 HTTP 出口已抽成 _post，
 测试用子类覆写模拟服务端。不依赖真机：控件树用构造的 LayoutNode。
@@ -285,7 +285,7 @@ class TestA4Tiered(unittest.TestCase):
         self.assertEqual(t.source, 'tree')
 
     def test_l2_called_when_l1_ambiguous(self):
-        # ⚠ ️ 用例数据按新 L1 口径更新（配合 A 的新 vision.py）。
+        # ⚠️ 用例数据按新 L1 口径更新（配合 A 的新 vision.py）。
         #    旧口径「静态候选必须唯一命中」→ 两候选同文案即为歧义、升级 L2。
         #    新口径「取最紧 + 最紧候选文案与指令**精确相等**才免调模型」：
         #    候选文案若与指令相等，L1 直接返回、不再升级 L2 —— 这正是免调

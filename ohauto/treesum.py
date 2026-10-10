@@ -20,7 +20,7 @@
     focusable 任一为真。`enabled` 仍然采集，但只作为行内状态展示，
     不触发保留。如需严格按字面行为，传 keep_enabled=True。
 
-真机适配（B 的设计输入， @A）：
+真机适配要点：
     真机上可交互容器**自身文案与 id 双双为空**（app_settings 0 个 id、
     标签在子 Text 上；sample_calc 19/20 只有 id）—— 所以「按 id 认控件」
     和「按 text 认控件」单用哪一个都会废掉一边，必须**双向覆盖**，并允许
@@ -28,7 +28,7 @@
     - 摘要行 `_node_line`：自身无 id/text/descr/hint 的可交互容器，
       行尾追加 `deep="…"`（借来的子树文案，截断展示）；
     - 新增 `control_catalog()`：给 `Generator(catalog_fn=…)` 的正式版
-      控件清单，签名与 B 的最小实现一致（page, limit=60) -> str，换一行
+      控件清单，签名与既有最小实现一致（page, limit=60) -> str，换一行
       即可替换 —— 区别正是上面两条：双向产出 + 借文案（截断）而不是丢弃。
 """
 
@@ -193,9 +193,9 @@ def control_catalog(page: Any, limit: int = 60,
                     text_limit: int = 30) -> str:
     """控件清单 —— `Generator(catalog_fn=…)` 的替换件。
 
-    签名与 B 的最小实现完全一致（``control_catalog(page, limit=60) -> str``），
-    B 侧 ``Generator(catalog_fn=ohauto.treesum.control_catalog)`` 换一行即可。
-    与最小实现的两点差异（B 的真机设计输入， @A）：
+    签名与既有最小实现完全一致（``control_catalog(page, limit=60) -> str``），
+    调用方把 ``Generator(catalog_fn=ohauto.treesum.control_catalog)`` 换一行即可。
+    与最小实现的两点差异：
 
     - **双向覆盖**：id 维度与文案维度都产出 —— sample_calc 19/20 只有 id、
       app_settings 0 个 id 且标签在子 Text 上，按单键筛必废一边；
@@ -203,7 +203,7 @@ def control_catalog(page: Any, limit: int = 60,
       ``deep="…"`（text_deep，截断到 text_limit）—— 借文案而不是
       整行丢弃，否则清单在真机上等于没有。
 
-    自身 text 超过 text_limit 时**截断保留**（B 的最小实现是整行跳过）：
+    自身 text 超过 text_limit 时**截断保留**（最小实现是整行跳过）：
     长文案行该防的是撑爆 prompt，不是连人带 id 一起扔。
     """
     if page is None:

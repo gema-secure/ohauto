@@ -289,7 +289,7 @@ DIALOG_WINDOW_OVERLAP_MIN = 0.05
 class DialogVerdict:
     """当前页面是不是弹窗 / 有遮罩，以及凭什么这么判。
 
-    `evidence` 不是装饰：B4 的归因要拿它当证据，报告里也要能解释。
+    `evidence` 不是装饰：归因要拿它当证据，报告里也要能解释。
     """
     is_dialog: bool = False
     evidence: List[str] = field(default_factory=list)
@@ -719,12 +719,12 @@ class Explorer:
         self.tarpit_policy = tarpit_policy or TarpitPolicy()
         # 视觉定位器（可选）：半盲页（树候选过少）时介入，补充控件树看不到的
         # 可点击目标（Canvas/无标识按钮）。缓存命中统计由定位器自带
-        # （cache_hit_rate），这里只透传——B14 的 KPI 数字从这里出。
+        # （cache_hit_rate），这里只透传——缓存命中率的数字从这里出。
         self.vision_locator = vision_locator
         self.vision_stats: Dict[str, Any] = {'calls': 0, 'cache_hits': 0,
                                              'cache_misses': 0, 'errors': 0,
                                              'suggested': 0, 'tapped_ok': 0}
-        # 页级缓存：页面指纹 → 视觉候选（同页重访即命中，B14 的测量口径）
+        # 页级缓存：页面指纹 → 视觉候选（同页重访即命中，页级缓存的测量口径）
         self._vision_page_cache: Dict[str, List[LayoutNode]] = {}
         self.graph = StateGraph()
         self.artifact_dir = artifact_dir or getattr(driver, 'artifact_dir', None)
@@ -807,7 +807,7 @@ class Explorer:
         （真机上试过按面积排：正文提示「按 = 出结果」的面积是标题「计算器」的
         30 倍，直接把标题挤掉了。）
 
-        ⚠ ️ 真机缺陷（C 在 DAYU200 上抓到）：**必须先剔掉状态栏**。
+        ⚠️ 真机缺陷（C 在 DAYU200 上抓到）：**必须先剔掉状态栏**。
         真机状态栏永远在 `top≈32` 且带文本（`没有 SIM 卡` 在 `[43,32][170,50]`），
         所以「最靠上的文本」永远命中状态栏 —— 六个页面标题全成了同一句。
         模拟设备的状态栏文本为空，自测暴露不出来。
@@ -973,7 +973,7 @@ class Explorer:
 
         伪节点带视觉框（rect）与 label，能直接流进既有探索循环
         （tap 走 node.center，产物规格为 {'text': label}——无坐标，红线安全）。
-        页级缓存按**页面内容指纹**键控——同页重访即命中（B14 的测量口径），
+        页级缓存按**页面内容指纹**键控——同页重访即命中（页级缓存的测量口径），
         命中/未命中计入 vision_stats 供 KPI 出数。"""
         cached = self._vision_page_cache.get(fingerprint)
         if cached is not None:
@@ -1660,7 +1660,7 @@ def _edge_label(t: Transition) -> str:
 
 
 def _coverage_note(picked_n: int, total_n: int, skipped: List[Transition]) -> str:
-    """把「没纳入哪些边」写清楚。**不许静默丢** —— 这是 B-1 的硬要求。"""
+    """把「没纳入哪些边」写清楚。**不许静默丢** —— 这是硬要求。"""
     if total_n == 0:
         return '探索图里没有可用的跳转边（成功、非自环、带控件规格），本用例只有启动步骤'
     if not skipped:

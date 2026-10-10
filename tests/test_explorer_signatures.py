@@ -1,4 +1,4 @@
-"""B1 / B2 改造的单测 —— 页面双签名、覆盖度度量、四档优先级、Budget 契约。
+"""页面双签名与覆盖度改造的单测 —— 页面双签名、覆盖度度量、四档优先级、Budget 契约。
 
 全部基于 `FakeHdc` / 纯控件树字典，**不需要真机**（约定：全部在模拟设备上自测）。
 
@@ -98,7 +98,7 @@ def _no_sleep(_seconds: float) -> None:
 class TestPageSignature(unittest.TestCase):
 
     def test_content_signature_reacts_to_text_but_structural_does_not(self):
-        """★ B1 的核心论据：文案变化不该产生「新页面」。"""
+        """★ 内容签名的核心论据：文案变化不该产生「新页面」。"""
         a = parse_layout(_tree([
             _node('Text', 'tv', '未读 3 条', _b(0, 0, 100, 100), 'false')]))
         b = parse_layout(_tree([
@@ -276,7 +276,7 @@ class TestDialogDetection(unittest.TestCase):
         self.assertFalse(detect_dialog(root).is_dialog)
 
     def test_evidence_is_kept_for_explainability(self):
-        """判据必须能解释 —— B4 的归因要拿它当证据。"""
+        """判据必须能解释 —— 归因要拿它当证据。"""
         root = parse_layout(_tree([
             _node('Popup', 'p', '', _b(0, 0, 1080, 2340), 'false'),
         ]))
@@ -549,7 +549,7 @@ class TestExploreOnSim(_SimCase):
 
 
 class TestCoverageAcceptance(_SimCase):
-    """B1 的验收标准本身：多页面应用上覆盖度 ≥ 90%。"""
+    """验收标准本身：多页面应用上覆盖度 ≥ 90%。"""
 
     def test_seven_page_app_coverage_at_least_90pct(self):
         pages, trans = _chain_app(7)

@@ -337,7 +337,7 @@ class TestSafetyPolicy(unittest.TestCase):
             self.assertTrue(pol.is_dangerous(n)[0], txt)
 
     def test_multilingual_patterns(self):
-        """C6：俄/西/阿三种语言的不可逆操作也要被拦下。
+        """俄/西/阿三种语言的不可逆操作也要被拦下。
 
         背景：界面文案是外文时，只写中英文会让整条黑名单**静默失效** ——
         探索照样点进「Удалить / Eliminar / حذف」。这不报错、也不显眼，

@@ -1,4 +1,4 @@
-"""B4 失败归因引擎的单测 —— 四分类判据 + **20 条注入样例的准确率验收**。
+"""失败归因引擎的单测 —— 四分类判据 + **20 条注入样例的准确率验收**。
 
 本模块的验收标准原文：
     「注入四类故障各 5 例，准确率 ≥ 80%；**真崩溃必须判为「应用缺陷」**」
@@ -161,7 +161,7 @@ class TestAppDefect(_TmpCase):
 
 
 class TestWeakEvidenceDoesNotDecide(_TmpCase):
-    """C4 明确标注「别把它单独当结论用」的弱证据，不能把失败判成应用缺陷。"""
+    """信号采集明确标注「别把它单独当结论用」的弱证据，不能把失败判成应用缺陷。"""
 
     def test_no_response_weak_evidence_falls_through(self):
         """`frozen` + `probe_rounds>=2` 只给 0.3 置信度 → 不参与定案。"""
@@ -199,14 +199,14 @@ class TestCrashFiltering(_TmpCase):
         return self._signals(sim)
 
     def test_crash_of_another_app_is_filtered_upstream(self):
-        """别人的崩溃：C4 采集时就按 bundle 过滤掉了，归因侧连看都看不到。"""
+        """别人的崩溃：信号采集时就按 bundle 过滤掉了，归因侧连看都看不到。"""
         sim = FakeHdc(screen=(120, 260))
         sim.inject_crash(bundle='com.ohos.calendar')
         rec = ExecutionRecord(bundle=BUNDLE, step=_failed_step(),
                               trees=[_good_page()])
         rec.signals = self._signals(sim)
         self.assertEqual(rec.signals.crashes, [],
-                         'C4 的 collect_signals 应当已经按 bundle 过滤')
+                         'collect_signals 应当已经按 bundle 过滤')
         self.assertNotEqual(diagnose(rec).category, Category.APP_DEFECT)
 
     def test_foreign_crash_handed_in_directly_is_ignored(self):
@@ -494,7 +494,7 @@ class TestCaseDefect(unittest.TestCase):
     def test_overlay_covering_the_click_point_is_case_defect(self):
         """★ 真遮挡：另一个节点 zIndex 更高**且盖住了点击落点** → 用例该先关掉弹窗。
 
-        旧版这条测试用的是「单节点 zIndex>0」，而那正是 复核出来的反向判据
+        旧版这条测试用的是「单节点 zIndex>0」，而那正是复核出来的反向判据
         （zIndex 大表示它**在上层**，恰好说明没被盖住）。现在按真实机制判：
         uiInput 打的是控件中心坐标，中心被上层节点接走，这一击才会打到别人身上。
         """
@@ -962,7 +962,7 @@ class TestInjectedSamples20(_TmpCase):
         self.assertEqual(set(s['by_category']) - {c.value for c in Category}, set())
 
     def test_locator_samples_report_missing_locator_id_honestly(self):
-        """样例里没带 A 的 locator_id → 结论必须**明说回写不了**，而不是编一个。"""
+        """样例里没带 locator_id → 结论必须**明说回写不了**，而不是编一个。"""
         for _, rec, want in self._samples():
             if want is not Category.LOCATOR:
                 continue

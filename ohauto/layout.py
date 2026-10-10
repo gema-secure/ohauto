@@ -254,7 +254,7 @@ class LayoutNode:
         无障碍文案，id 是代码标识（如 `btn_login`、`item_bluetooth`）——
         对读日志的人和喂给视觉模型都不友好。
 
-        ⚠ ️ `text_deep` 必须排在 id 之前（实测踩到）：
+        ⚠️ `text_deep` 必须排在 id 之前（实测踩到）：
         真机上可交互容器的形态是 `Flex(id='item_reset', text='')` +
         子节点 `Text('恢复出厂设置')`。若 id 优先，日志里这个危险按钮就叫
         `item_reset`，而安全策略按文案匹配「恢复出厂」也照样找不到它。

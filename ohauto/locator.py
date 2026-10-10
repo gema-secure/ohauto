@@ -18,7 +18,7 @@
 
     L1  id 精确          Matcher.id(exact)         快、可解释、最脆
     L2  id 模糊 + text   id 包含匹配，或 text 命中   版本升级改前缀后还能活
-    L3  层级路径 + 类型  type_fingerprint + control_key（B 已交付，
+    L3  层级路径 + 类型  type_fingerprint + control_key（
         from ohauto.explorer import）——id 全改掉也能按「树里的位置和类型」找回
     L4  视觉语义         HybridLocator（需要截图与已配置的 Provider）
     L5  坐标兜底         记录时的 rect 中心，**必记告警**——
@@ -34,14 +34,14 @@
 设计约定（与全组对齐）：
 - 不缓存坐标（红线第 5 条）：L5 的兜底坐标只是 spec 里的一次性记录，
   每次定位都基于**当次**传入的新鲜控件树；
-- 失败自动记账（幂等口径，定稿 / A-0 修正）：
+- 失败自动记账（幂等口径）：
   locate 全链路落空时内部也会 record_locator_failure，执行器按契约
   回写是第二重保险。去重键 = **(来源, 代次, locator_id)** ——
   内部 locate 路径用 `_locate_seq`，执行器回写路径用 runner 传进来的
-  `attempt`（A-0 之后新增的可选参数）。那版只认 `_locate_seq`，
+  `attempt`（新增的可选参数）。早期版本只认 `_locate_seq`，
   而执行器**从不调 locate()**，代次恒为 0 → 回写被全量误判成重复记账 →
   连续失败停在 1 → 自愈在生产链路上永不触发（归因链路断点）。
-  调用方签名不变（新参数可选、有缺省），A3 阈值不会被翻倍触发；
+  调用方签名不变（新参数可选、有缺省），自愈阈值不会被翻倍触发；
 - 自愈换代必须**先快照、验证通过才提交**：验证失败时恢复快照、
   generation 不自增、consecutive_failures 不清零 —— 账本与真实状态
   必须一致（修复前是「报已回滚但没回滚」）；
@@ -88,7 +88,7 @@ class LocatorSpec:
     """一个定位器的完整描述（记录「这个控件长什么样」的全部线索）。"""
     locator_id: str
     description: str                 # 人类可读描述，L4 视觉通道的输入
-    page_signature: str = ''         # 页面归属（B1 内容签名或等价物）
+    page_signature: str = ''         # 页面归属（内容签名或等价物）
     target_id: str = ''
     text: str = ''
     #: **子树文案聚合**（`LayoutNode.text_deep`）。真机上「可交互容器自身
@@ -212,7 +212,7 @@ class LocatorManager:
     def _health_of(self, locator_id: str) -> LocatorHealth:
         """`_health` 的唯一访问器 —— 缺失就地补建，杜绝裸索引。
 
-        为什么要有它（A-2，C 高危）：`self._health[lid]` 这种
+        为什么要有它：`self._health[lid]` 这种
         裸索引只要有一处漏补账本，就会在运行时炸成 KeyError
         （`_resolve_spec` 当初就只补了 `_specs` 没补 `_health`，
         于是「传未注册 spec 进 locate()」第一行必崩）。收敛到这一个
@@ -277,7 +277,7 @@ class LocatorManager:
             spec.parent_types = tuple(p.type for p in self._ancestors(node))
             spec.fallback_center = node.rect.center
         self._specs[spec.locator_id] = spec
-        self._health_of(spec.locator_id)      # 注册表与账本同生共死（A-2 口径）
+        self._health_of(spec.locator_id)      # 注册表与账本同生共死（口径）
         self._by_key[key] = spec.locator_id
         self._log(f'注册定位器 {spec.locator_id} ({spec.describe_chain()})')
         return spec
@@ -325,7 +325,7 @@ class LocatorManager:
         self._locate_seq += 1          # 幂等闸的代次（一次 locate = 一次定位尝试）
         self._last_root = page
         spec = self._resolve_spec(target, page, page_signature)
-        # A-2：这里原来是对 _health 的裸索引 —— 传未注册 LocatorSpec 时
+        # 这里原来是对 _health 的裸索引 —— 传未注册 LocatorSpec 时
         # _resolve_spec 只补了 _specs，账本还没有，于是第一行就 KeyError。
         health = self._health_of(spec.locator_id)
         t0 = time.perf_counter()
@@ -442,7 +442,7 @@ class LocatorManager:
                       page_signature: str) -> LocatorSpec:
         """按 target 找到（或注册）对应的 LocatorSpec。
 
-        A-2（C 高危）：`locate(target, ...)` 的 `target` 是
+        `locate(target, ...)` 的 `target` 是
         `Any`，且显式支持传 `LocatorSpec` —— 这是**受支持的输入形态**，
         不是误用。修复前这条旁路只 `setdefault` 了 `_specs`，没补
         `_health`，于是 locate() 第一行的账本索引直接 KeyError。
@@ -597,11 +597,11 @@ class LocatorManager:
         Parameters
         ----------
         attempt:
-            **可选**（A-0，C P0）。执行器侧的执行尝试序号，
+            **可选**。执行器侧的执行尝试序号，
             由 runner 维护、单调递增，每次回写自带一个新值。
             不传（内部 locate 路径以及旧式两参调用）时行为与修复前
             **完全一致**，用 `_locate_seq` 当代次 —— 契约签名向后兼容，
-            所以分工卡的 W2 冻结签名不受影响。
+            所以对外冻结签名不受影响。
         """
         self._count_failure(locator_id, reason, attempt)
 
@@ -614,7 +614,7 @@ class LocatorManager:
         - `attempt`（执行器回写路径）：一次执行尝试 = 一次记账；
         - `self._locate_seq`（内部 locate 路径）：一次 locate() = 一次记账。
 
-        A-0 根因（修复前）：只用 `_locate_seq` 当代次，而执行器走
+        根因（修复前）：只用 `_locate_seq` 当代次，而执行器走
         matcher/layout 定位、**从不调 `locate()`** → 代次恒为 0 →
         第 1 次回写后 `_fail_seq[lid] = 0`，第 2 次起 `0 == 0` 恒成立 →
         回写全部被当重复记账丢掉 → `consecutive_failures` 永远停在 1 →
@@ -868,7 +868,7 @@ class LocatorManager:
     def health(self, locator_id: str) -> LocatorHealth:
         """查账本。**未知 id 照旧抛 KeyError** —— 这是查询接口，
         调用方要的是「这个定位器现在什么状态」，把不存在的 id 悄悄
-        变成一份空账本反而会掩盖调用方的 id 拼错（A-2 的教训是
+        变成一份空账本反而会掩盖调用方的 id 拼错（教训是
         「注册链路必须补账本」，不是「查错 id 也该给个默认可信对象」）。
         """
         return self._health[locator_id]

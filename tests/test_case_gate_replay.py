@@ -1,12 +1,12 @@
 """用例级总闸与可重放的钉子测试。
 
-    B-0  generator.py::validate_case   空壳用例（只 start/waitIdle/screenshot）被放行
-    B-1  explorer.py::generate_case    把边集当轨迹串 → 产物必然重放失败
+    用例级总闸  generator.py::validate_case   缺乏实质动作的用例被放行
+    可重放性    explorer.py::generate_case    把边集当轨迹串 → 产物必然重放失败
 
-除了 C 给的两条钉子，这里多加了两条我自己认为更关键的：
+在既有两条钉子之外，这里另加两条更关键的：
 
-    ★ B-0 端到端：provider 吐空壳 → GenerationOutcome 必须**判不可执行**，且不进修复链路
-    ★ B-1 真跑：产物**真的能执行**（不是只检查「相邻边首尾相接」这种静态形状）——
+    ★ 用例级总闸端到端：provider 吐缺乏实质动作的用例 → GenerationOutcome 必须**判不可执行**，且不进修复链路
+    ★ 可重放性真跑：产物**真的能执行**（不是只检查「相邻边首尾相接」这种静态形状）——
       静态能对上但跑不起来的用例，正是这次要根除的那类东西。
 
 全部离线，不碰设备/网络。
@@ -94,10 +94,10 @@ def _gen(stub, name='用例'):
     return out
 
 
-# ================================================================ B-0 用例级总闸
+# ================================================================ 用例级总闸
 
 class TestEmptyCaseGate(unittest.TestCase):
-    """★ C 派活 B-0（P0）：空壳用例必须被**用例级**总闸拦下。
+    """★ 缺乏实质验证的用例必须被**用例级**总闸拦下。
 
     L3 真机实测的后果：**空壳 2/2 全过、真引用控件 0/3** ——
     逐步检查抓不到它，因为每一步都合法，**无从证伪**。
@@ -222,10 +222,10 @@ class TestEmptyCaseGateEndToEnd(unittest.TestCase):
         self.assertEqual(rep.executable, 0)
 
 
-# ================================================================ B-1 可重放
+# ================================================================ 可重放
 
 class TestChainTransitions(unittest.TestCase):
-    """把**边集**切成首尾相接的路径 —— B-1 的核心算法。"""
+    """把**边集**切成首尾相接的路径 —— 可重放性的核心算法。"""
 
     def _t(self, src, dst, label):
         return Transition(src=src, dst=dst, control=label,
@@ -327,7 +327,7 @@ class TestGenerateCaseIsActuallyReplayable(unittest.TestCase):
     """★★ 比形状检查更硬的一条：**产物真的能执行**。
 
     「相邻边首尾相接」只是静态形状；静态能对上但跑不起来的用例，
-    正是 B-1 要根除的那类东西。所以这里把探索产物拿一台**新的模拟设备**跑一遍。
+    正是可重放性要根除的那类东西。所以这里把探索产物拿一台**新的模拟设备**跑一遍。
     """
 
     def _explore(self, n=4):

@@ -1,7 +1,7 @@
-"""B8 样本量的钉子 —— 描述集必须能凑到规划要求的条数，且**不许悄悄凑不满**。
+"""样本量的钉子 —— 描述集必须能凑到规划要求的条数，且**不许悄悄凑不满**。
 
 背景（见阶段性总结的「KPI 层」未落实第 2 条）：
-B8 的 `executable_rate` 只有 3 条描述（入口页实测只派生得出 **1** 条正样本
+`executable_rate` 只有 3 条描述（入口页实测只派生得出 **1** 条正样本
 + 2 条固定负样本），而规划原文要求「**20 条**描述生成后逐条执行」。
 分母不是 20 时，报出来的百分比既不可比，又容易被读成「已按规划验过」。
 
@@ -104,7 +104,7 @@ class TestPromptsFile(unittest.TestCase):
         self.assertEqual(ev.load_prompts_file(p), ['甲', '乙', '丙'])
 
     def test_shipped_prompts_file_is_usable(self):
-        """仓库里那份 B8 补充描述必须真的读得出 5 条（不含注释）。"""
+        """仓库里那份补充描述必须真的读得出 5 条（不含注释）。"""
         p = os.path.join(ROOT, 'tools', 'b8_prompts_calc.txt')
         self.assertTrue(os.path.isfile(p), p)
         got = ev.load_prompts_file(p)

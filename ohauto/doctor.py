@@ -160,7 +160,7 @@ def main() -> int:
         check('设备时间', WARN, f'{type(e).__name__}: {e}')
 
     # ---------------------------------------------------------- 6 uitest 通路
-    # C8：uitest 不可用**不再直接终止自检** —— 写动作还有 uinput / sendevent
+    # uitest 不可用**不再直接终止自检** —— 写动作还有 uinput / sendevent
     # 两条备用通路（探测顺序 uitest → uinput → sendevent）。
     # 逐条探测并如实列出结论；三者皆无才落「不可交互」档。
     uitest_ok = False

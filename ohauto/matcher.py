@@ -193,7 +193,7 @@ class Matcher:
     def within(self, other: 'Matcher') -> 'Matcher':
         """限定在 other 匹配到的节点子树内查找。
 
-        ⚠ ️ 三条**约束型**语义（A-1，C高危修复后定稿，
+        ⚠️ 三条**约束型**语义（修复后定稿，
         改动前请先读这里，否则很容易"修好一个洞、挖出两个洞"）：
 
         1. **只取最外层容器**：父子同 type 在真机上很常见
@@ -233,7 +233,7 @@ class Matcher:
         return all(p(node) for p in self._preds)
 
     def _apply_within(self, pool: List[LayoutNode]) -> List[LayoutNode]:
-        """把 `pool` 收窄到 within 容器的子树（A-1 的三条语义）。"""
+        """把 `pool` 收窄到 within 容器的子树（三条约束型语义）。"""
         within = self._within
         assert within is not None
         containers = [n for n in pool if within.match(n)]

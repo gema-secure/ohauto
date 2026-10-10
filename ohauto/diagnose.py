@@ -648,7 +648,7 @@ def _app_defect(rec: ExecutionRecord) -> Tuple[float, List[str], List[str]]:
             ev.append(f'（{kind} 证据置信度仅 {score:.2f}，低于定案门槛 '
                       f'{APP_CONFIDENCE_FLOOR}，按要求不单独作为应用缺陷判定）')
 
-    # ---- ③ 进程不在，但没有崩溃日志：C4 给 0.35，只作参考
+    # ---- ③ 进程不在，但没有崩溃日志：信号采集给 0.35，只作参考
     if getattr(sig, 'process_alive', None) is False and not crashes:
         ev.append('（进程已不在 pidof 输出中，但**没有**崩溃日志：也可能是被 '
                   'force-stop / 系统回收，置信度不足，不作为应用缺陷判定）')
@@ -967,7 +967,7 @@ def load_snapshots(artifact_dir: Any, *, step_index: Optional[int] = None,
     **不能盲读** —— 所以这里逐个尝试解析，只有能解析出带 bounds 的控件树才采用，
     其余静默跳过（坏文件不该让归因失败）。
 
-    ⚠ ️ **`step_index` 不是文件名过滤器**（按实测更正）
+    ⚠️ **`step_index` 不是文件名过滤器**（按实测更正）
     ---------------------------------------------------------------
     产物文件名来自 `driver._art()`：`f'{seq:04d}_{ext}'`，`seq` 是
     **全局递增的采集计数器**（截图与控件树共用一个），**一步可产生 0..N 张** ——
@@ -984,7 +984,7 @@ def load_snapshots(artifact_dir: Any, *, step_index: Optional[int] = None,
     此时离现场最近的快照才有用 —— 取最早那几张会把失败现场整个漏掉。
 
     仓库侧保留 `_SNAPSHOT_EXCLUDE` 过滤（报告/用例等非快照 json 的黑名单，
-    本文件 最初的既有防护，旧基线里没有——移植时保留）。
+    本文件最初的既有防护，旧基线里没有——移植时保留）。
 
     Parameters
     ----------
@@ -1117,7 +1117,7 @@ def diagnose(record: Any, *, locator_sink: Optional[Callable[[str, str], None]] 
         `ExecutionRecord` / dict / `runner.StepResult` / `runner.CaseResult`。
     locator_sink:
         可选。判定为**定位失败**时用它回写定位器自愈，签名为
-        `sink(locator_id, reason)`，与 A 的 `record_locator_failure(locator_id, reason)` 对齐。
+        `sink(locator_id, reason)`，与 `record_locator_failure(locator_id, reason)` 对齐。
 
         口径已与定位器模块对齐：**`locator_id` 由 LocatorManager 统一生成**
         （形如 `L3_登录按钮`），归因侧不自己拼，只把 `LocateResult.locator_id`

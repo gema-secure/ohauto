@@ -1049,7 +1049,7 @@ class FakeHdc:
             # 仍保留对 `screen size` 这种老写法的兼容：真机上某些裁剪版本
             # 只有 DisplayManagerService，输出形如 `screen size: W x H`。
             if '--mem' in cmd:
-                # 2C：真机 `hidumper --mem <pid>` 同构内存表 —— 表头含 Pss，
+                # 真机 `hidumper --mem <pid>` 同构内存表 —— 表头含 Pss，
                 # 两行 Total 开头（单位行无数字、数值行首个数字 = PSS 合计
                 # KB）。解析规则见 ohauto/perf.py，两侧必须同构。
                 return self._R(self._mem_dump())

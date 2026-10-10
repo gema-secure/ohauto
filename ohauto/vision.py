@@ -191,7 +191,7 @@ bbox 使用截图像素坐标，原点在左上角。
         判定必须与 `from_env()` 的回退链**逐变量对齐**：base_url / api_key /
         model 三件套各自只要在任一前缀里取到值即可（三个前缀见类 docstring）。
 
-        ⚠ ️ **不要改成「任一一组三个变量配齐」**（集成实测）：
+        ⚠️ **不要改成「任一一组三个变量配齐」**（集成实测）：
         `from_env()` 是**逐变量**回退取值 —— 这正是「DeepSeek 生成用例 +
         Qwen-VL 看图」能分开配的前提，也是 `test_vision_group_has_priority`
         依赖的行为。改成按组会让 available() 比 from_env() **更严格**：
@@ -424,7 +424,7 @@ class TieredVisionLocator:
     L3  全屏兜底       —— L2 没命中时，把全部 hints 交给模型（约 3s，最贵）
 
     缓存：key = 页面指纹 + 目标描述。同一页面同一描述，第二次直接吃缓存。
-    页面指纹由调用方传（B1 的 content signature，或任意能区分页面的稳定串）——
+    页面指纹由调用方传（内容签名，或任意能区分页面的稳定串）——
     摘要器 treesum / explorer 的 PageSignature.content 都可以。
 
     「裁剪」的诚实说明：纯标准库没有图像裁剪能力（不引新依赖是项目约束）。

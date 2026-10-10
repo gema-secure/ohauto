@@ -1,6 +1,6 @@
-"""A3 定位器健康度与自愈 的单元测试（主攻方向★）。
+"""定位器健康度与自愈 的单元测试。
 
-验收场景全部按分工卡 A3 原文设计：
+验收场景：
 - 降级链五级逐级可测；
 - 「人为改 5 个控件 id，不人工干预自动恢复，成功率 ≥ 80%」；
 - 连续失败达阈值自动触发自愈（结构变化场景，降级链救不回来的那种）。
@@ -50,7 +50,7 @@ TEN_TYPES = ('Button', 'TextInput', 'Checkbox', 'Switch', 'Search',
 
 
 def ten_widget_page(ids):
-    """10 个不同类型可交互控件的页面（A6 扩容验收的舞台，机制同 five_widget_page）。"""
+    """10 个不同类型可交互控件的页面（扩容验收的舞台，机制同 five_widget_page）。"""
     root = node('root', bounds=(0, 0, 720, 1280))
     col = node('Column', parent=root)
     for t, i in zip(TEN_TYPES, ids):
@@ -112,7 +112,7 @@ class TestChainBasics(unittest.TestCase):
 
 
 class TestAcceptance5Ids(unittest.TestCase):
-    """分工卡验收原文：人为改 5 个控件 id，不人工干预自动恢复，
+    """验收原文：人为改 5 个控件 id，不人工干预自动恢复，
     成功率 ≥ 80%。"""
 
     def test_five_renamed_ids_auto_recover(self):

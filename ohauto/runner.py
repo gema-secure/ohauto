@@ -463,7 +463,7 @@ class StepResult:
     # 这条硬证据（diagnose._locator）。只有 kind/attempts 时它只能退回运行器分类，
     # 置信度从 0.85 掉到 0.6。抓不到就留空列表 —— 归因侧本来就兼容这种情况。
     trees: List[str] = field(default_factory=list)
-    # 定位器 id（A 的 `LocateResult.locator_id` 原样回写）。
+    # 定位器 id（`LocateResult.locator_id` 原样回写）。
     # 为什么需要：归因定案为「定位失败」后要调 `A.record_locator_failure(locator_id)`
     # 回写健康度台账 —— 没有 id 就回写不了，那条链路等于断的。
     # 为什么不在归因侧现拼：id 是定位器**自己**的身份，拼出来的是假账
@@ -957,11 +957,11 @@ class Runner:
         self.artifact_budget = artifact_budget or 0
         self.verbose = verbose
         self._sleep = sleep_fn
-        # 定位失败回写钩子（分工卡第五章契约：执行失败要回写，让自愈有输入）。
+        # 定位失败回写钩子（执行失败要回写，让自愈有输入）。
         # 签名为 sink(target_spec, reason)，target_spec 是 DSL 里那个原始规格
         # （如 {'id': '7'}），reason 是失败原因。
         #
-        # ⚠️ 为什么传「规格」而不是「locator_id」：locator_id 是 A 的
+        # ⚠️ 为什么传「规格」而不是「locator_id」：locator_id 由定位器生成，
         # `LocatorManager` 在自己册子里发的水号（L001_xxx），而执行器的定位
         # 走的是 matcher/layout，**手里根本没有这个号**。硬要 runner 认识它
         # 就得把 LocatorManager 塞进执行链路（改动太大）。所以这里定义成
@@ -982,7 +982,7 @@ class Runner:
         # 直接复用会把规格当 id 传出去，在定位器健康度台账里塞假账 —— 所以分成两个参数。
         self.diagnose_locator_sink = diagnose_locator_sink
         # ── 自愈喂料：给 sink 递「执行尝试序号」──────────
-        # A 的幂等键是 (定位代次, locator_id)，而代次只在 locate() 推进；
+        # 幂等键是 (定位代次, locator_id)，而代次只在 locate() 推进；
         # 执行器走 matcher，从不调 locate() → 代次恒 0，第 2 次回写起
         # 全被 A 判成「同一次定位的重复记账」丢弃 → 连续失败停在 1，
         # 自愈阈值永远够不着（tools/wire_locator_sink.py 自测诊断段有证据）。
@@ -1085,7 +1085,7 @@ class Runner:
                     sr.kind = kind
                     # 判定失败之前先留现场 —— 归因引擎靠它把置信度从 0.6 提到 0.85
                     self._capture_trees(driver, sr)
-                    # 定位失败要回写，否则 定位器自愈永远拿不到输入
+                    # 定位失败要回写，否则定位器自愈永远拿不到输入
                     self._report_locator_failure(sr)
                     break
 
@@ -1180,7 +1180,7 @@ class Runner:
     # ---------------------------------------------------------- 失败回写
 
     def _resolve_locator_id(self, sr: StepResult) -> str:
-        """把「目标规格」翻成 A 的 `locator_id`，填进 `StepResult.locator_id`。
+        """把「目标规格」翻成 `locator_id`，填进 `StepResult.locator_id`。
 
         为什么需要这一步（闭环接线的最后一环）：
         归因定案「定位失败」后，结论里要带上 `locator_id` —— 否则归因只能说
@@ -1189,7 +1189,7 @@ class Runner:
 
         但执行器的定位走 `matcher`/`layout`，手里只有 DSL 里的原始规格
         （如 `{'id': '7'}`），**没有** A 册子里发的那个号（`L001_7`）。
-        runner **不认识也不该认识** `LocatorManager`（那是 A 的模块），
+        **不认识也不该认识** `LocatorManager`，
         所以做成钩子：由集成层注入反查函数
         （`tools/wire_locator_sink.make_locator_id_resolver`）。
 
@@ -1539,7 +1539,7 @@ def run(cases: Sequence[Any], device: Any = None, *,
 
         rep = run(cases, device)
         rep.ok                     # 契约字段
-        rep.suite.failures_by_kind()   # 富信息（信号采集 / B 的归因输入）
+        rep.suite.failures_by_kind()   # 富信息（信号采集 / 归因的输入）
 
     Parameters
     ----------

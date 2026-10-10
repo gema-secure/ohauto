@@ -558,7 +558,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.execute:
         ok_cases = [o.case for o in report.outcomes if o.ok and o.case]
         print(f'\n真机执行 L3：{len(ok_cases)} 条可执行用例 …')
-        # ⚠ ️ Driver 第一参数是 bundle（修：写错成 Driver(hdc, ...) 会把
+        # ⚠️ Driver 第一参数是 bundle（修：写错成 Driver(hdc, ...) 会把
         #    Hdc 对象当 bundle，真机一跑就崩）；Runner 不收 driver/hdc，
         #    driver 在 run_case 时传。
         driver = Driver(bundle=args.bundle, ability=args.ability, hdc=hdc,

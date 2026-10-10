@@ -1,4 +1,4 @@
-"""A6 bounds 解析加固 + A5 控件树摘要器 的单元测试。
+"""bounds 解析加固 + 控件树摘要器 的单元测试。
 
 全部不需要真机：A5 的验收直接跑在 C 提供的真机 fixture
 （real_dayu200_usb_dialog.json，DAYU200 实测 dump）上。
@@ -44,7 +44,7 @@ def make_tree(spec):
     return build(spec)
 
 
-# ================================================================ A6
+# ================================================================ bounds
 
 class TestA6BoundsDictForms(unittest.TestCase):
     """每种形态各一条单测；含负数与超大坐标的用例不崩。"""
@@ -124,7 +124,7 @@ class TestA6BoundsAliasKeys(unittest.TestCase):
         self.assertEqual((node.rect.right, node.rect.bottom), (4, 6))
 
 
-# ================================================================ A5
+# ================================================================ 控件树摘要
 
 class TestA5Treesum(unittest.TestCase):
     def _toy_tree(self):

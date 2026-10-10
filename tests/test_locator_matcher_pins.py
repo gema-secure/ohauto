@@ -56,7 +56,7 @@ class TestA0AttemptIdempotency(unittest.TestCase):
     def test_a0a_signature_keeps_attempt_optional(self):
         """签名向后兼容：attempt 必须**可选**。
 
-        分工卡把 `record_locator_failure(locator_id, reason) -> None` 列为
+        把 `record_locator_failure(locator_id, reason) -> None` 列为
         W2 冻结签名 —— 加一个带缺省值的参数不破坏它，B 的两参调用照旧可用。
         """
         import inspect

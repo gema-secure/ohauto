@@ -91,7 +91,7 @@ class TestExportLogin(unittest.TestCase):
                 self.fail(f'单引号嵌套: {line}')
 
     def test_swipe_exported_not_placeholder(self):
-        # C9：login.yaml 的 step 10 是 swipe —— 现在应真导出，而不是占位报错。
+        # login.yaml 的 step 10 是 swipe —— 现在应真导出，而不是占位报错。
         self.assertIn('step 10: swipe', self.src)
         self.assertIn('await driver.swipe(', self.src)
         self.assertNotIn('步骤 10 (swipe) 未导出', self.src)
@@ -229,7 +229,7 @@ class TestTextContainsIsReachable(unittest.TestCase):
 
 
 class TestSwipeExport(unittest.TestCase):
-    """C9：swipe 从「不可导出」变为「可导出」。
+    """swipe 从「不可导出」变为「可导出」。
 
     核心契约是**屏幕尺寸运行时取**（`driver.getDisplaySize()`），
     而不是导出期按某个分辨率猜坐标 —— 猜错的分辨率在产物里看不出来。
