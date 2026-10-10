@@ -1,8 +1,8 @@
 """B1 / B2 改造的单测 —— 页面双签名、覆盖度度量、四档优先级、Budget 契约。
 
-全部基于 `FakeHdc` / 纯控件树字典，**不需要真机**（任务卡约定：A、B 全在 sim 上开发自测）。
+全部基于 `FakeHdc` / 纯控件树字典，**不需要真机**（约定：全部在模拟设备上自测）。
 
-这里刻意把「双签名」当成一号被测对象：任务卡说它是「B1 最该先定下来的东西，
+这里刻意把「双签名」当成一号被测对象：设计上它是「最先要定下来的东西，
 定错了后面全白做」，所以它的行为必须有测试钉住，而不是靠注释解释。
 """
 import json
@@ -399,7 +399,7 @@ class TestCoverage(unittest.TestCase):
         self.assertEqual(ex.coverage.ratio, 0.0)
 
     def test_dialog_controls_all_go_high(self):
-        """任务卡原话是「弹窗内可交互控件**一律**提为最高优先级」——
+        """设计要求是「弹窗内可交互控件**一律**提为最高优先级」——
         一律就是不看关键词，普通控件在弹窗里也是 HIGH。"""
         ex = Explorer(_StubDriver(), verbose=False)
         ex.dialog = detect_dialog(parse_layout(_tree([
@@ -786,7 +786,7 @@ class TestRefreshSignatureRegression(_SimCase):
       ① `_done` 按入口页记账 → 跨页同 key 控件被误合并，后续页面**少探索**；
       ② 「点了没反应就降档」在非入口页静默失效；
       ③ 覆盖度明细里每页 `visited` **恒为 0**；
-      ④ 状态图（挑战 #3）可信度受影响。
+      ④ 状态图（自动探索）可信度受影响。
 
     一直没被抓到，是因为现有测试里那个无效控件恰好落在入口页 ——
     所以这条回归测试**专门盯着非入口页**。

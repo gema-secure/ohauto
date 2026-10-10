@@ -1,6 +1,6 @@
 """B5 压测用例生成的单测 —— 边缘安全算法、四类场景、以及与 driver 的一致性交叉验证。
 
-任务卡 B5 的验收标准原文：
+本模块的验收标准原文：
     「能生成并在真机跑通至少 1 个压测场景」
     「**swipe 起止点离屏幕左右边缘各留 150–200px**，否则会误触系统返回手势」
 
@@ -157,7 +157,7 @@ class TestSwipeSafety(unittest.TestCase):
         self.assertEqual(res.distance_px, 216)
 
     def test_horizontal_large_scale_is_flagged(self):
-        """★ scale 一大就会贴边 —— 这正是任务卡警告的那个坑。"""
+        """★ scale 一大就会贴边 —— 这正是规模放大后必然贴边的根因。"""
         res = check_swipe_safety('left', 0.9, (1080, 2340), margin=180)
         self.assertFalse(res.ok)
         self.assertEqual(res.distance_px, 54)

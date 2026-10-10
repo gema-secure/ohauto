@@ -4,10 +4,10 @@
 
 为什么要有它
 ------------
-答辩 / 演示时最怕两件事：
+演示时最怕两件事：
 
 1. 要敲七八条命令、中间任何一条翻车就演砸；
-2. 「跑通了」没有产物 —— 评委要的是看得见的报告，不是终端上的几行字。
+2. 「跑通了」没有产物 —— 需要的是看得见的报告，不是终端上的几行字。
 
 所以这个脚本：一条命令、每步有横幅、产出落在 `_out/demo_full_chain/`
 （JSON / Markdown / HTML 三种报告 + 状态图 + 生成的用例）。
@@ -129,7 +129,7 @@ def execute_generated(case, driver) -> None:
 
 
 def demo_attribution(driver, out_dir: str):
-    """阶段：失败步归因（挑战 #5 闭环）—— 故意跑一步必然失败的用例。
+    """阶段：失败步归因（闭环）—— 故意跑一步必然失败的用例。
 
     为什么要故意失败：归因引擎的价值只有在**有失败**时才看得见。
     跑一条全绿的用例，闭环那一节永远是空的。
@@ -240,7 +240,7 @@ def run_offline(out_dir: str) -> int:
     banner(6, '执行刚生成的用例（生成 → 执行的闭环）')
     execute_generated(case, d3)
 
-    banner(7, '失败步归因（挑战 #5 闭环）')
+    banner(7, '失败步归因（闭环）')
     demo_attribution(
         Driver(bundle='com.demo.app', hdc=FakeHdc(start_page='login', verbose=False),
                artifact_dir=os.path.join(out_dir, 'artifacts_attr'), verbose=False),
@@ -323,7 +323,7 @@ def run_real(out_dir: str, target: str, bundle: str, ability: str) -> int:
     banner(6, '执行刚生成的用例（生成 → 执行的闭环）')
     execute_generated(case, d)
 
-    banner(7, '失败步归因（挑战 #5 闭环）')
+    banner(7, '失败步归因（闭环）')
     demo_attribution(d, out_dir)
 
     banner(8, '生成报告（JSON / Markdown / HTML）')

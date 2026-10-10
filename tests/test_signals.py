@@ -1,7 +1,7 @@
 """信号采集 结果信号采集 —— 单元测试。
 
 **全部测试都不需要真机**，一律由 `FakeHdc` 驱动，在无设备的机器上必须全绿
-（任务卡第七章一，这是验收的一部分）。
+（这是验收的一部分）。
 
 解析器的开发依据是 `fixtures/signals/` 下的**真机产出样本**，不是自己编的日志：
 
@@ -38,7 +38,7 @@ SCREEN_NORMAL = os.path.join(FIX, 'screen_normal.png')
 LAYOUT_NORMAL = os.path.join(FIX, 'layout_normal.json')
 LAYOUT_NO_WINDOW = os.path.join(FIX, 'layout_no_window.json')
 
-# 真机实测的崩溃日志文件名（任务卡第三章一）
+# 真机实测的崩溃日志文件名
 CRASH_NAME = 'cppcrash-com.ohos.note-20010019-20260916151446'
 BUNDLE = 'com.ohos.note'
 
@@ -88,7 +88,7 @@ class TestParseRealCrashLog(unittest.TestCase):
                                   source_file=CRASH_NAME)
 
     def test_header_fields(self):
-        """真机实测的 11 个字段必须全部解析出来（任务卡第三章三）。"""
+        """真机实测的 11 个字段必须全部解析出来。"""
         r = self.rec
         self.assertEqual(r.module_name, 'com.ohos.note')
         self.assertEqual(r.pid, 9639)
@@ -166,7 +166,7 @@ class TestParseTempCrashLog(unittest.TestCase):
 
 
 class TestParseFaultFilename(unittest.TestCase):
-    """命名规律（任务卡第三章一）。freeze/ 的格式**未验证**，必须能降级。"""
+    """命名规律。freeze/ 的格式**未验证**，必须能降级。"""
 
     def test_faultlogger_name(self):
         got = parse_fault_filename(CRASH_NAME)
@@ -225,7 +225,7 @@ class TestCollectCrashes(unittest.TestCase):
         self.assertIn('SIGSEGV', sig.crashes[0].reason)
 
     def test_module_name_mismatch_is_not_adopted(self):
-        """★ 别的应用崩溃在同一目录里，绝不能算到我们头上（任务卡第五章三·2）。"""
+        """★ 别的应用崩溃在同一目录里，绝不能算到我们头上。"""
         sim = FakeHdc()
         sim.inject_crash(bundle='com.ohos.calendar')
         sig = collect_signals(sim, BUNDLE, out_dir=out_dir())
@@ -361,7 +361,7 @@ class TestCollectCrashes(unittest.TestCase):
 # ================================================================ 5/6. 降级
 
 class TestDegradation(unittest.TestCase):
-    """采集是旁路行为：它自己失败绝不能把正在跑的测试搞崩（任务卡第五章三·3）。"""
+    """采集是旁路行为：它自己失败绝不能把正在跑的测试搞崩。"""
 
     def test_hilog_failure_degrades(self):
         sim = FakeHdc(hilog_text='09-16 15:14:47.0 9639 9639 E X: SIGSEGV',
@@ -371,7 +371,7 @@ class TestDegradation(unittest.TestCase):
         self.assertTrue(any('hilog' in w for w in sig.warnings), sig.warnings)
 
     def test_hilog_goes_through_hdc_hilog(self):
-        """`hilog` 必须带 `-x`，否则阻塞读会把整条流程挂死（任务卡第三章六）。
+        """`hilog` 必须带 `-x`，否则阻塞读会把整条流程挂死。
 
         这里的守法是：collect_signals 只能经 `hdc.hilog()` 取日志，
         不能自己拼 shell 命令绕过它（`hdc.py::Hilog()` 已经用对了 `-x -z`）。
@@ -604,7 +604,7 @@ class TestNoWindow(unittest.TestCase):
 
 
 class TestNoResponse(unittest.TestCase):
-    """任务卡明确要求：多信号叠加，每信号标注来源与置信度，不要单信号硬判。"""
+    """设计要求：多信号叠加，每信号标注来源与置信度，不要单信号硬判。"""
 
     def test_freeze_file_is_a_high_confidence_signal(self):
         """★ freeze/ 出现窗口内文件 —— 客观判据（尽管命名格式未实测验证）。"""
@@ -739,7 +739,7 @@ class TestSignalsContract(unittest.TestCase):
             self.assertEqual(json.load(f)['bundle'], BUNDLE)
 
     def test_both_clocks_are_recorded(self):
-        """设备 RTC 可能不准 —— 本机时间与设备时间都要记（任务卡第六章三·5）。"""
+        """设备 RTC 可能不准 —— 本机时间与设备时间都要记。"""
         sig = collect_signals(FakeHdc(), BUNDLE, out_dir=out_dir())
         self.assertTrue(sig.captured_at)
         self.assertTrue(sig.device_time)
@@ -771,7 +771,7 @@ class TestSignalsContract(unittest.TestCase):
 class TestEndToEndCrashCapture(unittest.TestCase):
     """★ 验收标准本身：**注入一次崩溃能被捕获**。
 
-    真机上的对应操作是 `kill -11 <pid>`（任务卡第三章四）。这里用
+    真机上的对应操作是 `kill -11 <pid>`。这里用
     `FakeHdc.inject_crash()` 做同一件事，整条链路无真机可跑。
     """
 
@@ -844,7 +844,7 @@ class TestEndToEndCrashCapture(unittest.TestCase):
                          '两条都在窗口内，但只有一条被采纳')
 
     def test_collection_is_read_only(self):
-        """采集是**旁路**行为：不许点击、不许改应用状态（任务卡第二章四）。"""
+        """采集是**旁路**行为：不许点击、不许改应用状态。"""
         sim = FakeHdc()
         sim.inject_crash(bundle=BUNDLE)
         before = sim.current

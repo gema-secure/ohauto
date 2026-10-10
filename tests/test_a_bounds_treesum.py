@@ -47,7 +47,7 @@ def make_tree(spec):
 # ================================================================ A6
 
 class TestA6BoundsDictForms(unittest.TestCase):
-    """任务卡 A6：每种形态各一条单测；含负数与超大坐标的用例不崩。"""
+    """每种形态各一条单测；含负数与超大坐标的用例不崩。"""
 
     def test_standard_keys(self):
         r = Rect.parse({'left': 1, 'top': 2, 'right': 3, 'bottom': 4})

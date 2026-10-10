@@ -1,6 +1,6 @@
 """hypium 脚本导出器 —— 把 YAML DSL 导出为可在真机运行的 .ets 测试脚本。
 
-对应任务卡 C5：把 YAML DSL 导出为 arkxtest / hypium 脚本，
+把 YAML DSL 导出为 arkxtest / hypium 脚本，
 证明「可在指定测试框架中执行」。
 
 ## 以官方 API 为准（本机实测确认）
@@ -10,7 +10,7 @@
 - 老 API（`UiDriver`/`By`/`UiComponent`）标注 `@deprecated since 9` →
   **全部生成新 API**（`Driver`/`ON`/`Component`，`@kit.TestKit`）
 - `static create(): Driver`（@since 9）—— **不是 async，无 await**
-- 设备上的 `uitest` CLI **没有** 任务卡所说的 `--mode DUMP` 参数（实测
+- 设备上的 `uitest` CLI **没有** `--mode DUMP` 参数（实测
   `uitest help` 逐条核对）；但新 API 的 `Driver` 有 `dumpLayout(savePath)`
   与 `screenCap(savePath)`，能力等价 —— 已按设备实测修正
 

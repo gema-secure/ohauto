@@ -3,7 +3,7 @@
 
 为什么有这个东西
 ----------------
-命题挑战目标第一条是「支持多模态大模型理解应用截图和布局结构」，而我们的
+设计目标是「支持多模态大模型理解应用截图和布局结构」，而我们的
 现状是：`ohauto/vision.py` 的 Provider 抽象、HybridLocator、TieredVisionLocator
 全都写完了，**一次真实推理都没跑过** —— 没有 key，也没有评测口径。
 
@@ -49,7 +49,7 @@
    `OpenAICompatibleProvider` 零改动对接；
 2. **同一个 key 通吃文本与视觉**，正好落在 `vision.py` 的回退链设计上：
    只配 `OHAUTO_LLM_*` 一套，B 的 NL→用例生成与 A 的视觉通道一起跑起来，
-   挑战 #1 与 #2 一次解决，不用申请两个账号；
+   视觉与生成两条链路一次覆盖，不用申请两个账号；
 3. 便宜：单图 token 上限 1024，Flash 输入空闲时段 1 元/百万 token。
    本工装全量 20 条一轮 **不到一毛钱**。
 
@@ -712,7 +712,7 @@ def page_intent(provider: OpenAICompatibleProvider, image: str,
                 screen: Tuple[int, int]) -> Dict[str, Any]:
     """让模型输出**页面意图 / 核心操作入口 / 潜在测试路径**。
 
-    这是命题挑战目标第一条的后半句：「识别页面意图、核心操作入口、潜在测试路径」。
+    这是设计目标的后半句：「识别页面意图、核心操作入口、潜在测试路径」。
     前半句「理解截图和布局结构」已由 bbox 定位落地（见本工装主流程），
     但后半句是**另一个问题** —— 不是「某某控件在哪」，而是「这个页面上
     值得测什么、从哪进去」。两者的答案结构不同，所以用独立的提问。
@@ -968,7 +968,7 @@ def write_report(rep: Report, summ: Dict[str, Any], out_dir: str,
     js = os.path.join(out_dir, 'vision_eval.json')
 
     L: List[str] = []
-    L.append('# 视觉通道离线评测报告（多模态 a24）\n')
+    L.append('# 视觉通道离线评测报告（多模态）\n')
     L.append(f'> Provider: `{rep.provider}` ｜ 样本目录: `{samples_dir}`\n')
     L.append(f'> 评测项 {summ["overall"].get("n", 0)} 条'
              f'（歧义剔除 {rep.ambiguous} 条）\n')
@@ -1116,7 +1116,7 @@ def write_report(rep: Report, summ: Dict[str, Any], out_dir: str,
              '（实测对「蓝牙」判定为 `False`）。\n')
     L.append('建议修法：线索里补 `\'deep\': n.text_deep`，匹配键列表加上 `deep`；'
              '`HybridLocator` 的 blob 追加 `n.text_deep`。'
-             '**这是 A 的模块（任务卡 A1/A2/A4），本工装只报不改。**\n')
+             '**这是视觉模块，本工装只报不改。**\n')
     L.append('## 五、清洗与盲区清单\n')
     if skipped:
         L.append('评测集构建时被剔除/合并的项：\n')
@@ -1579,7 +1579,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                          '用于诊断定位失败是「模型没认出」还是「画面里没有」')
     ap.add_argument('--page-intent', metavar='SAMPLE', default='',
                     help='让模型输出该页面的意图、核心操作入口、潜在测试路径'
-                         '（对应命题挑战目标第一条的后半句）')
+                         '（对应设计目标的后半句）')
     ap.add_argument('--no-thinking', action='store_true',
                     help='关掉模型思考模式（\u4ec5 openai 生效）。DeepSeek 默认'
                          '开着思考，定位任务不需要，关掉省时间省钱且让 '

@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""挑战 #2 真实评测 —— 自然语言 → 可执行用例，**用真模型跑**，给真实可执行率。
+"""自然语言用例生成真实评测 —— 描述 → 可执行用例，**用真模型跑**，给真实可执行率。
 
 ## 这个工具解决什么问题
 
-在此之前，挑战 #2 只有 `ScriptedProvider`（剧本）的链路验证 —— 那证明的是
+在此之前，这条链路此前只有 `ScriptedProvider`（剧本）的链路验证 —— 那证明的是
 「管线与校验/修复逻辑正确」，**不是模型能力指标**。本工具把口径补上：
 
     可执行率 = （生成出来、且通过静态校验的用例数）/（总描述数）
 
-并且按 `RejectReason` 给出**不可执行的原因分类**（任务卡明确要求）。
+并且按 `RejectReason` 给出**不可执行的原因分类**（设计要求）。
 
 ## 三层口径（别混）
 
@@ -328,7 +328,7 @@ def render(report: Any, *, base_url: str, model: str, bundle: str,
            extra: Dict[str, Any]) -> str:
     L: List[str] = []
     A = L.append
-    A('# 挑战 #2 真实评测 —— 自然语言 → 可执行用例\n')
+    A('# 自然语言用例生成真实评测 —— 描述 → 可执行用例\n')
     A(f'- 被测应用：`{bundle}`')
     A(f'- 模型：`{model}` @ `{base_url}`（**key 不落盘**）')
     A(f'- 描述数：**{n_desc}**（其中 {neg} 条为**故意混入的负样本**，见文末）')
@@ -346,7 +346,7 @@ def render(report: Any, *, base_url: str, model: str, bundle: str,
     A(f'| ★ 其中**真引用了控件/断言** | **{len(effective)}**（'
       f'占比 {len(effective) / report.executable * 100:.1f}% of 可执行） |'
       if report.executable else '| ★ 真引用了控件/断言 | — |')
-    A(f'| 任务卡 KPI（≥80%） | {"✅ 达标" if report.ok() else "❌ 未达标"} |')
+    A(f'| 验收线（≥80%） | {"✅ 达标" if report.ok() else "❌ 未达标"} |')
 
     if report.executable and len(effective) < report.executable:
         A('\n### ⚠️ 空壳用例（**可执行 ≠ 做了事**）\n')
@@ -427,7 +427,7 @@ def render(report: Any, *, base_url: str, model: str, bundle: str,
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description='挑战 #2 真实评测：NL → 可执行用例')
+    ap = argparse.ArgumentParser(description='自然语言用例生成真实评测：NL → 可执行用例')
     ap.add_argument('--target', default=DEFAULT_TARGET)
     ap.add_argument('--bundle', default=DEFAULT_BUNDLE)
     ap.add_argument('--ability', default=DEFAULT_ABILITY)

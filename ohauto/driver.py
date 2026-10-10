@@ -68,7 +68,7 @@ class Step:
     shot_skipped: bool = False
     layout_json: Optional[str] = None
     node_path: Optional[str] = None
-    #: 可定位规格（id/text/text_deep/type）—— 挑战 #6 用例沉淀的原料。
+    #: 可定位规格（id/text/text_deep/type）—— 用例沉淀的原料。
     #: 只记客观属性、**绝不记坐标**（红线）；留痕只有 node_path(type+id) 时，
     #: 真机 id 覆盖率仅 5.62%，沉淀出的用例会退化成按 type 歧义匹配。
     node_spec: Optional[Dict[str, Any]] = None
@@ -198,7 +198,7 @@ class Driver:
 
     @staticmethod
     def _fill_node_spec(step: Step, node: LayoutNode) -> None:
-        """留痕附带可定位规格 —— 挑战 #6 沉淀用例的原料。
+        """留痕附带可定位规格 —— 用例沉淀的原料。
 
         只记「重放时能重新匹配到」的客观属性：
           id 最稳（但真机覆盖率仅 5.62%）；文案次之 —— 可点容器自身

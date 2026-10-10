@@ -3,7 +3,7 @@
 
 为什么需要它
 ------------
-命题原话：「至少基于一个 OpenHarmony 示例应用完成验证，**覆盖不少于 3 个页面
+验收要求：「至少基于一个 OpenHarmony 示例应用完成验证，**覆盖不少于 3 个页面
 或核心流程**」。
 
 2026-09-23 的两条事实：
@@ -18,7 +18,7 @@
 
 ⚠️ **本脚本刻意不把系统应用冒充成「示例应用」**。
 它产出的是「多页面结构证据」，用途是补强「页面覆盖」这一维；
-在报告里必须如实注明样本来源，命题的「示例应用」要求仍以
+在报告里必须如实注明样本来源，「示例应用」的要求仍以
 `ohos.samples.*` + 核心流程那条为准。
 
 判定依据是什么（关键）
@@ -467,9 +467,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         'pages': [p.__dict__ for p in pages],
         'distinct_sigs': len(seen_sigs),
         'meets_3_pages': len(pages) >= 3,
-        'caveat': ('本样本是**系统应用**，不是命题要求的「OpenHarmony 示例应用」。'
+        'caveat': ('本样本是**系统应用**，不是「OpenHarmony 示例应用」。'
                    '用途是补强「页面覆盖」这一维的结构证据；'
-                   '命题的示例应用要求以 ohos.samples.* + 核心流程为准。'),
+                   '示例应用要求以 ohos.samples.* + 核心流程为准。'),
     }
     rp = os.path.join(out_dir, 'page_evidence.json')
     with open(rp, 'w', encoding='utf-8') as f:

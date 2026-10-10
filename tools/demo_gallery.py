@@ -19,7 +19,7 @@ OpenHarmony 开源版不含 screenrecorder 系统应用。因此演示材料采�
 28 个可交互控件，**但 id 数为 0** —— 只靠控件树，这些控件无法被稳定定位，
 必须靠视觉和文案通道补上。这个数字是真实采集的，不是渲染出来的。
 
-产物是**单文件 HTML**（截图 base64 内嵌，无外链），可直接转发给评委。
+产物是**单文件 HTML**（截图 base64 内嵌，无外链），可直接转发。
 
 用法::
 
@@ -211,7 +211,7 @@ def main() -> int:
 
     out_html = build(samples)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
-    with open(args.out, 'w', encoding='utf-8') as f:
+    with open(args.out, 'w', encoding='utf-8', newline='\n') as f:
         f.write(out_html)
     size = os.path.getsize(args.out) / 1024.0
     print('\n样本 %d 个 → %s（%.0f KB，自包含）' % (len(samples), args.out, size))

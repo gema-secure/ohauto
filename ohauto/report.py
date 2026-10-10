@@ -122,7 +122,7 @@ def to_markdown(data: Dict[str, Any], path: str,
     for _line in _perf_lines(_pick_curve(data)):
         L.append(_line)
 
-    # ---- 失败步归因（挑战 #5 闭环，2026-09-23）
+    # ---- 失败步归因（闭环）
     # 数据来自 case.steps[].verdict（runner 在失败分支上挂的 diagnose 结论）。
     # 为什么单列一节而不是塞进步骤表：归因的价值在**证据**与**建议**，
     # 表格里一行放不下；而且「没做归因」与「归因为空」必须看得出区别 ——
@@ -358,7 +358,7 @@ def to_html(data: Dict[str, Any], path: str) -> str:
         verdict = (f'<h2>用例判定</h2><p><span class="pill {"" if ok else "bad"}">'
                    f'{"通过" if ok else "未通过"}</span> '
                    f'通过 {case.get("passed", 0)} / 共 {case.get("total", 0)} 步</p>')
-        # ---- 失败步归因（挑战 #5 闭环，2026-09-23）—— 证据与建议都要看得见
+        # ---- 失败步归因（闭环）—— 证据与建议都要看得见
         _diag = [st for st in (case.get('steps') or [])
                  if isinstance(st, dict) and st.get('verdict')]
         if _diag:

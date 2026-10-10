@@ -140,7 +140,7 @@ class TestAcceptance10Ids(unittest.TestCase):
     人为改 10 个控件 id，不人工干预自动恢复，成功率 ≥ 80%。
 
     与 TestAcceptance5Ids 的关系：机制完全相同，只是舞台从 5 个控件
-    扩到 10 个（多 5 种控件类型）。原 5-id 验收原样保留（对应任务卡原文）。
+    扩到 10 个（多 5 种控件类型）。原 5-id 验收原样保留（对应验收原文）。
     """
 
     def test_ten_renamed_ids_auto_recover(self):

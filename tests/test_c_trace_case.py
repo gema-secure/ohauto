@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""挑战 #6 沉淀链路的钉子：driver 留痕带 node_spec + 沉淀规则 + 红线。
+"""用例沉淀链路的钉子：driver 留痕带 node_spec + 沉淀规则 + 红线。
 
 这里钉的是三件事（都是 09-25 剖析出的真卡点）：
   1. Driver 留痕必须带 node_spec（id/text/text_deep）—— 否则沉淀只能退化成 type 歧义；
@@ -30,7 +30,7 @@ def _make_driver() -> Driver:
 
 
 class TestDriverNodeSpec(unittest.TestCase):
-    """留痕必须自带可定位规格 —— 挑战 #6 的原料。"""
+    """留痕必须自带可定位规格 —— 用例沉淀的原料。"""
 
     def test_tap_records_id_spec(self):
         d = _make_driver()

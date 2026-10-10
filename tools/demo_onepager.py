@@ -25,11 +25,11 @@ ROOT = os.path.dirname(HERE)
 #: 同 demo_gallery：产物落仓库内的 docs/demo/，随仓库提交
 OUT = os.path.join(ROOT, 'docs', 'demo', 'onepager.html')
 
-#: 关键数字（与 项目内部指标档案（仓库外） 同步，10-08 复核）
+#: 关键数字（与 README 同步，10-10 复核）
 #: 每个数字须与 README 及项目指标档案保持一致；修改时同步更新。
 KPI = [
-    ('1384', '单元测试 OK'),
-    ('91%', '覆盖率'),
+    ('1529', '单元测试 OK'),
+    ('89%', '覆盖率'),
     ('95.0%', '视觉一致性'),
     ('92.3%', 'NL→用例可执行'),
     ('220 轮', '长稳 0 失败'),
@@ -163,7 +163,7 @@ def main() -> int:
     ap.add_argument('-o', '--out', default=OUT)
     args = ap.parse_args()
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
-    with open(args.out, 'w', encoding='utf-8') as f:
+    with open(args.out, 'w', encoding='utf-8', newline='\n') as f:
         f.write(build())
     print('已生成一页纸: %s（%.0f KB）'
           % (args.out, os.path.getsize(args.out) / 1024.0))

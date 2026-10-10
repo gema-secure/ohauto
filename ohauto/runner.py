@@ -519,7 +519,7 @@ class StepResult:
             d['cascade_of'] = self.cascade_of
         if self.trees:
             d['trees'] = list(self.trees)
-        # 归因结论（挑战 #5 的证据链出口）：有才输出，且**不带** None 占位 ——
+        # 归因结论（证据链出口）：有才输出，且**不带** None 占位 ——
         # 报告消费方用「有没有 verdict 键」就能区分「没做归因」与「归因为空」。
         if self.verdict is not None:
             d['verdict'] = (self.verdict.to_dict()
@@ -911,7 +911,7 @@ class Runner:
     artifact_budget:  每个用例跑完后最多保留多少个产物文件，超出按「失败优先」清理
                       0 或 None 表示不清理。50 步连续执行会产出上百个截图，
                       不限制会直接撑爆磁盘。
-    diagnose_failures: 失败步是否做归因（挑战 #5 闭环）。**默认 False**，不改变既有行为。
+    diagnose_failures: 失败步是否做归因（闭环）。**默认 False**，不改变既有行为。
                       开启后每个失败步调一次 `diagnose_failed_step`，结论写进
                       `StepResult.verdict`，并随报告落盘。
     diagnoser:        归因函数，签名 `(step_result, driver) -> Verdict`。
@@ -969,7 +969,7 @@ class Runner:
         # 反查成 locator_id —— 两边都不必知道对方的内部结构。
         self.locator_sink = locator_sink
 
-        # ---- 失败归因（挑战 #5 闭环，2026-09-23）
+        # ---- 失败归因（闭环）
         # 在此之前 `diagnose_failed_step()` 已经就绪、`StepResult.trees/locator_id`
         # 也早就备好了，但**生产链路一次都没调用过** —— 归因只能靠 examples 手动跑，
         # 所以「崩溃 ✅ / 白屏 ✅」没有证据链。这里把它接进失败分支。
@@ -1010,7 +1010,7 @@ class Runner:
         if self.verbose:
             print(f'[runner] {msg}')
 
-    # ---------------------------------------------------------- 失败归因（挑战 #5 闭环）
+    # ---------------------------------------------------------- 失败归因（闭环）
 
     def _diagnose_step(self, driver: Driver, sr: StepResult) -> Optional[Any]:
         """对一个失败步做归因，返回 `Verdict`；不做/做不了都返回 None。
@@ -1318,7 +1318,7 @@ class Runner:
                 else:
                     first_failure = i
 
-            # ---- 失败归因（挑战 #5 闭环）
+            # ---- 失败归因（闭环）
             # 放在级联判定之后：级联步也照样归因 —— 「这步为什么挂」和
             # 「它是不是被前面带崩的」是两个独立问题，报告的读者两个都要看。
             # 归因是旁路，抛异常已在 _diagnose_step 内降级，不会影响执行。

@@ -58,7 +58,7 @@ def eval_diagnose_accuracy() -> Tuple[Dict[str, Any], List[str]]:
     """跑 40 条注入样例（A6 扩容后），返回 (结果摘要, 逐条明细行)。
 
     样例来源：直接调 `test_diagnose.TestInjectedSamples20` 的
-    `_samples() + _extra_samples()` —— 那份注入集就是任务卡 B4 验收
+    `_samples() + _extra_samples()` —— 那份注入集就是归因模块验收
     （4×5）+ A6 扩容（4×5）的本体，在这里重新造一份必然漂移。
     若内部接口变了（`_extra_samples` 拿不到），退回只用原 20 条，
     并在摘要里如实注明。

@@ -164,7 +164,7 @@ def build_html(items: Sequence[BlindItem], samples_dir: str) -> str:
 
     return f'''<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
-<title>视觉盲区标注表 · 多模态 a24</title>
+<title>视觉盲区标注表 · 多模态</title>
 <style>
 :root {{ --line:#d8dbe0; --ink:#1f2328; --dim:#6b7280; --acc:#c62828; }}
 * {{ box-sizing:border-box; }}

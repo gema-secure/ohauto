@@ -1,6 +1,6 @@
 """B4 失败归因引擎的单测 —— 四分类判据 + **20 条注入样例的准确率验收**。
 
-任务卡 B4 的验收标准原文：
+本模块的验收标准原文：
     「注入四类故障各 5 例，准确率 ≥ 80%；**真崩溃必须判为「应用缺陷」**」
 
 所以这个文件里有两层：
@@ -579,12 +579,12 @@ class TestContract(unittest.TestCase):
 # ================================================================ ★ 验收：四类各 5 例
 
 class TestInjectedSamples20(_TmpCase):
-    """任务卡 B4 的验收本身：注入四类故障各 5 例，准确率 ≥ 80%。
+    """验收本身：注入四类故障各 5 例，准确率 ≥ 80%。
 
     样例全部在 `FakeHdc` 上造，**不需要真机** —— 这也是「B 不碰真机」这条
     分工约定下唯一可行的做法。
 
-    ★ A6 扩容（2026-09-27）：原 20 条**原样保留**（对应任务卡原文，动一条
+    ★ A6 扩容（2026-09-27）：原 20 条**原样保留**（对应验收原文，动一条
     对比基线就断了），另增 `_extra_samples()` 四类各 5 例——机制不变、
     表面参数变化（故障类型 / 动作形态 / 快照序列），由
     `test_accuracy_of_40_expanded_samples` 跑 4×10 = 40 条的扩容验收。
@@ -1182,7 +1182,7 @@ class TestEnvironmentCategory(unittest.TestCase):
         self.assertEqual(diagnose(rec).category, Category.APP_DEFECT)
 
     def test_four_categories_are_unchanged(self):
-        """★ 任务卡口径的「四分类」没有被新增类别稀释。"""
+        """★ 本模块口径的「四分类」没有被新增类别稀释。"""
         self.assertEqual([c.value for c in FOUR_CATEGORIES],
                          ['LOCATOR', 'TIMING', 'APP_DEFECT', 'CASE_DEFECT'])
         self.assertEqual(CATEGORY_CN[Category.ENVIRONMENT], '环境问题')

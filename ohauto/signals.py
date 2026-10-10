@@ -98,7 +98,7 @@ _TEMP_NAME_RE = re.compile(
     r'^(?P<kind>[a-z]+crash)-(?P<pid>\d+)-(?P<ts>\d{10,13})$')
 
 # hilog 里与「崩溃/冻结」相关的关键字。**这是启发式，不是实测确认的清单**
-# （任务卡第三章第五节把 freeze 的关键字列为未验证项），所以它只作为
+# （freeze 的关键字尚未实测验证），所以它只作为
 # 「中等置信度」证据参与叠加，绝不单信号硬判。
 HILOG_FILTER = (
     r'crash|SIGSEGV|SIGABRT|SIGBUS|SIGILL|SIGFPE|faultlog|faultlogger|'
@@ -107,7 +107,7 @@ HILOG_FILTER = (
     r'[Ee]xception|FATAL'
 )
 
-# 白屏判据（任务卡第五章四·白屏）：
+# 白屏判据：
 #   真机实测 720×1280 正常页面截图 70 KB – 931 KB，纯色页约 2–5 KB。
 #   换成「每像素字节数」以便适配其它分辨率：正常 0.076 – 1.01，纯色 0.0022 – 0.0054。
 _PNG_BPP_SOLID = 0.006        # ≤ 这个值：强烈怀疑纯色页
@@ -205,7 +205,7 @@ class Signals:
     layout_path: Optional[str] = None
     warnings: List[str] = field(default_factory=list)
 
-    # ---- 额外客观证据（任务卡第五章二的字段清单是「建议」，这几条是对 B4 有用的补充）
+    # ---- 额外客观证据（字段清单是「建议」，这几条是补充）
     window_start: str = ''                # 采集窗口起点（本机时间 ISO 8601）
     process_alive: Optional[bool] = None  # pidof 是否还有该进程；None = 没测到
     layout_nodes: Optional[int] = None    # 采集到的控件树节点数
@@ -586,7 +586,7 @@ def analyze_screenshot(path: str, deep: bool = True,
         dominant_rgb     占比最高的颜色
         decoded          是否做过像素级分析
 
-    两条思路（任务卡第五章四）都实现：A 是体积启发式（永远跑，零成本），
+    两条思路都实现：A 是体积启发式（永远跑，零成本），
     B 是像素直方图（`deep=True` 时跑，实测 720×1280 约 0.4 s）。
     B 只在 A 已经可疑时才需要 —— 见 is_white_screen() 的调用约定。
     """
@@ -713,7 +713,7 @@ def _window_start_epoch(since: Any, lookback_s: float,
                         offset_s: float) -> float:
     """把调用方给的窗口起点换算到**设备时钟域**。
 
-    窗口的**长度**用本机时钟度量（这是任务卡要求的：不要用设备时间做窗口判断），
+    窗口的**长度**用本机时钟度量（设计要求：不要用设备时间做窗口判断），
     只把锚点平移到设备时钟域，以便和文件时间戳比较。
     """
     now = time.time()
@@ -817,7 +817,7 @@ def list_fault_dir(hdc, device_dir: str,
     """列目录，返回 [{'name','size','mtime'}]。失败 → 空列表 + warning。
 
     降级是硬要求：`faultlogger/` 权限是 `drwxr-x--- hiview log`，非 root 设备
-    读不到（任务卡第三章第五节列为未验证项），此时必须返回空列表而不是抛异常。
+    读不到（该字段尚未实测验证），此时必须返回空列表而不是抛异常。
     """
     try:
         res = hdc.shell(f'ls -l {device_dir}', timeout=30)
@@ -1053,8 +1053,7 @@ def _collect_crashes(hdc, bundle: str, sig: Signals, out_dir: str,
                      device_now: Optional[float] = None) -> None:
     """采集 `faultlogger/` 里**窗口内 + bundle 匹配**的崩溃。
 
-    只读正式归档目录，不读 `temp/` —— 后者是写入中的文件，可能读到半截
-    （任务卡第三章一）。
+    只读正式归档目录，不读 `temp/` —— 后者是写入中的文件，可能读到半截。
 
     `device_now` 是当前设备时间（设备时钟域）。窗口只有下界是不够的：
     设备 RTC 一旦向后跳（真机上就跳回了 2017 年），跳变**之前**写的旧日志
@@ -1157,7 +1156,7 @@ def _probe_process_alive(hdc, bundle: str, sig: Signals) -> Optional[bool]:
 
 def _collect_screenshot(hdc, sig: Signals, out_dir: str,
                         deep: bool, max_pixels: int) -> None:
-    """截图并做白屏判据。失败只记 warning，不中断采集（任务卡第五章三·3）。
+    """截图并做白屏判据。失败只记 warning，不中断采集。
 
     ⚠️ **只出原始判据，不当场定案** —— 定案在 `_judge_white_screen()`（步骤 6.5），
     因为那一刻 `sig.layout_nodes` 还没采到（控件树在步骤 4），无法交叉验证。
@@ -1241,8 +1240,8 @@ def _collect_layout(hdc, sig: Signals, out_dir: str,
                     probe_rounds: int, probe_gap_s: float) -> None:
     """采控件树，判定「无窗口」；可选多轮探测「界面卡住不动」。
 
-    无窗口的判据**直接复用** `runner.DeviceGuard.has_window()`（任务卡第六章三·4
-    明确要求不要重写），本模块只在结果之上补一条节点数证据并让两者交叉印证。
+    无窗口的判据**直接复用** `runner.DeviceGuard.has_window()`，
+    明确要求不要重写；本模块只在结果之上补一条节点数证据并让两者交叉印证。
     """
     local = os.path.join(out_dir, 'layout.json')
     device_path = None
@@ -1297,7 +1296,7 @@ def _collect_layout(hdc, sig: Signals, out_dir: str,
             evidence=f'控件树仅 {nodes} 个零尺寸节点',
             source='layout', confidence=0.6))
 
-    # ---- 布局异常：可见控件越出父容器 bounds（挑战 #5 的第 5 类）
+    # ---- 布局异常：可见控件越出父容器 bounds（布局越界这一类）
     if root is not None:
         _judge_layout_anomaly(sig, root)
 
@@ -1343,7 +1342,7 @@ LAYOUT_OVERFLOW_MIN_PX = 2
 
 
 def _judge_layout_anomaly(sig: Signals, root: LayoutNode) -> None:
-    """布局异常：**可见控件越出屏幕边界**（挑战 #5 的第 5 类）。
+    """布局异常：**可见控件越出屏幕边界**（布局越界这一类）。
 
     ⚠️ 判据为什么选「越出屏幕」而不是更直觉的「越出父容器」——
     这是**真机数据**定的，不是偏好（复现：`tools/verify_layout_anomaly_real.py`
@@ -1396,8 +1395,8 @@ def _judge_layout_anomaly(sig: Signals, root: LayoutNode) -> None:
 def _collect_hilog(hdc, sig: Signals, lines: int, grep: Optional[str]) -> None:
     """取 hilog 末尾若干行，按关键词过滤后放进 `hilog_tail`。
 
-    **必须带 `-x`**：不带参数时 hilog 是阻塞读，会把整条自动化流程挂死
-    （任务卡第三章六）。`hdc.py::Hilog()` 已经用对了，这里直接调它。
+    **必须带 `-x`**：不带参数时 hilog 是阻塞读，会把整条自动化流程挂死。
+    `hdc.py::Hilog()` 已经用对了，这里直接调它。
     超时/异常一律降级为空列表 + warning。
     """
     try:
@@ -1445,7 +1444,7 @@ def _judge_no_response(hdc, sig: Signals, win_start: float,
                        device_now: Optional[float] = None) -> None:
     """无响应的多信号叠加 —— 每条信号独立成 Anomaly，各带来源与置信度。
 
-    任务卡明确要求**不要单信号硬判**。「无响应」（ANR / 卡死）本身没有
+    设计要求**不要单信号硬判**。「无响应」（ANR / 卡死）本身没有
     一个可靠的单一判据，`freeze/` 的文件名格式甚至还没实测验证过，
     所以这里只叠加证据，由 B4 去综合。
 

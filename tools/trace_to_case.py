@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""挑战 #6 用例沉淀工装：真机操作留痕 → DSL 回归用例 → 重放跑通。
+"""用例沉淀工装：真机操作留痕 → DSL 回归用例 → 重放跑通。
 
 为什么要有它
 ------------
-命题原文：「把一次探索的 graph.json 转成一份 DSL 回归用例并**跑通**」。
+验收要求：「把一次探索的 graph.json 转成一份 DSL 回归用例并**跑通**」。
 此前卡在两处（2026-09-25 剖析）：
 
   1. 留痕只存 ``node_path``(type+id)，真机 id 覆盖率仅 **5.62%** →
@@ -151,7 +151,7 @@ def steps_to_case(steps: List[Step], name: str = '') -> Dict[str, Any]:
 
 def main() -> int:
     import argparse
-    ap = argparse.ArgumentParser(description='挑战 #6：留痕 → DSL 用例 → 重放跑通')
+    ap = argparse.ArgumentParser(description='用例沉淀：留痕 → DSL 用例 → 重放跑通')
     ap.add_argument('--target', default=DEFAULT_TARGET)
     ap.add_argument('--bundle', default=DEFAULT_BUNDLE)
     ap.add_argument('--ability', default=DEFAULT_ABILITY)
@@ -161,7 +161,7 @@ def main() -> int:
 
     os.makedirs(OUT, exist_ok=True)
     print('=' * 70)
-    print('  挑战 #6 用例沉淀：采集 → 沉淀 → %s' % ('真机重放' if args.execute else '落盘'))
+    print('  用例沉淀：采集 → 沉淀 → %s' % ('真机重放' if args.execute else '落盘'))
     print('=' * 70)
 
     hdc = require_device(target=args.target)
