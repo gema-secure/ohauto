@@ -276,7 +276,7 @@ class PerfChannel:
 
     采样与分析原语单源在 `ohauto/perf.py`（L1）；本类是**面向编排的通道**：
     持有一串采样点、随时能出内存趋势曲线（验收口径：note_stability 类
-    用例产出 PSS 曲线并入报告，docs/发展规划与改进建议.md §2 2C）。
+    用例产出 PSS 曲线并入报告）。
 
     与 faultlog 采集同一条降级纪律：采样是旁路，失败记 None + 警告，
     绝不把正在跑的测试搞崩 —— `sample()` 不抛异常。

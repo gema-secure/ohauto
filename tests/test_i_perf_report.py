@@ -1,6 +1,6 @@
 """2C 内存趋势曲线**并入报告** —— 钉住 runner 采样接线与 Markdown 渲染口径。
 
-规划原文（docs/发展规划与改进建议.md §2 2C）验收句是「note_stability 类
+验收句是「note_stability 类
 用例可在真机产出内存趋势曲线**并入报告**」。采集与分析已在
 tests/test_h_perf_asserts.py 钉过；本文件钉的是**最后一公里**：
 

@@ -18,6 +18,10 @@
 | `HdcError` / `DeviceNotFound` | 设备连接异常 |
 | `Driver` | 执行驱动。`refresh()` 取控件树（合并 dump+cat 一次往返）；只读步骤自动复用树，动作步骤前置重取；`tree_dumps` / `tree_reuses` 对外计数 |
 | `DriverError` / `Step` | 驱动异常与步骤定义 |
+| `HdcLike`（`ohauto.hdc`） | 设备接口**窄契约**（15 方法 + `tmp_dir`），`Hdc` 与 `FakeHdc` 都满足；删除契约成员会让引用处类型检查失败 |
+| `InputBackend` / `InputUnavailable`（`ohauto.hdc`） | 写动作注入通路窄契约；通路不可用或某动作在该通路无法表达时响亮失败 |
+| `Hdc.detect_backend(force=, verbose=)` | 探测并切换输入通路，返回 `{'selected','interactive','probes'}`；顺序 uitest → uinput → sendevent，皆无则 `none` |
+| `Hdc.backend_name` / `Hdc.interactive` | 当前生效通路名（uitest / uinput / sendevent / none）与「能否做写操作」 |
 
 ### 控件树与定位
 
@@ -35,8 +39,9 @@
 
 | 名称 | 说明 |
 |---|---|
-| `Runner` / `run` / `run_case` / `run_suite` | 执行入口。`Runner.run_case(driver, case) -> CaseResult`；套件级 `run_suite` |
-| `CaseResult` / `StepResult` / `StepAttempt` / `SuiteResult` | 结果对象（`SuiteResult` 含 `tree_dumps` / `tree_reuses` / `tree_reuse_rate` 提效计数） |
+| `Runner` / `run` / `run_case` / `run_suite` | 执行入口。`Runner.run_case(driver, case) -> CaseResult`；套件级 `run_suite`；`Runner(collect_perf=True)` 每步采内存 / 负载 |
+| `CaseResult` / `StepResult` / `StepAttempt` / `SuiteResult` | 结果对象（`SuiteResult` 含 `tree_dumps` / `tree_reuses` / `tree_reuse_rate` 提效计数；`collect_perf` 开启时含 `perf` 内存趋势曲线） |
+| 断言原语 | `Driver.assert_checked` / `assert_enabled` / `assert_count` / `assert_memory_below`（性能断言，缺样本不判通过） |
 | `DeviceGuard` / `RetryPolicy` / `FailureKind` | 息屏保活、重试策略、失败分类 |
 | `load_case` / `dump_case` / `run_steps` / `trace_to_steps` | 用例 DSL 装载 / 导出 / 步骤执行 / 轨迹反推（`DslError` 为格式异常） |
 
@@ -66,13 +71,29 @@
 | `crossform_report.write_all(report, out_dir, stem)` | 一次性产出 JSON / Markdown / HTML 报告 |
 | `FormProfile` / `load_profiles` / `find_profile` | 设备形态档（安全区 / 挖孔 / 折叠态判定） |
 
+### 权限弹窗
+
+| 名称 | 说明 |
+|---|---|
+| `detect_permission_dialog` / `PermissionDialogVerdict` | 识别系统权限门（窗口属主 + 可见可点允许 / 禁止按钮，两条同时成立） |
+| `resolve_policy` / `POLICY_DENY` / `POLICY_ALLOW` / `POLICY_RECORD` | 策略解析与三档取值（默认 `deny`），见 §五 |
+
+### 性能与资源采样
+
+| 名称 | 说明 |
+|---|---|
+| `device_sample` / `host_sample` / `take_sample` | 单轮采样：设备 PSS / loadavg / 进程存活、宿主内存 |
+| `analyze_samples` / `PSS_SLOPE_THRESHOLD` / `MIN_PSS_SAMPLES` | 趋势分析：前后半均值涨幅判据，样本不足不判 |
+| `PerfChannel` | 面向编排的采样通道：持有一串采样点，出内存趋势曲线 |
+| `collect_signals(..., collect_perf=True)` | 采样一轮并随信号一起返回（见 §四） |
+
 ---
 
 ## 二、命令行工具（tools/）
 
 | 命令 | 用途 |
 |---|---|
-| `python -m ohauto.doctor` | 环境自检（设备在场 / SDK / 依赖） |
+| `python -m ohauto.doctor` | 环境自检（设备在场 / SDK / 依赖）；最后一关逐条列出输入通路 uitest / uinput / sendevent 的可用性 |
 | `python tools/quality_gate.py` | 一条命令全量门禁（单测 + 覆盖率 + 静态检查） |
 | `python tools/demo_full_chain.py [--real]` | 探索→生成→校验→执行→归因→自愈→沉淀 一键整链演示 |
 | `python tools/eval_kpi_offline.py` | 离线 KPI 评测（归因 / 自愈 / 探索冒烟，免设备） |
@@ -87,6 +108,7 @@
 | `python tools/export_hypium.py` / `sign_hap.py` | hypium 脚本导出与 HAP 签名 |
 | `python tools/emulator_cli.py start --skip-check` | DevEco 模拟器管理（用法见 §六） |
 | `python examples/collect_signals.py --bundle <包名> [--sim]` | 信号采集 CLI（`--sim` 无真机走通） |
+| `python examples/run_suite.py <用例...> [--perf]` | 套件执行（`--perf` 每步采内存 / 负载，趋势曲线并入报告） |
 
 ---
 
@@ -120,6 +142,10 @@ sig: Signals = collect_signals(hdc, bundle='com.ohos.note')
 # sig.anomalies: List[Anomaly]      —— 白屏 / 无窗口 / 布局异常，带置信度
 # sig.warnings:  采集过程的降级说明
 ```
+
+性能采样随信号一并返回：`collect_perf=True` 时 `sig.perf` 是 `PerfChannel`，
+持有一串采样点、可出内存趋势曲线（并入报告）。缺样本记 `None` + 警告，
+绝不编造 —— 「没采到」与「采到了且达标」必须可分。
 
 时间基准一律取**设备侧时钟**（本机时间比对会把所有崩溃误判成窗口外）；
 时钟回跳留下的旧日志自动识别剔除。信号夹具与模拟注入见

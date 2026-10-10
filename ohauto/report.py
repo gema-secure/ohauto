@@ -102,7 +102,7 @@ def to_markdown(data: Dict[str, Any], path: str,
     if backend:
         shown = f'{backend}（不可交互）' if backend == 'none' else backend
         L.append(f'| 输入通路 | {shown} |')
-    # 截图分级留存的省略必须可见（docs/截图分级留存策略.md）——
+    # 截图分级留存的省略必须可见 ——
     # 只在数据在场的旧报告上保持原样，不制造空行。
     if 'screenshots_saved' in s or 'screenshots_skipped' in s:
         L.append(f"| 截图留存 / 省略 | {s.get('screenshots_saved', 0)}"

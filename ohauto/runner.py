@@ -541,7 +541,7 @@ class CaseResult:
     #: 同一个 driver 被多条用例复用时不会把上一条的账算到下一条头上。
     tree_dumps: int = 0
     tree_reuses: int = 0
-    #: 截图账（分级留存，docs/截图分级留存策略.md）。按用例记增量，
+    #: 截图账（分级留存）。按用例记增量，
     #: 口径同 tree_dumps —— 同一 driver 被多条用例复用时不串账。
     #: skipped 必须与 saved 并列出报告：省略本身是要留痕的行为。
     screenshots_saved: int = 0
@@ -822,7 +822,7 @@ class SuiteResult:
         """
         return round(self.tree_dumps / self.total, 3) if self.total else 0.0
 
-    # ---- 截图账（分级留存，docs/截图分级留存策略.md）
+    # ---- 截图账（分级留存）
 
     @property
     def screenshots_saved(self) -> int:
@@ -998,7 +998,7 @@ class Runner:
         # **默认关**：每步多两次设备往返（pidof + hidumper），诊断链路不该背它，
         # 长稳场景才显式开。开启后每步采一轮，曲线挂 CaseResult.perf，
         # 由 SuiteResult 合并后进 Markdown 报告（验收原句「产出内存趋势曲线
-        # 并入报告」，docs/发展规划与改进建议.md §2 2C）。
+        # 并入报告」）。
         self.collect_perf = bool(collect_perf)
         # 归因自身的失败（不是被测应用的失败）。归因是**旁路**，它挂了不能影响执行，
         # 但也不能静默 —— 攒起来供报告/调用方检查。
@@ -1359,7 +1359,7 @@ class Runner:
         # suite_report.json 直接读得到，不必再回会话记录里手工数。
         res.tree_dumps = max(0, int(getattr(driver, 'tree_dumps', 0) or 0) - _dumps0)
         res.tree_reuses = max(0, int(getattr(driver, 'tree_reuses', 0) or 0) - _reuses0)
-        # 截图账同口径增量（分级留存，docs/截图分级留存策略.md）
+        # 截图账同口径增量（分级留存）
         res.screenshots_saved = max(0, int(getattr(driver, 'shots_saved', 0) or 0) - _shots0)
         res.screenshots_skipped = max(0, int(getattr(driver, 'shots_skipped', 0) or 0) - _skips0)
         # 曲线只在**真的采过**时挂上（空步骤的用例没有样本 → 保持 None，

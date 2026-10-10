@@ -1171,7 +1171,7 @@ class Explorer:
                 label = f'{node.type}:{node.label}'
                 uid = f'{sig.structural_key}::{control_key(node)}'
 
-                # 截图分级留存（docs/截图分级留存策略.md）—— 判定输入由探索器
+                # 截图分级留存 —— 判定输入由探索器
                 # 给，driver 不猜：
                 #   * 新页首达（本页还没登记过页面图）→ 必留，这是页面级证据；
                 #   * 降级命中（视觉通道伪节点）→ 必留，走了视觉通道不留图=隐瞒；

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """应用长稳遥测采样器（B15）—— CLI 壳。
 
-采样与分析原语已收编进 `ohauto/perf.py`（docs/发展规划与改进建议.md §2 2C），
+采样与分析原语已收编进 `ohauto/perf.py`，
 本文件只保留命令行入口：参数解析、采样循环、结论打印。周期采样与趋势曲线
 要在进程内消费（并入报告）时直接用 `ohauto.signals.PerfChannel`。
 

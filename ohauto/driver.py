@@ -63,7 +63,7 @@ class Step:
     ok: bool = True
     elapsed_ms: int = 0
     screenshot: Optional[str] = None
-    #: 按截图分级留存策略**有意省略**了本步截图（docs/截图分级留存策略.md）。
+    #: 按截图分级留存策略**有意省略**了本步截图。
     #: 省略必须留痕 —— 「没有图」要能区分「没拍」和「判了不必拍」。
     shot_skipped: bool = False
     layout_json: Optional[str] = None
@@ -146,7 +146,7 @@ class Driver:
         self._tree_dirty = True
         self.tree_dumps = 0        # 真取了几次树（对外可读，便于量收益）
         self.tree_reuses = 0       # 复用了几次
-        #: 截图账（分级留存策略，docs/截图分级留存策略.md）：
+        #: 截图账（分级留存策略）：
         #: saved 含 tap 前置图 / 失败补图 / 独立 screenshot() 落盘；
         #: skipped 只记「判了不必拍」的省略 —— 省略必须可见。
         self.shots_saved = 0
@@ -387,7 +387,7 @@ class Driver:
         证据不弱、还省一次 dump。页面真跳转了，第一份新鲜签名就会与基线
         不同，后续轮次与原逻辑完全一致 —— 最坏情况不比原来慢。
 
-        ★ 反向依赖声明（主责 AI 审阅裁定，见 docs/审阅意见文档）：「一次新鲜
+        ★ 反向依赖声明：「一次新鲜
         采样即可判稳」的证据强度，依赖 explorer 对页面签名/候选的**无条件
         refresh 兜底**（晚到跳转在那里被捕获，见 `_page_signatures` 文档；
         钉子：tests/test_f_wait_idle_semantics.py）。若有调用方脱离该兜底、
@@ -455,7 +455,7 @@ class Driver:
             keep_shot: Optional[bool] = None) -> LayoutNode:
         """点击：target 可为 Matcher 或 LayoutNode。
 
-        `keep_shot` —— 截图分级留存的**调用方判定输入**（docs/截图分级留存策略.md），
+        `keep_shot` —— 截图分级留存的**调用方判定输入**，
         本方法不猜：`None`（默认）按现行口径留「动作前」图；调用方确知页面已留档
         且非降级命中时传 `False` 省 2 次 hdc 往返，省略记入 `step.shot_skipped`
         与 `shots_skipped` 计数。失败路径不受它影响：本步失败且没留过图时，
@@ -771,7 +771,7 @@ class Driver:
             step.elapsed_ms = int((time.time() - t0) * 1000)
             self._record(step)
 
-    # -- 2C【C5】断言原语扩展（docs/发展规划与改进建议.md §2 2C）------------
+    # -- 2C【C5】断言原语扩展 ------------
 
     def assert_checked(self, m: Matcher, expected: bool = True,
                        timeout: Optional[int] = None) -> LayoutNode:

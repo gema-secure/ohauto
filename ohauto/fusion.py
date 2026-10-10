@@ -207,7 +207,7 @@ def source_static_project(root: str, *, page: str = '',
         return SourceResult('static', 'declaration', ok=False,
                             reason='未提供 ArkTS 工程目录（该应用可能没有源码）')
     try:
-        # static_arkts 已入包（规划 S1）：pip 安装后同样可用，
+        # static_arkts 已入包：pip 安装后同样可用，
         # 不再需要 sys.path 补丁 —— 那会把仓库的 tools/ 泄漏进 import 搜索路径。
         from .static_arkts.bridge import analyze_project, control_hints, last_error
     except ImportError as e:

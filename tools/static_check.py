@@ -481,7 +481,7 @@ def _check_import_boundary(path: str, tree) -> List[Finding]:
 #:
 #: `ohauto/__init__.py` 是对外门面（re-export 一切），不参与检查；
 #: `static_arkts` 是自包含子包，按 L1 对待。
-#: 层级表改动 = 架构决策，必须同步 docs/发展规划与改进建议.md。
+#: 层级表改动 = 架构决策，必须同步 README 的「分层架构」一节。
 LAYERS: Dict[int, Tuple[str, ...]] = {
     1: ('layout', 'identity', 'matcher', 'permission', 'treesum',
         'llm_transport', 'perf', 'report', 'static_arkts'),

@@ -258,7 +258,7 @@ class _SendeventBackend:
     在产物里看不出来）。有 `getevent` 的设备由 `_parse_axis_ranges()`
     解析轴范围后可用。
 
-    文本输入**刻意不做**：中文 / emoji 无法用 evdev 直接表达（设计稿 §4），
+    文本输入**刻意不做**：中文 / emoji 无法用 evdev 直接表达，
     调用即报 `InputUnavailable` 并给替代建议，绝不静默跳过。
     """
 
@@ -356,7 +356,7 @@ class _SendeventBackend:
 class _NullBackend:
     """三者皆无：**不可交互**档（只剩只读观测 + aa 拉起）。
 
-    任何写动作即时响亮失败 —— 「假装在跑」比报错危险得多（设计稿 §3.4）。
+    任何写动作即时响亮失败 —— 「假装在跑」比报错危险得多。
     """
 
     name = 'none'

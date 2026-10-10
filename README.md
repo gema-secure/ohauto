@@ -40,6 +40,9 @@ ohauto（OpenHarmony + Automation）是 OpenHarmony 应用 UI 自动化能力层
 - 跨形态比对：折叠展开双态与多形态差异比对，四类差异判据，输出修复回归门禁
 - 契约式多源融合：静态源码 / 控件树 / 视觉 / OCR 四源适配器，`Claim(kind,value,scope)` 契约，源不可用必须显式声明
 - 结果信号采集：崩溃、白屏、无响应、无窗口四类异常的客观证据与置信度
+- 输入通路三档降级：uitest → uinput → sendevent 逐条探测，首个可用者胜出；三者皆无时标注「不可交互」，写动作响亮失败而非静默跳过
+- 权限弹窗处理：冷启动系统权限门自动识别，按策略作答（禁止 / 允许 / 仅记录），动作留痕可查
+- 性能与资源采集：每步采 PSS 与负载，内存趋势曲线并入报告，支持断言应用 PSS 上限
 - 模拟设备：无真机执行完整链路，可接入 CI
 
 关键指标的实测值与口径：
@@ -52,6 +55,7 @@ ohauto（OpenHarmony + Automation）是 OpenHarmony 应用 UI 自动化能力层
 | 生成用例真机执行 | 用例级 23/24 与 22/24（两轮并列） | 两轮波动 1 条，根因均为断言目标落在控件树之外 |
 | 用例墙钟耗时（树复用优化后） | 降低 26%（取树 12 次 → 9 次） | 同一条 10 步用例的真机前后对比 |
 | 视觉定位时延 | p50 约 1.1 秒 | 关闭思考模式，云端模型 |
+| 备用输入通路真机核验 | uitest ✔ / uinput ✔ / sendevent ✘ | DAYU200；sendevent 因设备缺 `getevent` 读不到 evdev 轴范围而无法校准 |
 
 > 数据留痕说明：上述真机指标的采集期未随数据留存 hdc 版本记录
 > （hdc.config.json 带 BOM 时会被静默跳过、可能回退到另一个 hdc 二进制，
@@ -95,8 +99,9 @@ python -m ohauto.doctor
 python -m ohauto.doctor --bundle com.example.app    # 额外检查应用能否启动
 ```
 
-自检依次覆盖 Python、hdc、设备连接、uitest 命令行通路（该通路决定技术路线）、
-截图与控件树能力。
+自检依次覆盖 Python、hdc、设备连接、截图与控件树能力；最后一关逐条探测输入
+通路（uitest / uinput / sendevent），列出每条通路的可用性，三者皆无时标注
+「不可交互」。其中 uitest 命令行通路决定是否走主力通路。
 
 ### 3. 无真机验证
 
@@ -120,31 +125,40 @@ python examples/run_case.py examples/cases/calculator.yaml   # 执行示例用�
 ## 分层架构
 
 ```
-L4  应用层   explorer.py   自动探索 / 页面状态图 / 用例生成
-             diagnose.py   失败归因四分类（信号交叉印证）
-             generator.py  自然语言 → 用例（两阶段，多页上下文）
-             signals.py    结果信号采集（CRASH / WHITE_SCREEN / NO_RESPONSE / NO_WINDOW）
-             report.py     JSON / Markdown / HTML 报告
-L3  语义层   driver.py     Driver 门面：定位→操作→等待→断言→留痕
-             action.py     Action DSL（YAML 中间表示）
-             vision.py     多模态定位（可插拔 Provider）
-L2  定位层   layout.py     控件树 JSON 解析（字段别名宽进）
-             matcher.py    多属性匹配器（对齐 UiTest ON 语义）
-             treesum.py    控件树摘要（供模型的紧凑表示）
-L1  执行层   hdc.py        hdc 命令封装（超时 / 重试 / 文件拉取）
-L0           hdc  ←→  OpenHarmony 设备
+L4  编排层     explorer.py       自动探索 / 页面状态图 / 用例生成
+               generator.py      自然语言 → 用例（两阶段，多页上下文）
+               diagnose.py       失败归因四分类（信号交叉印证）
+               signals.py        结果信号采集（CRASH / WHITE_SCREEN / NO_RESPONSE / NO_WINDOW）+ 性能采样通道
+               runner.py         套件编排 / 重试 / 设备保活 / 内存趋势合并
+               crossform_report.py  跨形态报告
+L3  能力层     action.py         Action DSL（YAML 中间表示与执行）
+               locator.py        定位器健康账本与自愈换代，五档线索选人，视觉换通道，快照回滚
+               fusion.py         N 源契约融合，`Claim(kind,value,scope)` 契约，源不可用显式声明
+               sim.py            模拟设备，支持崩溃与 hilog 故障注入
+               crossform.py      跨形态差异比对（四类判据）
+L2  设备通道层 hdc.py            hdc 命令封装 + 三档输入通路（uitest / uinput / sendevent）
+               vision.py         多模态定位（可插拔 Provider）
+               driver.py         Driver 门面：定位→操作→等待→断言→留痕
+               devices.py        设备形态档案，数据源为 DevEco `productConfig.json`
+                                 （68 台设备 / 11 个类型），折叠屏展开为多条形态档
+               doctor.py         环境自检
+L1  基元层     layout.py         控件树 JSON 解析（字段别名宽进）
+               matcher.py        多属性匹配器（对齐 UiTest ON 语义）
+               treesum.py        控件树摘要（供模型的紧凑表示）
+               identity.py       控件身份指纹（跨页面 / 页面内两级稳定标识）
+               permission.py     系统权限弹窗识别与策略
+               llm_transport.py  LLM 传输与解析共用底座
+               perf.py           性能 / 资源采样原语
+               report.py         JSON / Markdown / HTML 报告
+L0             hdc  ←→  OpenHarmony 设备
 ```
 
-跨层专项模块：
+依赖方向由 `tools/static_check.py` 的分层闸（LAY001）机器校验：低层模块
+不得 import 高层模块，反向导入直接判定为 error。L1 基元层是纯数据结构与
+纯函数（无设备、无 I/O）。
 
-- `locator.py`：定位器健康账本与自愈换代，五档线索选人，视觉换通道，快照回滚
-- `fusion.py`：N 源契约融合，`Claim(kind,value,scope)` 契约，源不可用显式声明
-- `crossform.py` / `crossform_report.py`：跨形态差异比对与报告
-- `devices.py`：设备形态档案，数据源为 DevEco `productConfig.json`
-  （68 台设备 / 11 个类型），折叠屏展开为多条形态档，含分辨率、DPI、圆角与挖孔包围盒
-- `sim.py`：模拟设备，支持崩溃与 hilog 故障注入
-- `tools/emulator_cli.py`：模拟器命令行封装，覆盖安装、创建、启动、
-  折叠态切换、截屏与旋转，不依赖 DevEco 图形界面
+`tools/emulator_cli.py`：模拟器命令行封装，覆盖安装、创建、启动、
+折叠态切换、截屏与旋转，不依赖 DevEco 图形界面。
 
 分层的意义：L1/L2 稳定可单测，L3 的智能部分可替换，L4 随需求演进；
 更换模型、调整用例格式、新增报告模板互不影响。
@@ -188,6 +202,10 @@ ON.size_at_least(44, 44)                        # 触控热区达标
 ON.text('提交').within(ON.type('Scroll'))        # 限定在滚动容器内查找
 ON.type('ListItem').nth(2)                      # 取第 3 个
 ```
+
+断言原语除 `assert_exists` / `assert_gone` / `assert_text` 外，另有
+`assert_checked` / `assert_enabled` / `assert_count` / `assert_memory_below`
+（性能断言，缺样本不判通过）。
 
 ## 用例 DSL
 
@@ -293,7 +311,8 @@ python examples/collect_signals.py --bundle com.ohos.note         # 真机
 ## 安全策略
 
 自动探索会真实点击界面，存在风险。系统内置危险控件黑名单，
-默认拦截含删除、支付、退出登录、注销、卸载、重置等语义的控件：
+默认拦截含删除、支付、退出登录、注销、卸载、重置等语义的控件，覆盖中文、英文、
+俄文、西班牙文、阿拉伯文五种语言：
 
 ```python
 from ohauto.explorer import Explorer, SafetyPolicy
@@ -311,6 +330,24 @@ pol = SafetyPolicy(allow_dangerous=True)    # 明确知晓后果时放开
 
 被跳过的控件记录在状态图的 `skipped_controls` 字段中，供人工复核。
 
+## 权限弹窗
+
+应用冷启动常弹系统权限门（属主 `com.ohos.permissionmanager`），它盖住内容区时
+控件树返回的是弹窗的树而非页面。`Explorer` 会在把当前页当页面之前识别并按策略作答：
+
+```python
+ex = Explorer(driver, permission_policy='deny')   # 或读 OHAUTO_PERMISSION_POLICY
+```
+
+| 策略 | 行为 |
+|---|---|
+| `deny`（默认） | 点「禁止」——不在陌生设备上新增授权，但弹窗必须消掉 |
+| `allow` | 点「允许」——需要走通相机 / 通讯录这类需授权的流程时用 |
+| `record` | 只记录不动，保持「观察到」语义（收集证据时用） |
+
+识别要同时满足窗口属主是系统权限 UI 进程、且存在可见可点的允许 / 禁止按钮；
+动作记入 `explorer.permission_events`（含属主、标题、点的是哪个按钮、判据）。
+
 ## 测试
 
 ```bash
@@ -324,19 +361,19 @@ python -m unittest tests.test_core -v
 python -m unittest tests.test_integration_sim -v
 ```
 
-共 1384 项测试 / 45 个测试文件，全部不依赖真机。测试策略：每个修复对应一个
+共 1529 项测试 / 56 个测试文件，全部不依赖真机。测试策略：每个修复对应一个
 回归测试钉子，钉子只增不减；真机采集的控件树与截图作为离线夹具进入测试，
 使全部逻辑可在无设备环境复现。核心测试文件：
 
 | 文件 | 覆盖 | 项数 |
 |---|---|---:|
-| `test_core.py` | 坐标解析、控件树解析、匹配器、DSL、视觉融合、报告 | 96 |
-| `test_signals.py` | 信号采集：崩溃 / 白屏 / 无响应 / 窗口异常判据与置信度 | 104 |
+| `test_core.py` | 坐标解析、控件树解析、匹配器、DSL、视觉融合、报告 | 89 |
+| `test_signals.py` | 信号采集：崩溃 / 白屏 / 无响应 / 窗口异常判据与置信度 | 108 |
 | `test_runner.py` | 执行编排、重试、设备自愈、取树记账 | 100 |
-| `test_crossform.py` | 跨形态差异比对（四类判据 + 真机夹具回归） | 92 |
-| `test_emulator_cli.py` | 模拟器命令行封装：折叠态表、参数拼装、协议保护 | 58 |
+| `test_crossform.py` | 跨形态差异比对（四类判据 + 真机夹具回归） | 94 |
+| `test_emulator_cli.py` | 模拟器命令行封装：折叠态表、参数拼装、协议保护 | 70 |
 | `test_devices.py` | 设备形态档案：挖孔解析、多形态展开、安全区语义 | 56 |
-| `test_integration_sim.py` | 模拟设备端到端：定位→操作→断言→探索→报告 | 47 |
+| `test_integration_sim.py` | 模拟设备端到端：定位→操作→断言→探索→报告 | 62 |
 | `test_sync_device_time.py` | 设备校时 | 26 |
 | `test_hdc_pull.py` | 文件拉取的路径规范化与二进制完整性 | 11 |
 
@@ -350,12 +387,14 @@ python tools/quality_gate.py --fast     # 跳过覆盖率，本地快速自测
 | 关卡 | 内容 | 阻断条件 |
 |---|---|---|
 | 1 | 静态检查（`tools/static_check.py`，仅标准库实现） | 存在 error |
-| 2 | 单元测试（1384 项） | 任一失败 |
+| 2 | 单元测试（1529 项） | 任一失败 |
 | 3 | 覆盖率 | 低于 70% |
 | 4 | 离线端到端（`examples/offline_demo.py`） | 非零退出 |
 
-当前实测覆盖率 91%（7958 语句 / 747 未覆盖，核心包 `ohauto/`），
-门禁线 70%。静态检查不引入 flake8 / mypy 等外部依赖，
+当前实测覆盖率 89%（9104 语句 / 999 未覆盖，核心包 `ohauto/`），
+门禁线 70%。覆盖率口径为 `ohauto/` 包整体，含 `static_arkts` 桥接层 ——
+它经 Node 子进程调用，Python 侧不计入日常执行，故该文件覆盖率为 0。
+静态检查不引入 flake8 / mypy 等外部依赖，
 基于 `ast` 实现类型注解、命名规范与危险模式检查，符合「仅标准库」的依赖约束。
 
 ## 连接新设备的第一个步骤
@@ -378,7 +417,8 @@ python examples/dump_tree.py --bundle <包名>
 |---|---|
 | `uiInput` 基于坐标 | 坐标随折叠、旋转、滚动变化，每次操作前必须重新获取控件树，系统已按此实现 |
 | 控件树盲区 | Canvas 绘制、纯图标按钮在控件树中可能没有信息，需视觉通道补位 |
-| 设备差异 | 不同 OpenHarmony 版本的 `uitest` 命令支持程度不同，`python -m ohauto.doctor` 可检出 |
+| 设备差异 | 不同 OpenHarmony 版本的 `uitest` 命令支持程度不同；无 uitest 时自动降级到 uinput / sendevent，`python -m ohauto.doctor` 逐条列出可用性 |
+| sendevent 校准 | sendevent 需设备有 `getevent` 读 evdev 轴范围，缺失时该通路判不可用（不影响 uitest / uinput） |
 | 防自动化应用 | 部分商业应用禁止截图与注入，建议以自研或开源应用为测试目标 |
 | 开发者模式 | 真机需开启开发者模式与 USB 调试并授权宿主机 |
 | 平台范围 | 当前聚焦 OpenHarmony 生态；hdc 通道已隔离在独立封装层，可扩展其他平台 |
