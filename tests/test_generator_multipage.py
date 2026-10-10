@@ -158,7 +158,7 @@ if __name__ == '__main__':
 class TestValidationUsesEveryCollectedPage(unittest.TestCase):
     """校验的控件池要取**并集** —— 否则多页上下文会把 L2 打成 0/3。
 
-    实测（10-08 第一轮多页）：模型开始正确引用第二页的控件
+    实测（第一轮多页）：模型开始正确引用第二页的控件
     （`tv_second_title` / `input_second`），而只对照入口页的校验器把它们一律判成
     CONTROL_MISSING → 可执行率 2/3 → **0/3**。信息给对了，判据却还在按单页判。
     """

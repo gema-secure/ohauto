@@ -240,7 +240,7 @@ class ExecutionRecord:
         挑「独立失败」而不是「第一个失败」：级联失败（cascade=True）是前面某步
         带崩的，拿它做归因只会得到重复结论 —— 归因要打在病灶上。
 
-        ★ 2026-09-23 修（集成时抓到的缺陷）：
+        ★ 修（集成时抓到的缺陷）：
         **必须继承失败步的快照**，否则走这条路的归因永远「没有快照」，
         定位失败只能给 0.6（置信度阶梯的最低档）。
 
@@ -424,7 +424,7 @@ def _usability(node: LayoutNode, root: Optional[LayoutNode] = None
                ) -> Tuple[str, str]:
     """控件「在树里但点不动」的判据。返回 (`USABLE`/`SUSPECT`/`BLOCKED`, 原因)。
 
-    ★ zIndex / opacity 的语义方向（复核，2026-09-23 修）：
+    ★ zIndex / opacity 的语义方向（复核，修）：
 
     原来写的是「`zIndex > 0` → 被上层覆盖」——**方向是反的**。
     zIndex 越大表示这个控件**在上层**，它恰恰说明控件没被盖住。
@@ -525,7 +525,7 @@ def _page_expectation(rec: ExecutionRecord,
                       trees: Sequence[Optional[LayoutNode]]) -> str:
     """落点是否在用例声明的期望页面上：'match' / 'mismatch' / 'unknown'。
 
-    ★ 2026-09-22 真机缺陷修正（C 在 DAYU200 上抓到）：
+    ★ 真机缺陷修正（C 在 DAYU200 上抓到）：
     **没有可用快照时必须返回 'unknown'，不能返回 'mismatch'。**
 
     原实现是「for 遍历所有快照，没命中就 return 'mismatch'」——
@@ -548,7 +548,7 @@ def _page_expectation(rec: ExecutionRecord,
     if not usable:
         return 'unknown'          # ← 一行之差：核不了落点，就别假装核过了
     want = rec.expected_page
-    # ★ `ability` 两边填得不一致时不能就此判「落点不符」（2026-09-23 发现）：
+    # ★ `ability` 两边填得不一致时不能就此判「落点不符」（发现）：
     #   页面签名里带了 ability，而记录侧默认 `EntryAbility`、签名侧可能是空串
     #   （`build_page_signature` 的默认值就是 ''）。这种「一边填一边空」的
     #   不一致会把**定位失败**推成**用例缺陷** —— 又是方向错。
@@ -883,7 +883,7 @@ _ENV_PATTERNS = (
 def _environment(rec: ExecutionRecord) -> Tuple[float, List[str]]:
     """设备掉线 / hdc 断链 / 应用拉不起来 → **环境问题**（非归因结论）。
 
-    复核发现的缺陷（2026-09-23 补）：没有这一类时，上面几种失败全部落到
+    复核发现的缺陷：没有这一类时，上面几种失败全部落到
     `UNKNOWN @ 0.00`，还被建议「请补做结果信号采集」——
     **设备都没连上，采不到任何东西**。归因的价值一半在结论、
     一半在「把结论交给对的人」；环境问题该去重跑，不该去应用开发者那里。
@@ -967,7 +967,7 @@ def load_snapshots(artifact_dir: Any, *, step_index: Optional[int] = None,
     **不能盲读** —— 所以这里逐个尝试解析，只有能解析出带 bounds 的控件树才采用，
     其余静默跳过（坏文件不该让归因失败）。
 
-    ⚠️ **`step_index` 不是文件名过滤器**（09-29 按实测更正）
+    ⚠ ️ **`step_index` 不是文件名过滤器**（按实测更正）
     ---------------------------------------------------------------
     产物文件名来自 `driver._art()`：`f'{seq:04d}_{ext}'`，`seq` 是
     **全局递增的采集计数器**（截图与控件树共用一个），**一步可产生 0..N 张** ——
@@ -984,7 +984,7 @@ def load_snapshots(artifact_dir: Any, *, step_index: Optional[int] = None,
     此时离现场最近的快照才有用 —— 取最早那几张会把失败现场整个漏掉。
 
     仓库侧保留 `_SNAPSHOT_EXCLUDE` 过滤（报告/用例等非快照 json 的黑名单，
-    本文件 09-22 起的既有防护，旧基线里没有——移植时保留）。
+    本文件 最初的既有防护，旧基线里没有——移植时保留）。
 
     Parameters
     ----------

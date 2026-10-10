@@ -1227,7 +1227,7 @@ class TestSnapshotLoader(unittest.TestCase):
         self.assertEqual(len(load_snapshots(self.dir)), 1)
 
     def test_snapshots_are_ordered_by_four_digit_seq(self):
-        """★ 排序键 = **4 位采集序号前缀**（B 交付 09-29，C 的权威命名规则）。
+        """★ 排序键 = **4 位采集序号前缀**（采集序号命名规则）。
 
         `driver._art()` 产出 `f'{seq:04d}_{ext}'`，`seq` 是全局递增计数器。
         只有按这个序号排才是「执行顺序」；按文件名里有没有 layout 字样排是

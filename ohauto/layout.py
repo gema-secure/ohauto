@@ -10,7 +10,7 @@ L2 定位层 —— 控件树解析
 首次在真机跑通后，建议用 `LayoutNode.describe()` 核对真实结构并微调
 ATTR_ALIASES / CHILD_KEYS 即可。
 
-真机基线（2026-09-16 实测，润和 DAYU200 / OpenHarmony 5.0.3.135 / API 15 /
+真机基线（实测，润和 DAYU200 / OpenHarmony 5.0.3.135 / API 15 /
 uitest 5.0.1.2）：
   - 顶层键 `attributes` + `children`，节点共 32 种字段
   - 12 个语义**全部命中**：type / id / text / bounds / description / clickable /
@@ -216,7 +216,7 @@ class LayoutNode:
         """控件**自身及其子树**里的文案，拼成一个串。
 
         ⚠️ 这条是为真机结构加的 —— **可交互性在容器上、文案在子节点上**。
-        实测（2026-09-22，设备自带「设置」页）12 个可交互控件里：
+        实测（设备自带「设置」页）12 个可交互控件里：
 
             自身带文案           0 个
             自身无文案、子节点有  12 个   ← 100%
@@ -254,7 +254,7 @@ class LayoutNode:
         无障碍文案，id 是代码标识（如 `btn_login`、`item_bluetooth`）——
         对读日志的人和喂给视觉模型都不友好。
 
-        ⚠️ `text_deep` 必须排在 id 之前（2026-09-22 实测踩到）：
+        ⚠ ️ `text_deep` 必须排在 id 之前（实测踩到）：
         真机上可交互容器的形态是 `Flex(id='item_reset', text='')` +
         子节点 `Text('恢复出厂设置')`。若 id 优先，日志里这个危险按钮就叫
         `item_reset`，而安全策略按文案匹配「恢复出厂」也照样找不到它。

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """用例沉淀链路的钉子：driver 留痕带 node_spec + 沉淀规则 + 红线。
 
-这里钉的是三件事（都是 09-25 剖析出的真卡点）：
+这里钉的是三件事（都是剖析出的真卡点）：
   1. Driver 留痕必须带 node_spec（id/text/text_deep）—— 否则沉淀只能退化成 type 歧义；
   2. 沉淀反解：id 优先、文案兜底、解析不出给 unresolved —— **不猜 type、不猜坐标**；
   3. 红线：产物里永远不允许出现 tap_xy / 坐标。

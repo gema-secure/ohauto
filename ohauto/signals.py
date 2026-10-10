@@ -181,7 +181,7 @@ class Anomaly:
     """
 
     kind: str            # 'CRASH' / 'WHITE_SCREEN' / 'NO_RESPONSE' / 'NO_WINDOW'
-                         # / 'LAYOUT_ANOMALY'（2026-09-23 新增，见 _judge_layout_anomaly）
+                         # / 'LAYOUT_ANOMALY'（新增，见 _judge_layout_anomaly）
     evidence: str        # 客观描述，如 '进程 com.ohos.note 已不在 pidof 输出中'
     source: str          # 'faultlog' / 'hilog' / 'screenshot' / 'layout' / 'hdc'
     confidence: float = 1.0
@@ -880,7 +880,7 @@ def _read_device_file(hdc, device_path: str, local_path: str,
     （PNG 头 `\\x89PNG\\r\\n` 被写成 `\\x89PNG\\r\\r\\n`），产出**损坏但不报错**
     的文件（`hdc.pull` docstring 里的实测约束，hdc.py「坑 3」）。
 
-    2026-09-26 全项目评审发现：截图拉取一直没传这个参数 —— PNG 一旦走了
+    全项目评审发现：截图拉取一直没传这个参数 —— PNG 一旦走了
     cat 兜底，白屏判据读到的是坏文件，**看起来像「应用白屏」，实为工具损坏**。
     """
     try:
@@ -1184,7 +1184,7 @@ def _collect_screenshot(hdc, sig: Signals, out_dir: str,
 def _judge_white_screen(sig: Signals) -> None:
     """用控件树节点数**交叉验证**白屏判据，节点多就降级为「疑似」。
 
-    ★ 2026-09-23 新增（来源：外部评审 + 复核建议）。
+    ★ 新增（来源：外部评审 + 复核建议）。
 
     **缺陷原来的样子**：白屏判据是「单一颜色占比 ≥ 阈值」单一证据，
     触发后以 ≥0.95 的置信度一票否决。但同一次采集里 `layout_nodes` 就在手边 ——

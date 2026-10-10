@@ -20,7 +20,7 @@
     focusable 任一为真。`enabled` 仍然采集，但只作为行内状态展示，
     不触发保留。如需严格按字面行为，传 keep_enabled=True。
 
-真机适配（B 的设计输入，2026-09-23 @A）：
+真机适配（B 的设计输入， @A）：
     真机上可交互容器**自身文案与 id 双双为空**（app_settings 0 个 id、
     标签在子 Text 上；sample_calc 19/20 只有 id）—— 所以「按 id 认控件」
     和「按 text 认控件」单用哪一个都会废掉一边，必须**双向覆盖**，并允许
@@ -87,7 +87,7 @@ def _node_line(node: LayoutNode) -> str:
 
     借子节点文案（真机适配）：自身无 id/text/descr/hint 的可交互容器，
     追加 `deep="…"`（text_deep，截断到 40 字符）—— 否则真机上一整行
-    只剩类型和坐标，摘要器在真机上等于没有（B 2026-09-23）。
+    只剩类型和坐标，摘要器在真机上等于没有（B）。
     """
     indent = '  ' * node.depth
     flags = []
@@ -195,7 +195,7 @@ def control_catalog(page: Any, limit: int = 60,
 
     签名与 B 的最小实现完全一致（``control_catalog(page, limit=60) -> str``），
     B 侧 ``Generator(catalog_fn=ohauto.treesum.control_catalog)`` 换一行即可。
-    与最小实现的两点差异（B 的真机设计输入，2026-09-23 @A）：
+    与最小实现的两点差异（B 的真机设计输入， @A）：
 
     - **双向覆盖**：id 维度与文案维度都产出 —— sample_calc 19/20 只有 id、
       app_settings 0 个 id 且标签在子 Text 上，按单键筛必废一边；

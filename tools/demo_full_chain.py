@@ -134,7 +134,7 @@ def demo_attribution(driver, out_dir: str):
     为什么要故意失败：归因引擎的价值只有在**有失败**时才看得见。
     跑一条全绿的用例，闭环那一节永远是空的。
 
-    接线说明（2026-09-25 修复）：本演示**复用 `tools/wire_locator_sink.py`**
+    接线说明（修复）：本演示**复用 `tools/wire_locator_sink.py`**
     的接线（locator_sink 回写 + locator_id_resolver 只读反查，该模块五项
     自测全绿）。不接线的老版本会让归因结论打「没能回写定位器自愈，缺
     locator_id」—— 那不是闭环没接，是这条演示路径没复用接线，评审会误读。

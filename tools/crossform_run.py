@@ -73,7 +73,7 @@ def _emulator_target(real_serial: str) -> Optional[str]:
 
     真机与模拟器同时在线时，折叠态切换（Emulator.exe -foldedState）只作用于
     模拟器——若采集目标被自动钉到真机，两轮采集就是一模一样的树，
-    B12 会静默产出 0 差异的废报告（09-29 双设备实测场景）。
+    B12 会静默产出 0 差异的废报告（双设备实测场景）。
     解析规则：排除配置的真机串号后，优先形如 `host:port` 的 TCP 目标。
     """
     from ohauto.hdc import Hdc
@@ -206,7 +206,7 @@ def capture_online(device: str, form_state: Optional[str],
     两条通道**完全对应**（dumpLayout 文件 + hidumper RenderService）。
 
     ★ **重试与有效性校验是必须的，不是保险**。
-    实测（Mate X7 模拟器，2026-09-18）：折叠态切换后立刻 dump，
+    实测（Mate X7 模拟器）：折叠态切换后立刻 dump，
     大约每 3 次里会有 1 次拿回**只有根节点的空树** —— 桌面还没重绘完。
     不校验的话，那份空树会被当成「目标形态真有 89 个元素缺失」，
     报告里刷出 89 条高严重度假差异，而且看起来非常像真问题。

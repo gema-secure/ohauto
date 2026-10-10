@@ -25,7 +25,7 @@ ROOT = os.path.dirname(HERE)
 #: 同 demo_gallery：产物落仓库内的 docs/demo/，随仓库提交
 OUT = os.path.join(ROOT, 'docs', 'demo', 'onepager.html')
 
-#: 关键数字（与 README 同步，10-10 复核）
+#: 关键数字（与 README 同步，复核）
 #: 每个数字须与 README 及项目指标档案保持一致；修改时同步更新。
 KPI = [
     ('1529', '单元测试 OK'),

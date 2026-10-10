@@ -759,7 +759,7 @@ class TestTreeAccounting(unittest.TestCase):
 class TestFiftyStepKpi(unittest.TestCase):
     """执行引擎 验收标准：50 步连续执行**成功**率 ≥ 95%。
 
-    ⚠️ 2026-09-23 口径更正（来源：外部评审 + 复核）。
+    ⚠️ 口径更正（来源：外部评审 + 复核）。
 
     本类原来用 `independent_success_rate`（非级联失败率）当「成功率」断言，
     **名字与语义不符**：50 步里挂 45 步、其中 44 步判 cascade 时，

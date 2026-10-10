@@ -76,7 +76,7 @@ def make_locator_sink(lm, *, verbose: bool = False):
 
     target_spec: DSL 里那个原始规格字典（runner 原样递出）
     reason:      失败原因串
-    attempt:     执行尝试序号（2026-09-25 新增，runner 递增传入）——
+    attempt: 执行尝试序号（新增，runner 递增传入）——
                  透传给 `record_locator_failure(lid, reason, attempt)`，
                  作为幂等键，让执行器路径的连续失败能真正累加（自愈才有输入）。
                  调用方还没加该参数时（旧签名）自动退回两参调用，行为不变。
@@ -231,7 +231,7 @@ def _selftest() -> int:
         print('     例如让代次可由执行器显式推进，或幂等键改用「执行尝试序号」。')
         print('     （这不是本接线的问题：locator_id 已经正确送达，回写也被调用了。）')
 
-    # 2026-09-27 修：必须显式传 page。执行路径走 matcher/layout、从不调
+    # 修：必须显式传 page。执行路径走 matcher/layout、从不调
     # locate() → lm._last_root 恒 None → 不传 page 时自愈报告恒
     # 「ok=False / 没有可用的控件树」，看起来像断点，其实是工装口径。
     # 传当前页（d.refresh() 拿新鲜树）后：连续失败到阈值 → 换代真实发生。

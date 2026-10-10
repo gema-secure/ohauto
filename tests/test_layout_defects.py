@@ -1,8 +1,8 @@
 """缺陷修复验收钉子。
 
-对应 C 回执 docs/给A-缺陷回执-2026-09-22.md 与 B 的真机设计输入：
+覆盖以下几类缺陷：
 
-- C 2.2  record_locator_failure 幂等 —— locate() 落空 + 执行器回写
+- record_locator_failure 幂等 —— locate() 落空 + 执行器回写
          必须只计一次（修复前 consecutive_failures == 2）；
 - C 2.1  自愈验证失败必须真回滚 —— spec 线索逐字段相等、generation 不
          自增、consecutive_failures 不清零（修复前「报已回滚但没回滚」）；
@@ -185,7 +185,7 @@ class TestRepairRollback(unittest.TestCase):
 # ================================================================ B @A A5 清单
 
 class TestTreesumBorrowChildText(unittest.TestCase):
-    """B 2026-09-23 @A：真机上 app_settings 0 个 id（标签在子 Text 上）、
+    """B@A：真机上 app_settings 0 个 id（标签在子 Text 上）、
     sample_calc 19/20 只有 id —— 清单/摘要必须双向覆盖 + 借子节点文案。"""
 
     def test_real_app_settings_borrowed_text_present(self):

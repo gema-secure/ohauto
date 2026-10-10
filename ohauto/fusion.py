@@ -239,7 +239,7 @@ def source_static_project(root: str, *, page: str = '',
     pages = info.get('pages') or []
     for p in pages:
         claims.append(Claim('page', p, scope=p, evidence='main_pages.json'))
-    # 桌面卡片**不算应用内页面**（09-24 踩过：会被误当页面去探索）
+    # 桌面卡片**不算应用内页面**（踩过：会被误当页面去探索）
     note = '页面 %d 个；已排除桌面卡片 %d 个' % (
         len(pages), len(info.get('widget_pages') or []))
     return SourceResult('static', 'declaration', ok=True, claims=claims,
@@ -560,7 +560,7 @@ def source_vision(image_path: str, *, instruction: str = VISION_READ_TEXT,
     --------------------------------------------
     | | OCR（本地 rapidocr） | 视觉（云 VLM） |
     |---|---|---|
-    | 成本 | 0（本地算力） | 按 token（09-24 实测核对：每图上限 **1024** tokens） |
+    | 成本 | 0（本地算力） | 按 token（实测核对：每图上限 **1024** tokens） |
     | 离线 | ✅ | ❌ |
     | 能力 | **只认字** | **认字 + 理解**（图标含义、页面意图、图表） |
 

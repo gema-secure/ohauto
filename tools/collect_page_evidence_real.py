@@ -6,7 +6,7 @@
 验收要求：「至少基于一个 OpenHarmony 示例应用完成验证，**覆盖不少于 3 个页面
 或核心流程**」。
 
-2026-09-23 的两条事实：
+两条事实：
 
 1. **示例应用这条路走不通**：设备上只有 3 个 `ohos.samples.*`，
    没有一个有 ≥3 页面（`distributedmusicplayer` 整棵树只有一个
@@ -189,7 +189,7 @@ PAGE_PATH_RE = re.compile(r'pagePath=([^\s,;\]"]+)')
 def _page_path(root: LayoutNode) -> str:
     """从控件树里取 `pagePath` —— 这是**页面级身份，比标题和结构签名都硬**。
 
-    ★ 2026-09-23 真机确认：`uitest dumpLayout` 把 `pagePath` 放在节点的
+    ★ 真机确认：`uitest dumpLayout` 把 `pagePath` 放在节点的
     `attributes` 里，值是**路由路径**，形如：
 
         attributes['pagePath'] = 'pages/settingList'
@@ -267,7 +267,7 @@ def _stats(root: LayoutNode) -> Tuple[int, int, int, List[str]]:
 def _identity(node: LayoutNode) -> str:
     """取控件身份 —— **这条是踩出来的，不是设计出来的**。
 
-    ★ 真机实测（2026-09-23，`com.ohos.settings` 首页）：
+    ★ 真机实测（`com.ohos.settings` 首页）：
     **11 个可点控件，自身 id / text / descr 全部为空**（11/11 = 100%）！
 
     | 层级 | 内容 |

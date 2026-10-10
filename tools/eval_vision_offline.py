@@ -7,7 +7,7 @@
 现状是：`ohauto/vision.py` 的 Provider 抽象、HybridLocator、TieredVisionLocator
 全都写完了，**一次真实推理都没跑过** —— 没有 key，也没有评测口径。
 
-更麻烦的是「评测要等设备」这个假设是错的。2026-09-19 的真机采集里已经躺着一批
+更麻烦的是「评测要等设备」这个假设是错的真机采集里已经躺着一批
 **截图 + 控件树配对样本**（8 个应用，7 组有 png），设备在不在都能跑。
 
 ⭐ 必须说清楚的口径问题（否则报出来的「准确率」站不住）
@@ -37,7 +37,7 @@
 
     OHAUTO_VISION_BASE_URL   OHAUTO_VISION_API_KEY   OHAUTO_VISION_MODEL
 
-推荐配置（2026-09-22 核实 DeepSeek 官方文档）::
+推荐配置（核实 DeepSeek 官方文档）::
 
     export OHAUTO_VISION_BASE_URL=https://api.deepseek.com
     export OHAUTO_VISION_API_KEY=sk-...
@@ -298,7 +298,7 @@ def containment_gap(node: LayoutNode) -> Tuple[int, int]:
 
     返回 `(向上越界, 任意方向越界)`。为什么要单独看「向上」：
     列表滚动时子项跑到可视区**下方**是正常的裁剪现象，但跑到容器
-    **上方**往往意味着坐标偏移没叠加（2026-09-22 在设备自带「设置」页
+    **上方**往往意味着坐标偏移没叠加（在设备自带「设置」页
     实测到：内层 List `[42,156][678,207]` 的子项报 `[42,72][678,122]`，
     越界 84px ≈ 一个行高，且与页面标题「设置」的 `[36,72][684,156]`
     区域重叠 —— 子节点不在父节点内，是纯粹的逻辑矛盾）。
@@ -646,7 +646,7 @@ def align_rows(model_items: Sequence[Dict[str, Any]],
     逐行结果每项是 `(控件树文案, 控件树 rect, 画面文字或 None, 重合度)`。
 
     为什么不做「一对一匹配」：真机上一个文字框可能落在**多个**控件树行里
-    （容器行 + 行内控件），强行一对一反而会掩盖真相 —— 2026-09-22 第一版
+    （容器行 + 行内控件），强行一对一反而会掩盖真相 ——第一版
     用贪心一对一，结果「蓝牙」抢走了「设置」、把「应用」挤成"对不上"，
     输出的误配比真相还难读。**这里是诊断工具，不是求解器 —— 如实并列，
     让人自己看出问题更可靠。**
@@ -898,7 +898,7 @@ def find_box_reuse(results: Sequence[Result],
     每条都有框、格式合法、位置也不是乱指（往往是邻行的真实位置），
     所以单看一行的 IoU 会以为是「模型定位不准」。
 
-    实测（2026-09-22，app_settings）：
+    实测（app_settings）：
         指令「应用」        → 框 [42,465][678,549]
         指令「生物识别和密码」 → 框 [42,465][678,549]   ← 同一个框
     模型还给这个框贴了不同的 `label`，即 **bbox 与 label 自相矛盾**。
@@ -1035,7 +1035,7 @@ def write_report(rep: Report, summ: Dict[str, Any], out_dir: str,
             for ex in s.oob_examples:
                 L.append(f'  - {ex}')
         L.append('')
-        L.append('根因（2026-09-22 手工核对 `app_settings.json` 原始 JSON 确认，'
+        L.append('根因（手工核对 `app_settings.json` 原始 JSON 确认，'
                  '不是解析问题）：嵌套 `List` 的内层子项坐标**没有叠加外层偏移**。'
                  '原始 bounds 链条为\n')
         L.append('```\n'
@@ -1145,7 +1145,7 @@ def write_report(rep: Report, summ: Dict[str, Any], out_dir: str,
                      f'`{r.item.gt.to_dict()}` | `{pr}` | {r.iou:.2f} | '
                      f'{r.source} | `{raw}` |')
         L.append('')
-        L.append('**「模型原话」那一列是诊断的关键**（本工装 2026-09-22 补）：\n')
+        L.append('**「模型原话」那一列是诊断的关键**（本工装补充）：\n')
         L.append('- 原话是 `[]` → 模型**真的没找到**该目标（图里没有、'
                  '或描述与画面不符、或被遮挡）→ 改 prompt / 改指令；\n')
         L.append('- 原话里有框但结果 `None` → 候选被 '
@@ -1223,7 +1223,7 @@ class RecordingProvider(OpenAICompatibleProvider):
     为什么必须记原话：只看解析后的结果，分不清一次 MISS 的成因 ——
     是模型返回了 `[]`（真的没找到），还是给了框却被置信度阈值滤掉了，
     还是给了个错框？三者的修法完全不同，而报告里它们长得一模一样
-    （都是 `预测 bbox = None`）。2026-09-22 全量跑出 2 个 MISS 时正卡在这里。
+    （都是 `预测 bbox = None`）。全量跑出 2 个 MISS 时正卡在这里。
 
     刻意继承生产类而不是另写一套请求：必须跑真实生产路径，否则测通了也不算数。
     """
@@ -1260,7 +1260,7 @@ class NoThinkingProvider(RecordingProvider):
     这在本项目上是有害的：
 
     1. **延迟**：目标定位是「看图点一个控件」，不需要长推理链。每条请求都先输出
-       一段思维链 —— 2026-09-22 全量实测量到 p50 从 1059ms 涨到 3238ms（3.06×）；
+       一段思维链 ——全量实测量到 p50 从 1059ms 涨到 3238ms（3.06×）；
     2. **计费**：思维链 token 按**输出**计价（Flash 空闲时段 4 元/百万，
        是输入的 4 倍）；
     3. **口径失效**：思考模式下 `temperature` **不生效**（官方原文：
@@ -1306,7 +1306,7 @@ def probe(base_url: str, api_key: str, model: str, image: str = '',
 
     `progress=True` 时**边跑边打印**。这不是装饰：三关各有一条最长 `timeout`
     秒的网络等待，若把输出攒到最后才打，用户看到的是一个光标停在那里、
-    分不清「在跑」还是「卡死」—— 2026-09-22 实测就发生过一次误判。
+    分不清「在跑」还是「卡死」——实测就发生过一次误判。
 
     `instruction` 必须**是该截图里真实存在的目标**。踩过的坑：本函数曾把指令
     硬编码成 `'设置'`，而样本截图是「备忘录」—— 模型老实返回 `[]`，
@@ -1326,7 +1326,7 @@ def probe(base_url: str, api_key: str, model: str, image: str = '',
     if api_key:
         # 只露**末 4 位**，且不报长度 —— 末 4 位足够让人确认「加载的是哪把 key」，
         # 而前缀+长度+后缀拼起来的信息量没必要给出。报告可能被贴进群里/文档里，
-        # 默认按最小暴露处理（2026-09-22 用户主动问过 key 落盘问题后收紧）。
+        # 默认按最小暴露处理（用户主动问过 key 落盘问题后收紧）。
         L.append(f'- api_key: `...{api_key[-4:]}`（已掩码）')
     else:
         L.append('- api_key: **空**')
@@ -1470,7 +1470,7 @@ def probe(base_url: str, api_key: str, model: str, image: str = '',
         # 坐标系校验：这是最阴的一类失败 —— 模型答对了、格式也对，
         # 但 bbox 用的是 0~1 归一化坐标而不是像素坐标，于是每个框都缩在
         # 屏幕左上角几个像素里，IoU 全 0，表象却是「模型定位不准」。
-        # 2026-09-22 实测见过：那次体检 prompt 里给的示例是 `bbox:[0,0,1,1]`，
+        # 实测见过：那次体检 prompt 里给的示例是 `bbox:[0,0,1,1]`，
         # 模型就照抄了示例的坐标约定。**给视觉模型的示例会决定它输出的坐标系。**
         if targets and screen[0] > 100 and screen[1] > 100 \
                 and all(t.rect.right <= 2 and t.rect.bottom <= 2 for t in targets):

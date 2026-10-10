@@ -150,7 +150,7 @@ class TestUnsupportedAndErrors(unittest.TestCase):
 class TestTextContainsIsReachable(unittest.TestCase):
     """`text_contains` 必须真的出现在产物里 —— 它曾是一个**永不可达**的分支。
 
-    ★ 背景（2026-09-26 全项目评审发现）：`_on_chain()` 的循环元组写的是
+    ★ 背景（全项目评审发现）：`_on_chain()` 的循环元组写的是
     `('text', 'id', 'type', 'descr')`，**漏了 `text_contains`**。
 
     后果链很隐蔽：`_ON_FIELDS` 里有这个字段（第 93 行的未知字段检查因此放行），

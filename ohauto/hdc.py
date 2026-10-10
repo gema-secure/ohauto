@@ -645,7 +645,7 @@ class Hdc:
                 if not check and attempt >= retries:
                     # check=False：失败不抛错，但 **retries 仍要生效** ——
                     # 原实现在这里无条件 return，retries 参数形同虚设
-                    # （2026-09-26 全项目评审 #10）。重试耗尽后返回最后一次
+                    # （全项目评审 #10）。重试耗尽后返回最后一次
                     # 的结果，调用方按 rc 自行判断 —— 这才是 check=False 的本意。
                     return res
                 last_err = HdcError(f'hdc 执行失败 rc={proc.returncode}: {err.strip()[:300]}')
@@ -831,7 +831,7 @@ class Hdc:
              binary: bool = False) -> str:
         """从设备拉取文件到本地。
 
-        ★ 2026-09-19 实测踩到的两个坑，都在这里修掉：
+        ★ 实测踩到的两个坑，都在这里修掉：
 
         **坑 1：传正斜杠盘符路径会被当成相对路径。**
         `D:/foo/x.png` 会被 hdc 拼到 cwd 后面变成

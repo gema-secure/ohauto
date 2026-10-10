@@ -54,7 +54,7 @@ class TestRect(unittest.TestCase):
         self.assertEqual((r.left, r.right), (1, 3))
 
     # ------------------------------------------------------ 真机格式（回归）
-    # 2026-09-16 在润和 DAYU200 / OpenHarmony 5.0.3.135 上实测发现：
+    # 在润和 DAYU200 / OpenHarmony 5.0.3.135 上实测发现：
     # 真机 dumpLayout 的 bounds 是 "[left,top][right,bottom]"，两个方括号
     # 之间没有分隔符。旧的降级实现先删括号再 split，会把 "0,0][720,1280"
     # 变成 "0,0720,1280"，只剩 3 个数字，于是返回全 0 矩形 —— 结果是

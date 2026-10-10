@@ -536,7 +536,7 @@ class CaseResult:
     steps: List[StepResult] = field(default_factory=list)
     elapsed_ms: int = 0
     device_recoveries: int = 0
-    #: 取树账（10-08「合并往返 + 只读步骤复用」的收益必须有地方自动落账，
+    #: 取树账（「合并往返 + 只读步骤复用」的收益必须有地方自动落账，
     #: 否则每次对外报数都要回会话记录里手工数）。按用例记增量，
     #: 同一个 driver 被多条用例复用时不会把上一条的账算到下一条头上。
     tree_dumps: int = 0
@@ -596,7 +596,7 @@ class CaseResult:
         所以它**必须与 `ok` / `all_failed` / `health_ok` 一起展示**，
         禁止单独当作通过依据。
 
-        2026-09-23 由 `independent_success_rate` 改名而来 ——
+        由 `independent_success_rate` 改名而来 ——
         旧名鼓励误读（「独立成功率 0.98」在整体失败时是最危险的一句话）。
         """
         if not self.total:
@@ -797,7 +797,7 @@ class SuiteResult:
                 out[k] = out.get(k, 0) + v
         return dict(sorted(out.items(), key=lambda kv: -kv[1]))
 
-    # ---- 取树账（10-08 提效的可复现来源；进 suite_report 供趋势对比）
+    # ---- 取树账（提效的可复现来源；进 suite_report 供趋势对比）
 
     @property
     def tree_dumps(self) -> int:
@@ -818,7 +818,7 @@ class SuiteResult:
     def tree_dumps_per_step(self) -> float:
         """每步摊销真取次数（口径可比：用例步数不同也能横向比）。
 
-        参考值：`note_stability`（10 步）10-08 改前 1.2 次/步 → 改后 0.9 次/步。
+        参考值：`note_stability`（10 步） 改前 1.2 次/步 → 改后 0.9 次/步。
         """
         return round(self.tree_dumps / self.total, 3) if self.total else 0.0
 
@@ -1182,7 +1182,7 @@ class Runner:
     def _resolve_locator_id(self, sr: StepResult) -> str:
         """把「目标规格」翻成 A 的 `locator_id`，填进 `StepResult.locator_id`。
 
-        为什么需要这一步（2026-09-23 闭环接线的最后一环）：
+        为什么需要这一步（闭环接线的最后一环）：
         归因定案「定位失败」后，结论里要带上 `locator_id` —— 否则归因只能说
         「没能回写定位器自愈」（`diagnose.py:929` 就是这么写的），
         读者看不出该去修哪个定位器。

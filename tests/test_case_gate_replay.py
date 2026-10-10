@@ -1,8 +1,5 @@
 """用例级总闸与可重放的钉子测试。
 
-来源：`C交付-给B-2026-09-27/` 的 `派活-B0-空壳用例校验补闸.md` 与
-`派活-B1-explorergenerate_case不可重放.md`。
-
     B-0  generator.py::validate_case   空壳用例（只 start/waitIdle/screenshot）被放行
     B-1  explorer.py::generate_case    把边集当轨迹串 → 产物必然重放失败
 

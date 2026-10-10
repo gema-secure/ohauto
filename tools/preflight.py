@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """真机工装共用的设备预检 —— 设备不在场时「如实说」，绝不崩栈。
 
-背景（2026-09-24 复核）
+背景（复核）
 ----------------------
 `verify_core_flows_real.py` / `explore_coverage.py` / `demo_full_chain.py --real`
 在设备缺席时会以未捕获的 `json.decoder.JSONDecodeError` 崩栈：`dumpLayout`

@@ -480,7 +480,7 @@ class TestWhiteScreen(unittest.TestCase):
         纯色图**必须显式**要（`screen_style='solid'`），不能再依赖默认值 ——
         默认值已改为 `'content'`（正常内容页），见下面的回归测试。
 
-        source 是 `screenshot+layout`（2026-09-23 起）—— 判据现在会交叉验证
+        source 是 `screenshot+layout`（最初）—— 判据现在会交叉验证
         控件树节点数，且把结论落在 evidence 里。本用例显式关掉了
         `collect_layout`，所以 evidence 会注明「未能取到控件树（无法交叉验证）」。
         """
@@ -493,7 +493,7 @@ class TestWhiteScreen(unittest.TestCase):
         self.assertGreater(a.confidence, 0.0)
 
     def test_white_screen_is_downgraded_when_layout_contradicts(self):
-        """★ 白屏判据必须被控件树**交叉验证**（2026-09-23 新增）。
+        """★ 白屏判据必须被控件树**交叉验证**。
 
         单一颜色占比高 + 控件树有 20 个节点 = 矛盾信号。原实现只看前者，
         以 0.95 置信度一票否决；现在降级为「疑似」，并**把节点数写进 evidence**。
@@ -1100,7 +1100,7 @@ class TestMoreDegradation(unittest.TestCase):
     def test_screenshot_pull_failure_does_not_cat_fallback(self):
         """截图（二进制）拉取失败时**不许**用 cat 兜底 —— 宁可如实报失败。
 
-        ★ 语义变更（2026-09-26 评审）：本测试原名
+        ★ 语义变更（评审）：本测试原名
         `test_screenshot_pull_failure_falls_back_to_cat`，锁定的恰恰是缺陷行为 ——
         `hdc shell cat` 对二进制做 CRLF 转换（PNG 头被写成 \\x89PNG\\r\\r\\n），
         产出**损坏但不报错**的文件：白屏判据读到坏 PNG，看起来像「应用白屏」，

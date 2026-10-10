@@ -419,7 +419,7 @@ def export_case(case: Dict[str, Any]) -> tuple:
         f'// 来源用例: {name}',
         '// 目标: hypium / arkxtest（API 9+，@kit.TestKit；设备 API 15 实测）',
     ]
-    # ★ 不完整横幅（2026-09-22 补）
+    # ★ 不完整横幅
     # 起因：评审发现 hypium_out/note_stability.test.ets 里有 2 个 waitIdle 未导出，
     # 而「稳定性压测通过」的结论建立在这条脚本上 —— 但**文件自己不说**，
     # 报告里只看到 Pass，于是「跑通」被读成了「整条用例验证通过」。

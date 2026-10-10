@@ -30,7 +30,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 DEFAULT_TREE = '/data/local/tmp/ohauto_layout.json'
-SEGMENTS = ('device', 'host')   # cat 已合并进 device（10-08 起引擎一次往返拿树）
+SEGMENTS = ('device', 'host')   # cat 已合并进 device（最初引擎一次往返拿树）
 
 
 # ---------------------------------------------------------------- 统计（离线）
@@ -143,7 +143,7 @@ def render(summary: Dict[str, Any]) -> str:
 def measure_round(hdc: Any, tree: str, matcher: Any = None) -> Dict[str, Any]:
     """测一轮两段耗时。需要真机在线，设备预检由调用方负责。
 
-    **两段不是三段**：引擎自 10-08 起把 `dumpLayout` 与 `cat` 合并成一次往返
+    **两段不是三段**：引擎自 最初把 `dumpLayout` 与 `cat` 合并成一次往返
     （`driver.refresh` 非留痕分支，实测省约 150ms/次），**测量必须与引擎同一条路径**，
     否则量出来的是一条已经不存在的旧路径。
 

@@ -124,7 +124,7 @@ class TestShortSampleGate(unittest.TestCase):
         self.assertIsNone(ev.sample_gate(3, 0))
 
     def test_gate_stops_on_the_real_3_sample_measurement(self):
-        """★ 把 10-08 实测的「3 条」固化：它必须触发停止。"""
+        """★ 把实测的「3 条」固化：它必须触发停止。"""
         stop = ev.sample_gate(1, 20)          # 1 条正样本（实测入口页派生的就是 1）
         self.assertIsNotNone(stop)
         self.assertIn('1 条', stop)

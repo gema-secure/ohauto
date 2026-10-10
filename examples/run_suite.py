@@ -104,7 +104,7 @@ def main():
     # 在下面组装 items 时逐条取 —— 之前这里只取 loaded[0]，而 Driver 又
     # 全部用它构造：批量跑不同应用的用例时，后面的 bundle 被**静默忽略**，
     # DeviceGuard 会去 force-stop/拉起错误的应用，CaseResult.bundle 也是假账
-    # （2026-09-26 全项目评审发现）。
+    # （全项目评审发现）。
     bundle = args.bundle or loaded[0][1].get('bundle') or 'com.unknown'
     ability = args.ability or loaded[0][1].get('ability') or 'EntryAbility'
     verbose = not args.quiet
@@ -301,7 +301,7 @@ def _print_summary(suite: SuiteResult, guard, args):
           f'   ← 只衡量引擎健壮性，**不是成功率**')
     print(f'  整体健康          : {"是" if suite.health_ok else "否"}'
           f'（有失败步骤即「否」）')
-    # 这三个数各回答一个问题，**谁也代替不了谁**（2026-09-23 口径更正）。
+    # 这三个数各回答一个问题，**谁也代替不了谁**（口径更正）。
     # 原来的报告只打「独立成功率 ← 验收口径」，会在用例整体失败时
     # 仍显示一个很漂亮的比例（50 步挂 45 步 → 0.98），严重误导。
     print()
@@ -314,7 +314,7 @@ def _print_summary(suite: SuiteResult, guard, args):
           + (f'（挽救率 {rescued / attempts:.1%}）' if attempts else ''))
     print()
 
-    # 取树账（10-08 落地「合并往返 + 只读步骤复用」）—— 以前只能手工数，
+    # 取树账（落地「合并往返 + 只读步骤复用」）—— 以前只能手工数，
     # 现在跟着报告一起出来。口径：宿主侧**调用**次数，dumpLayout+cat 已合并为
     # 一次设备往返；动作步骤前仍必重取，复用只发生在跨越只读步骤时。
     if suite.tree_dumps or suite.tree_reuses:

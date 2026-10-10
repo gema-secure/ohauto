@@ -510,8 +510,8 @@ class TestCompareReport(unittest.TestCase):
         b = parse(tree(500, 500, [node('Button', 'x', 'X', (0, 0, 10, 10))]))
         rep = compare_forms((a, profile(500, 500, 'A'), 'A'),
                             (b, profile(500, 500, 'B'), 'B'))
-        # 2026-09-27 细化：本测试的意图是「元素数比例阈值不乱报警」；
-        # 安全区未实测的能力缺口告警（2026-09-27 新增）是另一回事，
+        # 细化：本测试的意图是「元素数比例阈值不乱报警」；
+        # 安全区未实测的能力缺口告警是另一回事，
         # 由 test_capability_gap_warning_* 单独钉。
         ratio_warnings = [w for w in rep.warnings if '元素数' in w]
         self.assertEqual(ratio_warnings, [])
@@ -519,7 +519,7 @@ class TestCompareReport(unittest.TestCase):
     def test_capability_gap_warning_when_safe_area_unmeasured(self):
         """★ 安全区未实测 → 不可达（挖孔）判据整个没生效，必须留痕。
 
-        2026-09-27 修（评审中危）：原来这里只有注释「必须留痕」+ pass，
+        评审中危修正：原来这里只有注释「必须留痕」+ pass，
         报告会给人「该形态没有不可达问题」的错误印象 —— 红线⑤。
         """
         a = parse(tree(500, 500, [node('Button', 'x', 'X', (0, 0, 10, 10))]))
@@ -820,7 +820,7 @@ class TestRunnerTool(unittest.TestCase):
     def test_main_offline_exit_code_nonzero_on_high_severity(self):
         # ★ 有缺失/不可达时返回非 0 —— 这样能直接接进 CI 当门禁
         #
-        # 2026-09-27 反转：原来钉 rc == 2，锁的恰是缺陷行为 ——
+        # 反转：原来钉 rc == 2，锁的恰是缺陷行为 ——
         # 2 是「设备不在场」专用（docs/API手册.md §三），CI 拿到 2 会按
         # 「跳过」处理而不是门禁红，真失败被静默放过。改钉 1（未达标）。
         import tempfile
@@ -837,7 +837,7 @@ class TestRunnerTool(unittest.TestCase):
 #   这一节是「真机给了一份数据，验证引擎能解释它」。
 #
 # 夹具是 DevEco 模拟器 Mate X7 的**系统桌面**（SCBDesktop）在
-# open / close 两态下的真实控件树（2026-09-18 采集）。
+# open / close 两态下的真实控件树（采集）。
 # 详见 tests/fixtures/crossform/README-matex7-desktop.md。
 #
 # 为什么必须有这一节：前面所有测试用的都是我自己造的树，
@@ -1001,7 +1001,7 @@ class TestRealFixture(unittest.TestCase):
     def test_no_spurious_warning_on_real_data(self):
         """真机这份数据不该触发**阈值类**告警 —— 有告警说明阈值定得不合理。
 
-        2026-09-27 注：夹具的 profile 没实测过安全区（status_bar/nav_bar
+        注：夹具的 profile 没实测过安全区（status_bar/nav_bar
         全 0），会带一条**能力缺口**告警（挖孔判据未生效）—— 那不是
         误报，是事实陈述，由 test_capability_gap_warning_* 单独钉。
         """

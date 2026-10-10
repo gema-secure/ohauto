@@ -165,7 +165,7 @@ class TestDriverOnSim(SimTestCase):
         #       ohauto_sim_<页面名>_<screen_style>.png
         # 早期没有 style 后缀，于是这里写死 'ohauto_sim_login.png' 时，
         # 断言会靠**上一次运行残留的旧文件**假通过 —— 干净环境（CI）下必红。
-        # 实测：2026-09-21 手工删掉那个残留文件后，这条立刻 FAILED。
+        # 实测：手工删掉那个残留文件后，这条立刻 FAILED。
         # 所以只按前缀匹配，下次再加 style 也不会红。
         prefix = f'ohauto_sim_{self.sim.current}_'
         in_tmp = [f for f in os.listdir(tempfile.gettempdir())

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """B15 应用长稳编排器 v2 —— 带前台核验的混合套件 2 小时连续压力。
 
-v1 的教训（09-29）：hmos.settings 是**扩展型应用（无 MainAbility）**，
+v1 的教训：hmos.settings 是**扩展型应用（无 MainAbility）**，
 `aa start -b` 的隐式拉起时灵时不灵，而 **rc 照样是 0**（shell 通道成功 ≠
 应用拉起）——v1 的重放全落在拨号盘/桌面上空转，31/31 是假绿。
 

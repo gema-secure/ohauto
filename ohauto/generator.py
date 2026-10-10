@@ -1527,7 +1527,7 @@ def _prefetch(descriptions: Sequence[str], fetch: Callable[[str], str],
     `executor_factory` 可注入 —— 单测里塞一个"同步立刻完成"的假执行器，
     就能在**不开线程**的前提下断言预取确实发生了（提交数领先于消费数）。
 
-    ★ 异常处理（复核发现的缺陷，2026-09-23）：这里**必须把异常当值传出去**，
+    ★ 异常处理（复核发现的缺陷）：这里**必须把异常当值传出去**，
     不能让它从 `fut.result()` 直接抛出去。原因是调用方的写法是
 
         for desc, reply in _prefetch(...):
@@ -1754,7 +1754,7 @@ def pick_stress_target(page: Any, *, hint_keywords: Sequence[str] = STRESS_TAP_H
       2. 优先挑语义上「点完还留在原页」的控件（刷新/更多/展开…），
          否则第二轮就会因为页面已经跳走而失败 —— 那是用例设计问题，不是应用缺陷。
 
-    ★ 身份取值的兜底链（2026-09-23 用真机样本补）：
+    ★ 身份取值的兜底链（用真机样本补）：
 
         ① id  ② 自身 text  ③ descr
         ④ **子节点文案** —— 真机上「可点击的容器」经常自己没有 id/text/descr，

@@ -191,7 +191,7 @@ bbox 使用截图像素坐标，原点在左上角。
         判定必须与 `from_env()` 的回退链**逐变量对齐**：base_url / api_key /
         model 三件套各自只要在任一前缀里取到值即可（三个前缀见类 docstring）。
 
-        ⚠️ **不要改成「任一一组三个变量配齐」**（2026-09-23 集成实测）：
+        ⚠ ️ **不要改成「任一一组三个变量配齐」**（集成实测）：
         `from_env()` 是**逐变量**回退取值 —— 这正是「DeepSeek 生成用例 +
         Qwen-VL 看图」能分开配的前提，也是 `test_vision_group_has_priority`
         依赖的行为。改成按组会让 available() 比 from_env() **更严格**：
@@ -448,7 +448,7 @@ class TieredVisionLocator:
         self.min_confidence = min_confidence
         self.verbose = verbose
         self.crop_fn = crop_fn      # Optional[Callable[[str, Rect], str]]
-        # L1 保守/激进开关（C 专文 ⑥，2026-09-23 定稿）：
+        # L1 保守/激进开关（C 专文 ⑥，定稿）：
         #   True（默认，保守版 E）—— 最紧匹配的 deep 文案须与指令完全相等
         #     才免调模型。实测 70% 免调、14/14 全对、零误命中；
         #   False（激进版 D）—— 只要取到最紧就返回。实测 100% 免调、
@@ -544,7 +544,7 @@ class TieredVisionLocator:
         self.cache_misses += 1
 
         # --- L1：静态候选（不调模型） ---
-        # C 专文 ⑥（2026-09-23 定稿）：补 deep 之后容器也会命中（deep 拼接
+        # C 专文 ⑥：补 deep 之后容器也会命中（deep 拼接
         # 了子项文案），「必须唯一命中」在真机上基本永不成立 —— 实测补了
         # 文案但保留唯一判定，免调模型率仍是 10%。改为取**最紧匹配**：
         # 容器的 rect 一定比它吞掉的行大，面积最小的那个就是真正的目标行。

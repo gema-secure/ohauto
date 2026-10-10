@@ -34,11 +34,11 @@
 设计约定（与全组对齐）：
 - 不缓存坐标（红线第 5 条）：L5 的兜底坐标只是 spec 里的一次性记录，
   每次定位都基于**当次**传入的新鲜控件树；
-- 失败自动记账（幂等口径，2026-09-23 定稿 / 2026-09-27 A-0 修正）：
+- 失败自动记账（幂等口径，定稿 / A-0 修正）：
   locate 全链路落空时内部也会 record_locator_failure，执行器按契约
   回写是第二重保险。去重键 = **(来源, 代次, locator_id)** ——
   内部 locate 路径用 `_locate_seq`，执行器回写路径用 runner 传进来的
-  `attempt`（A-0 之后新增的可选参数）。2026-09-23 那版只认 `_locate_seq`，
+  `attempt`（A-0 之后新增的可选参数）。那版只认 `_locate_seq`，
   而执行器**从不调 locate()**，代次恒为 0 → 回写被全量误判成重复记账 →
   连续失败停在 1 → 自愈在生产链路上永不触发（归因链路断点）。
   调用方签名不变（新参数可选、有缺省），A3 阈值不会被翻倍触发；
@@ -212,7 +212,7 @@ class LocatorManager:
     def _health_of(self, locator_id: str) -> LocatorHealth:
         """`_health` 的唯一访问器 —— 缺失就地补建，杜绝裸索引。
 
-        为什么要有它（A-2，C 2026-09-26 高危）：`self._health[lid]` 这种
+        为什么要有它（A-2，C 高危）：`self._health[lid]` 这种
         裸索引只要有一处漏补账本，就会在运行时炸成 KeyError
         （`_resolve_spec` 当初就只补了 `_specs` 没补 `_health`，
         于是「传未注册 spec 进 locate()」第一行必崩）。收敛到这一个
@@ -442,7 +442,7 @@ class LocatorManager:
                       page_signature: str) -> LocatorSpec:
         """按 target 找到（或注册）对应的 LocatorSpec。
 
-        A-2（C 2026-09-26 高危）：`locate(target, ...)` 的 `target` 是
+        A-2（C 高危）：`locate(target, ...)` 的 `target` 是
         `Any`，且显式支持传 `LocatorSpec` —— 这是**受支持的输入形态**，
         不是误用。修复前这条旁路只 `setdefault` 了 `_specs`，没补
         `_health`，于是 locate() 第一行的账本索引直接 KeyError。
@@ -597,7 +597,7 @@ class LocatorManager:
         Parameters
         ----------
         attempt:
-            **可选**（A-0，C 2026-09-25 P0）。执行器侧的执行尝试序号，
+            **可选**（A-0，C P0）。执行器侧的执行尝试序号，
             由 runner 维护、单调递增，每次回写自带一个新值。
             不传（内部 locate 路径以及旧式两参调用）时行为与修复前
             **完全一致**，用 `_locate_seq` 当代次 —— 契约签名向后兼容，

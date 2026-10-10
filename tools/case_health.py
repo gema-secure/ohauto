@@ -85,7 +85,7 @@ def check(case_path: str, sample: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
     这里刻意不用 `fusion.fuse()` 的完整报告：批量场景只要「缺了几个、缺哪些」，
     自己算比解析报告更直接。**但声明怎么提取，必须和融合器用同一份实现** ——
-    否则两条路的"声明"口径会分叉（这个坑 09-24 踩过：重写 trifusion 时
+    否则两条路的"声明"口径会分叉（这个坑 踩过：重写 trifusion 时
     把 case_health 的旧导入打断了）。
     """
     src = fusion.source_case(case_path)

@@ -143,7 +143,7 @@ def build_stages(include_coverage: bool = True) -> List[Stage]:
     # 导出产物（.ets）的 ArkTS/hypium 规则检查。
     # 为什么要单独一关：CI 里**没法编译 ArkTS**（要拉 4 GB SDK，太重），
     # 而 export_hypium.py 的历史 bug 清一色是「Python 侧测试全绿、真机才炸」——
-    # 2026-09-21/22 两天里就出了 5 个（ON 大小写 / function 表达式 /
+    # 早先 两天里就出了 5 个（ON 大小写 / function 表达式 /
     # 漏 await / screenCap 路径）。这一关用纯文本规则把已知的 4 类钉死，
     # 零依赖、秒级。挡不住未知新坑，但能挡住已踩过的每一个。
     stages.append(Stage(

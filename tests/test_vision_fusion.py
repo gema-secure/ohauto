@@ -285,7 +285,7 @@ class TestA4Tiered(unittest.TestCase):
         self.assertEqual(t.source, 'tree')
 
     def test_l2_called_when_l1_ambiguous(self):
-        # ⚠️ 用例数据按新 L1 口径更新（2026-09-23，配合 A 的新 vision.py）。
+        # ⚠ ️ 用例数据按新 L1 口径更新（配合 A 的新 vision.py）。
         #    旧口径「静态候选必须唯一命中」→ 两候选同文案即为歧义、升级 L2。
         #    新口径「取最紧 + 最紧候选文案与指令**精确相等**才免调模型」：
         #    候选文案若与指令相等，L1 直接返回、不再升级 L2 —— 这正是免调

@@ -415,7 +415,7 @@ def compare_forms(
 
     # ---- 3) 合理性告警（不判差异，但报告里提示人看一眼）
     #
-    # ★ 能力缺口留痕（2026-09-27 修）：目标形态没量到挖孔/异形区时，
+    # ★ 能力缺口留痕：目标形态没量到挖孔/异形区时，
     # 「不可达（挖孔）」判据**整个没生效** —— 这不是「没有不可达问题」，
     # 是「没法判」。必须在报告里说出来，否则读报告的人会把
     # 「UNREACHABLE=0」当成通过。按 profile 报一次，不逐元素刷。
@@ -524,7 +524,7 @@ def _geometric_diffs(el: Element, prof: FormProfile, form_name: str,
                       'is_new_in_target': is_new,
                       'cutouts': [list(c) for c in prof.cutouts]},
         ))
-    # 2026-09-27 修（评审中危：「必须留痕」的函数体是 pass ——
+    # 评审中危修正：「必须留痕」的函数体是 pass ——
     # 红线⑤：只写注释不处置等于不存在）。挖孔数据缺失时的能力缺口
     # 改在**报告级**留痕：compare() 的告警段对 `not prof_b.has_measured_safe_area`
     # 统一告警一次（逐元素告警会把同一条能力缺口刷成几十遍，没人读）。

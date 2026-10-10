@@ -916,7 +916,7 @@ class Driver:
             'success_rate': round((total - len(failed)) / total, 4) if total else 0.0,
             'total_elapsed_ms': sum(s.elapsed_ms for s in self.steps),
             'failed_steps': [s.to_dict() for s in failed],
-            # 取树效率（10-08 落地「合并往返 + 只读步骤复用」后必须能自动量到，
+            # 取树效率（落地「合并往返 + 只读步骤复用」后必须能自动量到，
             # 之前只能靠会话记录手工数；延迟口径讨论全靠这两个数）
             'tree_dumps': self.tree_dumps,
             'tree_reuses': self.tree_reuses,

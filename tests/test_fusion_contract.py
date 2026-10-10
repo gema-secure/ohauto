@@ -251,7 +251,7 @@ class TestClaimAndWeights(unittest.TestCase):
                            base.targets[0].confidence)
 
     def test_evidence_recorded_and_deduped(self):
-        """证据要带上「谁说的」，且同一来源的同一条不重复（09-24 实测踩过）。"""
+        """证据要带上「谁说的」，且同一来源的同一条不重复（实测踩过）。"""
         rep = fusion.fuse([
             fusion.SourceResult('static', 'declaration', claims=[
                 fusion.Claim('id', 'btn', evidence='Index.ets')]),

@@ -1,7 +1,5 @@
 """验收钉子：自愈幂等代次 / within 边界 / 未注册 spec。
 
-兼容整合派活包 `C交付-给A-2026-09-27.zip`（取代 09-25、09-26 两份）：
-
 - A-0（P0）：`locator.py::_count_failure` 的幂等键只用 `_locate_seq`，
   而执行器走 matcher/layout **从不调 locate()** → 代次恒 0 → 回写全被
   当重复记账丢掉 → `consecutive_failures` 停在 1 → 自愈永不触发。
@@ -120,7 +118,7 @@ class TestA0AttemptIdempotency(unittest.TestCase):
         """旧式两参调用 + locate 内部记账的幂等口径不变。
 
         `locate()` 全链路落空会内部记一次；同一次定位里 B 再按老签名
-        回写一次，必须仍被去重（修复前是 2，这是 09-23 那条钉子）。
+        回写一次，必须仍被去重（修复前是 2，这是当时那条钉子）。
         """
         mgr = LocatorManager(failure_threshold=99)
         root = node('Root', children=[])
