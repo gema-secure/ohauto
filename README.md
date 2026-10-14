@@ -124,44 +124,59 @@ python examples/run_case.py examples/cases/calculator.yaml   # 执行示例用�
 
 ## 分层架构
 
-```
-L4  编排层     explorer.py       自动探索 / 页面状态图 / 用例生成
-               generator.py      自然语言 → 用例（两阶段，多页上下文）
-               diagnose.py       失败归因四分类（信号交叉印证）
-               signals.py        结果信号采集（CRASH / WHITE_SCREEN / NO_RESPONSE / NO_WINDOW）+ 性能采样通道
-               runner.py         套件编排 / 重试 / 设备保活 / 内存趋势合并
-               crossform_report.py  跨形态报告
-L3  能力层     action.py         Action DSL（YAML 中间表示与执行）
-               locator.py        定位器健康账本与自愈换代，五档线索选人，视觉换通道，快照回滚
-               fusion.py         N 源契约融合，`Claim(kind,value,scope)` 契约，源不可用显式声明
-               sim.py            模拟设备，支持崩溃与 hilog 故障注入
-               crossform.py      跨形态差异比对（四类判据）
-L2  设备通道层 hdc.py            hdc 命令封装 + 三档输入通路（uitest / uinput / sendevent）
-               vision.py         多模态定位（可插拔 Provider）
-               driver.py         Driver 门面：定位→操作→等待→断言→留痕
-               devices.py        设备形态档案，数据源为 DevEco `productConfig.json`
-                                 （68 台设备 / 11 个类型），折叠屏展开为多条形态档
-               doctor.py         环境自检
-L1  基元层     layout.py         控件树 JSON 解析（字段别名宽进）
-               matcher.py        多属性匹配器（对齐 UiTest ON 语义）
-               treesum.py        控件树摘要（供模型的紧凑表示）
-               identity.py       控件身份指纹（跨页面 / 页面内两级稳定标识）
-               permission.py     系统权限弹窗识别与策略
-               llm_transport.py  LLM 传输与解析共用底座
-               perf.py           性能 / 资源采样原语
-               report.py         JSON / Markdown / HTML 报告
-L0             hdc  ←→  OpenHarmony 设备
-```
+![ohauto 分层架构](docs/architecture.png)
 
-依赖方向由 `tools/static_check.py` 的分层闸（LAY001）机器校验：低层模块
-不得 import 高层模块，反向导入直接判定为 error。L1 基元层是纯数据结构与
-纯函数（无设备、无 I/O）。
+系统分六层。`ohauto/` 包内 L1–L4 的依赖方向由 `tools/static_check.py`
+的分层闸（LAY001）机器校验：低层模块不得 import 高层模块，反向导入直接
+判定为 error。L5 是包外的工装与验证资产，L0 是被测设备侧。
+
+L1–L4 合计 **25 个可校验模块**（24 个 `.py` 模块 + `static_arkts` 子包），
+清单如下（与 `static_check.LAYERS` 逐项一致）：
+
+| 层 | 模块 | 职责要点 |
+|---|---|---|
+| L5 应用与工装层（3 类） | `tools/` | 质量门禁 / 静态检查 / 离线评测 / 长稳编排（51 个脚本） |
+| | `examples/` | 冒烟 / 套件执行 / 探索 / 用例生成示例（7 个） |
+| | `tests/` | 单元与集成测试（56 个文件 / 1529 项，离线可跑） |
+| L4 编排层（6 模块） | `runner.py` | 套件编排 / 重试 / 设备保活 / 内存趋势合并 |
+| | `explorer.py` | 自动探索 / 页面状态图 / 回归用例 |
+| | `generator.py` | 自然语言 → 用例（两阶段，多页上下文） |
+| | `diagnose.py` | 失败归因四分类（信号交叉印证） |
+| | `signals.py` | 结果信号采集（CRASH / WHITE_SCREEN / NO_RESPONSE / NO_WINDOW） |
+| | `crossform_report.py` | 跨形态报告 |
+| L3 能力层（5 模块） | `action.py` | Action DSL（YAML 中间表示与执行） |
+| | `locator.py` | 定位器健康账本与自愈换代，五档线索选人，视觉换通道，快照回滚 |
+| | `fusion.py` | N 源契约融合，`Claim(kind,value,scope)` 契约，源不可用显式声明 |
+| | `crossform.py` | 跨形态差异比对（四类判据） |
+| | `sim.py` | 模拟设备，支持崩溃与 hilog 故障注入 |
+| L2 设备通道层（5 模块） | `hdc.py` | hdc 命令封装 + 三档输入通路（uitest / uinput / sendevent） |
+| | `vision.py` | 多模态定位（可插拔 Provider） |
+| | `driver.py` | Driver 门面：定位→操作→等待→断言→留痕 |
+| | `devices.py` | 设备形态档案，数据源为 DevEco `productConfig.json`（68 台 / 11 类型） |
+| | `doctor.py` | 环境自检 |
+| L1 基元层（9 模块） | `layout.py` | 控件树 JSON 解析（字段别名宽进） |
+| | `matcher.py` | 多属性匹配器（对齐 UiTest ON 语义） |
+| | `treesum.py` | 控件树摘要（供模型的紧凑表示） |
+| | `identity.py` | 控件身份指纹（跨页面 / 页面内两级稳定标识） |
+| | `permission.py` | 系统权限弹窗识别与策略 |
+| | `perf.py` | 性能 / 资源采样原语 |
+| | `report.py` | JSON / Markdown / HTML 报告 |
+| | `llm_transport.py` | LLM 传输与解析共用底座 |
+| | `static_arkts/` | 静态源码桥接子包（Node 子进程调用） |
+| L0 设备层 | — | hdc 通道 → OpenHarmony 设备（DAYU200 真机 / DevEco 模拟器实例） |
+
+L1 基元层是不带业务语义的通用底座：控件树解析、匹配器、身份指纹、报告
+序列化、LLM 传输等，各模块只依赖标准库与自身同层模块，可脱离设备单独
+单测。`ohauto/__init__.py` 是对外门面（re-export 一切），不参与分层校验；
+`static_arkts` 是自包含子包，按 L1 对待。
 
 `tools/emulator_cli.py`：模拟器命令行封装，覆盖安装、创建、启动、
 折叠态切换、截屏与旋转，不依赖 DevEco 图形界面。
 
 分层的意义：L1/L2 稳定可单测，L3 的智能部分可替换，L4 随需求演进；
 更换模型、调整用例格式、新增报告模板互不影响。
+
+图由 `tools/arch_diagram.py` 脚本生成（仅依赖 Pillow），改架构时重跑该脚本即可。
 
 关于技术路线：OpenHarmony 官方 UiTest 提供 ArkTS API 与 hdc 命令行两条通路。
 ArkTS 通路要求每个被测应用打包测试 HAP；hdc 命令行通路只需 hdc 本身，
