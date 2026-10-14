@@ -500,6 +500,11 @@ class LocatorManager:
 
         双证据打分：type_fp（跨页面同类锚点）必须有；control_key
         （不含坐标的稳定标识）或父链类型序列作第二证据，按得分取唯一最高。
+
+        真机上还有一个高频情形：容器自身既无 id 也无文案，文案全在子节点上。
+        这类兄弟的 control_key 会算出同一个值（该 key 刻意不含坐标），
+        于是打成同分、按「唯一最高分才认」的纪律落空。子树文案
+        （`spec.text_deep`）是它们的唯一区分线索，故一并计入打分。
         """
         cands = flatten(page, only_visible=True)
         if spec.type_fp:
@@ -527,6 +532,12 @@ class LocatorManager:
                 s += 0.5
             if spec.descr and n.descr == spec.descr:
                 s += 0.5
+            # 同类型且无 id、无自带文案的兄弟，只差子树文案 —— 这条线索在
+            # 自愈路径（_pick_repair_candidate 第 2 档）已经在用，且 spec 里
+            # 早已填好；不计这一项就会与控制键同分而落空。
+            if spec.text_deep and \
+                    (getattr(n, 'text_deep', '') or '').strip() == spec.text_deep:
+                s += 1.0
             return s
 
         scored = sorted(same_type, key=score, reverse=True)
