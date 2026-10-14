@@ -3,6 +3,9 @@
 
 输出：docs/architecture.png
 运行：python tools/arch_diagram.py
+
+中文渲染依赖系统的 CJK 字体：脚本按平台候选表自动定位，
+也可用环境变量 OHAUTO_DIAGRAM_FONT 指定字体文件；都找不到时报错退出。
 """
 
 from __future__ import annotations
@@ -10,8 +13,54 @@ from __future__ import annotations
 import os
 from PIL import Image, ImageDraw, ImageFont
 
-FONT_REG = "C:/Windows/Fonts/msyh.ttc"
-FONT_BOLD = "C:/Windows/Fonts/msyhbd.ttc"
+#: 中文字形候选：按平台列出常见路径，命中第一个存在的即用。
+#: 找不到时**直接报错退出**，不回落 Pillow 默认位图字体 —— 默认字体没有
+#: 中文字形，会静默画出满屏方框，比直接报错更坏。
+#: 可用环境变量 OHAUTO_DIAGRAM_FONT 显式指定字体文件。
+_FONT_ENV = 'OHAUTO_DIAGRAM_FONT'
+
+_FONT_REG_CANDIDATES = (
+    'C:/Windows/Fonts/msyh.ttc',                                  # Windows 微软雅黑
+    'C:/Windows/Fonts/msyh.ttf',
+    'C:/Windows/Fonts/simhei.ttf',                                # Windows 黑体
+    'C:/Windows/Fonts/simsun.ttc',                                # Windows 宋体
+    '/System/Library/Fonts/PingFang.ttc',                         # macOS
+    '/System/Library/Fonts/Hiragino Sans GB.ttc',
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',     # Linux
+    '/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf',
+    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+    '/usr/share/fonts/opentype/source-han-sans/SourceHanSans-Regular.otf',
+)
+
+_FONT_BOLD_CANDIDATES = (
+    'C:/Windows/Fonts/msyhbd.ttc',
+    'C:/Windows/Fonts/simhei.ttf',
+    '/System/Library/Fonts/PingFang.ttc',
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',
+    '/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc',
+    '/usr/share/fonts/opentype/source-han-sans/SourceHanSans-Bold.otf',
+)
+
+
+def _resolve_font(bold: bool) -> str:
+    """定位一个可渲染中文的字体文件。找不到就报错，不静默降级。"""
+    env = os.environ.get(_FONT_ENV)
+    if env:
+        if os.path.isfile(env):
+            return env
+        raise SystemExit(f'{_FONT_ENV} 指向的字体文件不存在：{env}')
+    for path in (_FONT_BOLD_CANDIDATES if bold else _FONT_REG_CANDIDATES):
+        if os.path.isfile(path):
+            return path
+    if bold:                       # 粗体缺席时退用常规字重：字形正确，只是不加粗
+        for path in _FONT_REG_CANDIDATES:
+            if os.path.isfile(path):
+                return path
+    raise SystemExit(
+        '找不到可渲染中文的字体。请安装任一 CJK 字体（如 Noto Sans CJK），'
+        f'或用环境变量 {_FONT_ENV} 指定字体文件路径。\n'
+        '这里不回落 Pillow 默认字体：它没有中文字形，会画出满屏方框。')
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                    "docs", "architecture.png")
@@ -139,11 +188,12 @@ def build():
     img = Image.new("RGB", (img_w * S, img_h * S), BG)
     d = ImageDraw.Draw(img)
 
-    f_title = ImageFont.truetype(FONT_BOLD, 30 * S)
-    f_code = ImageFont.truetype(FONT_BOLD, 26 * S)
-    f_lname = ImageFont.truetype(FONT_BOLD, 22 * S)
-    f_bname = ImageFont.truetype(FONT_BOLD, 21 * S)
-    f_bdesc = ImageFont.truetype(FONT_REG, 17 * S)
+    fp_bold, fp_reg = _resolve_font(True), _resolve_font(False)
+    f_title = ImageFont.truetype(fp_bold, 30 * S)
+    f_code = ImageFont.truetype(fp_bold, 26 * S)
+    f_lname = ImageFont.truetype(fp_bold, 22 * S)
+    f_bname = ImageFont.truetype(fp_bold, 21 * S)
+    f_bdesc = ImageFont.truetype(fp_reg, 17 * S)
 
     def ctext(x, y, text, font, fill, anchor="lm"):
         d.text((x * S, y * S), text, font=font, fill=fill, anchor=anchor)
