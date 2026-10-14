@@ -1375,5 +1375,45 @@ class TestDiagnoseFailedStepEntry(unittest.TestCase):
                       '要明说「这次回写不了」')
 
 
+class TestCaseResultTreesOptOut(unittest.TestCase):
+    """`from_case_result` 必须区分「没传 trees」与「显式传空」。
+
+    判据用**键是否存在**，不是真假值：`trees=[]` 是调用方「刻意不带快照」
+    （构造对照实验时常这么做），与「没传」是两回事。写成
+    `if not kw.get('trees')` 会把前者静默改写成后者 —— 记录里凭空多出失败步
+    的快照，于是「有快照 / 无快照」两档输入实际相同，置信度差恒为 0。
+    """
+
+    TREE = json.dumps({'attributes': {'type': 'root', 'id': 'root',
+                                      'bounds': '[0,0][720,1280]',
+                                      'visible': 'true'},
+                       'children': []})
+
+    class _Res:
+        def __init__(self, steps):
+            self.steps = steps
+            self.bundle = BUNDLE
+            self.name = 'case_trees_opt_out'
+
+    def _failing_res(self):
+        step = StepResult(index=0, action='tap', target='btn_submit',
+                          ok=False, kind=FailureKind.LOCATE)
+        step.trees = [self.TREE]      # StepResult.trees 存路径或控件树 JSON 文本
+        return self._Res([step])
+
+    def test_not_passing_trees_inherits_from_failed_step(self):
+        rec = ExecutionRecord.from_case_result(self._failing_res())
+        self.assertEqual(len(rec.trees), 1, '不传时应继承失败步的快照')
+
+    def test_explicit_empty_trees_is_respected(self):
+        rec = ExecutionRecord.from_case_result(self._failing_res(), trees=[])
+        self.assertEqual(rec.trees, [], '显式传空 = 刻意不带快照，不许回填')
+
+    def test_explicit_trees_passed_through(self):
+        rec = ExecutionRecord.from_case_result(self._failing_res(),
+                                               trees=[self.TREE, self.TREE])
+        self.assertEqual(len(rec.trees), 2, '显式传入的内容应原样保留')
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

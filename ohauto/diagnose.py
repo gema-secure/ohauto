@@ -249,6 +249,11 @@ class ExecutionRecord:
         **接不了路径**（路径会被解析失败变成 None）。所以这里必须**读出文件内容**
         再放进去，直接塞路径等于把「恒空」换成「恒解析失败」，那更坏。
         读不出来的（文件被清理 / 路径无效）**跳过**，不制造 None 占位。
+
+        判断一律用**键是否存在**，不用真假值：显式传 `trees=[]` 表示调用方
+        「刻意不带快照」（构造对照实验时常这么做），这和「没传」是两回事。
+        `[]` 是 falsy，写成 `if not kw.get('trees')` 会把前者静默改写成后者，
+        于是「有快照 / 无快照」两档输入实际相同，置信度差恒为 0。
         """
         steps = list(getattr(res, 'steps', []) or [])
         chosen = None
@@ -264,7 +269,7 @@ class ExecutionRecord:
         kw.setdefault('steps', steps)
         kw.setdefault('bundle', getattr(res, 'bundle', '') or '')
         kw.setdefault('case_name', getattr(res, 'name', '') or '')
-        if not kw.get('trees'):
+        if 'trees' not in kw:
             kw['trees'] = _load_step_trees(chosen)
         return cls(step=chosen, **kw)
 
