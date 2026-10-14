@@ -4,6 +4,9 @@
 `_diag_l3.py` 把落空定位到「同分候选 > 1」。本脚本进一步回答：那些同分组
 的 `text_deep` 到底是不是互不相同 —— 如果是，说明线索本来就在手上。
 
+与 `_diag_l3.py` 一致，这里的打分公式**刻意保留未计入子树文案的版本**，
+否则同分现象已被主实现消掉，就无从诊断这条线索本身。
+
     python probes/_diag_deep.py
 """
 from __future__ import annotations

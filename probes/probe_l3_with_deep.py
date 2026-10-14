@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
-"""把子树文案（text_deep）计进 L3 打分的前后对照。
+"""量化「子树文案（text_deep）计入 L3 打分」这一项值多少。
 
 背景：真机上可交互容器自身常无 id 也无文案，文案落在子节点上（`text_deep`）。
 `control_key` 刻意不含坐标，于是同类型、同尺寸的无标识兄弟会算出同一个 key，
 在 `_lv_path_type` 里打成同分，按「唯一最高分才认」的纪律一律落空。
-`text_deep` 恰好能区分它们 —— 而这条线索在自愈路径上已经在用，主打分路径没用。
 
-做法：用**子类覆盖** `_lv_path_type`，不修改仓库里的 `locator.py`，
-在同一批控件上跑前后两次，差值只来自那一项打分。
+断言「计入这一项」的收益，做法是**把这一项拿掉**再跑一遍同一批控件：
+拿掉的那一端用子类覆盖实现，不修改仓库里的 `locator.py`。
 
     python probes/probe_l3_with_deep.py
     python probes/probe_l3_with_deep.py --subset app_settings,contacts
@@ -32,8 +31,11 @@ DEFAULT_SUBSET = ('app_settings', 'contacts', 'app_note', 'app_photos',
                   'mms', 'certmanager', 'camera')
 
 
-class L3WithDeep(LocatorManager):
-    """在 `_lv_path_type` 的 score() 里补一项 text_deep 打分。"""
+class L3WithoutDeep(LocatorManager):
+    """去掉 text_deep 打分项的层级路径 —— 这一项并入主实现之前的读法。
+
+    与 `ohauto/locator.py::_lv_path_type` 的差异只有一行：不打分子树文案。
+    """
 
     def _lv_path_type(self, spec, page):
         cands = flatten(page, only_visible=True)
@@ -61,10 +63,7 @@ class L3WithDeep(LocatorManager):
                 s += 0.5
             if spec.descr and n.descr == spec.descr:
                 s += 0.5
-            # 新增：同类型无标识兄弟的唯一区分线索（数据早已在 spec 里）
-            if spec.text_deep and \
-                    (getattr(n, 'text_deep', '') or '').strip() == spec.text_deep:
-                s += DEEP_WEIGHT
+            # 这里刻意**不打分** text_deep —— 这就是被拿掉的那一项
             return s
 
         scored = sorted(same_type, key=score, reverse=True)
@@ -75,39 +74,39 @@ class L3WithDeep(LocatorManager):
 
 
 def probe(samples_dir: str, subset) -> int:
-    base, deep = LocatorManager(), L3WithDeep()
-    rows, tot = [], {'blind': 0, 'b': 0, 'd': 0, 'sub_blind': 0, 'sub_b': 0, 'sub_d': 0}
+    without, current = L3WithoutDeep(), LocatorManager()
+    rows, tot = [], {'blind': 0, 'w': 0, 'c': 0, 'sub_blind': 0, 'sub_w': 0, 'sub_c': 0}
 
     for name, page in iter_samples(samples_dir):
         blind = blind_controls(page)
-        b = d = 0
+        w = c = 0
         for node in blind:
             spec = spec_of(node)
-            b += (base._lv_path_type(spec, page)[0] is node)
-            d += (deep._lv_path_type(spec, page)[0] is node)
-        rows.append([name, len(blind), f'{b}/{len(blind)}', pct(b, len(blind)),
-                     f'{d}/{len(blind)}', pct(d, len(blind))])
+            w += (without._lv_path_type(spec, page)[0] is node)
+            c += (current._lv_path_type(spec, page)[0] is node)
+        rows.append([name, len(blind), f'{w}/{len(blind)}', pct(w, len(blind)),
+                     f'{c}/{len(blind)}', pct(c, len(blind))])
         tot['blind'] += len(blind)
-        tot['b'] += b
-        tot['d'] += d
+        tot['w'] += w
+        tot['c'] += c
         if subset and name in subset:
             tot['sub_blind'] += len(blind)
-            tot['sub_b'] += b
-            tot['sub_d'] += d
+            tot['sub_w'] += w
+            tot['sub_c'] += c
 
     print(f'样本目录：{samples_dir}')
-    print_table(['样本', '无标识', 'L3现状', '现状率', 'L3+deep', '新率'],
+    print_table(['样本', '无标识', '去掉该项', '去项率', '当前实现', '当前率'],
                 rows, aligns=['<', '>', '>', '>', '>', '>'])
-    print(f'全量：{tot["b"]}/{tot["blind"]} = {pct(tot["b"], tot["blind"])}'
-          f'  ->  {tot["d"]}/{tot["blind"]} = {pct(tot["d"], tot["blind"])}'
-          f'  （提升 {tot["d"] / tot["b"]:.1f}x）' if tot['b'] else '')
+    print(f'全量：{tot["w"]}/{tot["blind"]} = {pct(tot["w"], tot["blind"])}'
+          f'  ->  {tot["c"]}/{tot["blind"]} = {pct(tot["c"], tot["blind"])}'
+          + (f'  （提升 {tot["c"] / tot["w"]:.1f}x）' if tot['w'] else ''))
     if tot['sub_blind']:
         print(f'子集（{len(subset)} 个应用）：'
-              f'{tot["sub_b"]}/{tot["sub_blind"]} = {pct(tot["sub_b"], tot["sub_blind"])}'
-              f'  ->  {tot["sub_d"]}/{tot["sub_blind"]} = '
-              f'{pct(tot["sub_d"], tot["sub_blind"])}')
-        print(f'  该子集未命中 {tot["sub_blind"] - tot["sub_d"]} 个 —— '
-              f'这些兄弟的子树文案本就相同，正确行为是继续落到 L4/L5。')
+              f'{tot["sub_w"]}/{tot["sub_blind"]} = {pct(tot["sub_w"], tot["sub_blind"])}'
+              f'  ->  {tot["sub_c"]}/{tot["sub_blind"]} = '
+              f'{pct(tot["sub_c"], tot["sub_blind"])}')
+        print(f'  仍未命中 {tot["sub_blind"] - tot["sub_c"]} 个 —— '
+              f'这些兄弟的子树文案本就相同，继续落到下一级是正确行为。')
     return 0
 
 
