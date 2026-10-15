@@ -3,12 +3,12 @@
 
 为什么要有这个工具
 ------------------
-KPI 表（项目规划 §三）里有一批指标不需要真机：**归因准确率**与**自愈成功率**
+KPI 表里有一批指标不需要真机：**归因准确率**与**自愈成功率**
 的验收本来就是「注入式」的（FakeHdc 造故障、人工改 id），单测里已经各有验收
 （`test_diagnose.TestInjectedSamples20`、`test_locator_health.TestAcceptance5Ids`）。
 但单测只给 PASS/FAIL，**KPI 汇报要的是数字** —— 这个工具把验收跑一遍，
 把数字、明细与口径写成结构化报告（JSON + Markdown），真机到位前就能进
-指标汇总；真机到位后由 `verify_*_real.py` / `explore_coverage.py` 出真值。
+KPI 汇总；真机到位后由 `verify_*_real.py` / `explore_coverage.py` 出真值。
 
 三段内容
 --------
@@ -49,7 +49,7 @@ sys.path.insert(0, TESTS)
 from ohauto.diagnose import diagnose, CATEGORY_CN                    # noqa: E402
 from ohauto.locator import LocatorManager                            # noqa: E402
 
-GATE = 0.80          # 项目规划 §三：归因准确率 ≥80%、定位器自愈成功率 ≥80%
+GATE = 0.80          # 验收门槛：归因准确率 ≥80%、定位器自愈成功率 ≥80%
 
 
 # ================================================================ 1. 归因准确率
@@ -287,7 +287,7 @@ def main(argv=None) -> int:
 
 def _to_markdown(results: Dict[str, Any], diag_detail: List[str],
                  heal_detail: List[str], expl_lines: List[str]) -> str:
-    """把结果写成可以直接贴进指标汇总的 Markdown。"""
+    """把结果写成可以直接贴进 KPI 汇总的 Markdown。"""
     d = results.get('diagnose', {})
     h = results.get('selfheal', {})
     e = results.get('explore_smoke', {})

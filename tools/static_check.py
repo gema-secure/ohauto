@@ -8,9 +8,9 @@
 CI 若为了 lint 引入一堆重依赖，
 就违背了这条约束，也会让「任何人 clone 后能跑起来」变难。
 
-所以本脚本用 `ast` 模块自己实现规划里要求的检查项：
+所以本脚本用 `ast` 模块自己实现这些检查项：
 
-| 规划要求 | 本脚本的检查 |
+| 要求 | 本脚本的检查 |
 |---|---|
 | 类型注解全覆盖 | 公共函数必须有参数与返回值注解 |
 | 统一格式化 | 无 tab 缩进、无尾随空白、文件以换行结尾 |
@@ -27,7 +27,7 @@ CI 若为了 lint 引入一堆重依赖，
 | `T101` | error | tests/ 里 `try` 内含 `self.assert*` 且 `except Exception: pass`——断言被吞，测试空转全绿（本仓库真实踩过） |
 | `NAR001` | 棘轮 | 注释/docstring 里的**纪要语体**（日期戳 / 回执引用 / 修复前叙事）。基线冻结在 `NARRATIVE_BASELINE`：存量→warning，**任何文件超出基线→error**（防反弹；实测清理期间日期戳一度不降反升） |
 | `CONV2` | warning | tools/ 里 `return 2` / `sys.exit(2)` 却没接 `require_device`——退出码 2 约定保留给「设备不在场」 |
-| `LAY001` | error | ohauto/ **分层违例**：低层模块 import 高层模块。层级表见 `LAYERS`（L1 基元 → L2 设备通道 → L3 能力 → L4 编排）—— 规划 1B 成果的机器化固化（S7） |
+| `LAY001` | error | ohauto/ **分层违例**：低层模块 import 高层模块。层级表见 `LAYERS`（L1 基元 → L2 设备通道 → L3 能力 → L4 编排）—— 分层归位成果的机器化固化 |
 | `EXC001` | 棘轮 | **无标记**的 `except Exception`。新增必须带 `# noqa(原因)` 标记；存量冻结在 `BROAD_EXCEPT_BASELINE`：存量→warning，超出基线或新文件→error，只减不增（S15） |
 
 用法
@@ -471,7 +471,7 @@ def _check_import_boundary(path: str, tree) -> List[Finding]:
 
 # ---------------------------------------------------------------- 分层闸（LAY001）
 
-#: ohauto 包的四层依赖图（规划 1E：把 1B 的归位成果固化成机器校验）。
+#: ohauto 包的四层依赖图（把分层归位成果固化成机器校验）。
 #: 规则：layer N 的模块只能 import 同层或更低层，向上即 LAY001 error。
 #:
 #:   L1 基元层    纯数据结构与纯函数（无设备、无 I/O）
@@ -698,7 +698,7 @@ def run(root: str = ROOT, check_annotations: bool = True,
         if ef:
             findings.append(ef)
         findings.extend(_check_swallowed_assert(p, rel, tree))
-        # ---- 治理闸（LAY001 / EXC001，规划 1E）
+        # ---- 治理闸（LAY001 / EXC001）
         findings.extend(_check_layering(p, rel, tree))
         bf = _check_broad_except(p, rel, text, tree)
         if bf:

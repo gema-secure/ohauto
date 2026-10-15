@@ -276,14 +276,14 @@ def sample_gate(positive: int, required: int) -> Optional[str]:
     而它必须在**调模型之前**生效（否则白烧一遍 API 才说样本不够）。
     做成纯函数就能离线钉住，不必接 key 和设备。
 
-    规划原文要求 20 条（`项目规划.md` §三），实测入口页只派生得出 1 条 ——
+    验收口径要求 20 条，实测入口页只派生得出 1 条 ——
     所以这条闸大概率会真的触发，触发时要说清怎么补，而不只是报个错。
     """
     if not required or positive >= required:
         return None
     return (f'[停止] 正样本只有 {positive} 条，低于 --require-samples {required} ——\n'
-            f'规划原文要求「**20 条**描述生成后逐条执行」；样本量不足时算出的百分比\n'
-            f'既不可比，也不能当作「已按规划验过」。补足办法：\n'
+            f'验收口径要求「**20 条**描述生成后逐条执行」；样本量不足时算出的百分比\n'
+            f'既不可比，也不能当作「已按口径验过」。补足办法：\n'
             f'  ① 加 --multi-page（按页并集派生描述）；\n'
             f'  ② 用 --prompts 文件追加描述（每行一条）；\n'
             f'  ③ 换可交互控件更多的应用（实测 calculator 一页可派生 19 条）。')
@@ -295,9 +295,9 @@ def build_descriptions_from_pages(pages: Sequence[Tuple[str, Any]],
 
     ★ 为什么需要它（B8 样本量的直接原因）：入口页（`com.example.myapplication`
     的 Index）只有 1 个「可交互且带文案/id」的控件 —— 实测派生出的正样本就
-    **只有 1 条**，加 2 条固定负样本总共 3 条。规划原文要的是「**20 条**描述生成后
+    **只有 1 条**，加 2 条固定负样本总共 3 条。验收口径要的是「**20 条**描述生成后
     逐条执行」：样本量上不去，`executable_rate` 的分母就不是 20，报出来的百分比
-    既不可比、也容易被读成「已经按规划验过」。
+    既不可比、也容易被读成「已经按口径验过」。
 
     多页模式已经把 Index/Second/Third 三页的控件清单都喂给了模型，描述集同样
     应当覆盖这三页（实测三页合计可派生 6 条：1 + 3 + 2）。
@@ -440,9 +440,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                          '都喂给生成器（B8 路线①）；不加则与旧口径一致')
     ap.add_argument('--prompts', default='', help='额外追加的描述文件（每行一条）')
     ap.add_argument('--require-samples', type=int, default=0,
-                    help='正样本描述条数的下限（规划原文要求 20）。不足时打印醒目'
+                    help='正样本描述条数的下限（验收口径要求 20）。不足时打印醒目'
                          '警告并以退出码 2 停止 —— 防止「3 条样本算出的百分比」'
-                         '被当成「已按规划验过」。0 = 不设下限（旧行为）')
+                         '被当成「已按口径验过」。0 = 不设下限（旧行为）')
     ap.add_argument('--execute', action='store_true',
                     help='对 L2 通过的用例在真机上跑一遍，给 L3 执行口径')
     ap.add_argument('--out', default=OUT)
@@ -499,7 +499,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f'    翻页后控件树 {len(nodes)} 个节点')
 
     # 描述集：多页模式下**按页并集**派生（入口页实测只出得来 1 条，
-    # 而规划要的是 20 条 —— 见 build_descriptions_from_pages 的说明）。
+    # 而验收口径要的是 20 条 —— 见 build_descriptions_from_pages 的说明）。
     if args.multi_page and pages:
         derived = build_descriptions_from_pages(pages, args.max)
         print(f'  描述派生：{len(pages)} 页并集 → {len(derived)} 条正样本')

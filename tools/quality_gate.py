@@ -1,11 +1,11 @@
 """CI 质量门禁 —— 一条命令跑完全部检查。
 
-对应规划「工程规范与 CI 质量门禁」高地：
+覆盖工程规范与 CI 质量门禁：
 
-| 规划要求 | 本脚本的关卡 |
+| 要求 | 本脚本的关卡 |
 |---|---|
 | 静态检查 | [1/3] `tools/static_check.py`（零依赖，见该文件说明） |
-| 单元测试 | [2/3] `unittest discover`（905 项） |
+| 单元测试 | [2/3] `unittest discover`（1537 项） |
 | 覆盖率 ≥70% | [2/3] `coverage report`（`.coveragerc` 里 `fail_under`） |
 | 模拟端到端 | [3/3] `examples/offline_demo.py`（不需要真机） |
 | 门禁：失败即阻断 | 任一步失败 → 退出码非 0 |
