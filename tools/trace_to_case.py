@@ -6,7 +6,7 @@
 验收要求：「把一次探索的 graph.json 转成一份 DSL 回归用例并**跑通**」。
 此前卡在两处（剖析）：
 
-  1. 留痕只存 ``node_path``(type+id)，真机 id 覆盖率仅 **5.62%** →
+  1. 留痕只存 ``node_path``(type+id)，真机 id 覆盖率仅 **4.2%** →
      沉淀规格退化成按 type 歧义匹配。**已修**：``driver.Step`` 现在带
      ``node_spec``（id / text / text_deep，见 driver._fill_node_spec）。
   2. 没有转换工装 → 本文件补上（归 C）。

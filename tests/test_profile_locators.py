@@ -98,6 +98,20 @@ class TestProfileLocators(unittest.TestCase):
         self.assertEqual(total['interactive'], 0)
         self.assertEqual(total['nodes'], 2)
 
+    def test_with_id_counts_all_nodes(self):
+        # 全节点带 id 的口径与 meta.with_id 一致：不限可交互，
+        # 容器节点带 id 也计入 —— README 引用的 id 覆盖率按此复现。
+        tree = _node('root')
+        tree['children'] = [_node('Column', id='x', bounds='[0,0][1,1]'),
+                            _node('Text', text='无 id 节点')]
+        _write_tree(self.dir, 'g.json', tree)
+        out = os.path.join(self.dir, 'stats.json')
+        _run(self.dir, '--json', out)
+        with open(out, encoding='utf-8') as handle:
+            total = json.load(handle)['total']
+        self.assertEqual(total['with_id'], 1)
+        self.assertEqual(total['nodes'], 3)
+
     def test_export_hard_elements(self):
         _write_tree(self.dir, 'd.json', _sample_tree())
         out = os.path.join(self.dir, 'hard.json')

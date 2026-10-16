@@ -271,5 +271,40 @@ class TestSwipeExport(unittest.TestCase):
         self.assertIn('direction', r.stderr.decode('utf-8', 'replace'))
 
 
+class TestCanonicalActionNames(unittest.TestCase):
+    """DSL 动作名以执行器（ohauto.action._exec_one）为准：snake_case。
+
+    早前文档与导出器都写驼峰 `doubleTap` / `longPress`，而执行器只认
+    `double_tap` / `long_press` —— 照文档写的用例在 DSL 侧直接 DslError。
+    导出器必须接受执行器认的名字（含同组别名），拒收执行器不认的驼峰。
+    """
+
+    def _export(self, step):
+        case = {'name': 't', 'bundle': 'b', 'ability': 'A', 'steps': [step]}
+        p, out = _tmp_case(case)
+        r = _run(p, '--out', out)
+        src = ''
+        if os.path.exists(out):
+            with open(out, encoding='utf-8') as f:
+                src = f.read()
+        return r, src
+
+    def test_snake_case_exports(self):
+        r, src = self._export({'double_tap': {'id': 'btn'}})
+        self.assertEqual(r.returncode, 0, r.stderr.decode('utf-8', 'replace'))
+        self.assertIn('.doubleClick();', src)
+        r, src = self._export({'long_press': {'id': 'btn'}})
+        self.assertEqual(r.returncode, 0, r.stderr.decode('utf-8', 'replace'))
+        self.assertIn('.longClick();', src)
+
+    def test_executor_aliases_export(self):
+        for step, method in (({'doubleclick': {'id': 'btn'}}, 'doubleClick'),
+                             ({'longclick': {'id': 'btn'}}, 'longClick')):
+            r, src = self._export(step)
+            self.assertEqual(r.returncode, 0,
+                             r.stderr.decode('utf-8', 'replace'))
+            self.assertIn(f'.{method}();', src)
+
+
 if __name__ == '__main__':
     unittest.main()

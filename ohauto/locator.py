@@ -92,7 +92,7 @@ class LocatorSpec:
     target_id: str = ''
     text: str = ''
     #: **子树文案聚合**（`LayoutNode.text_deep`）。真机上「可交互容器自身
-    #: text/id 全空、文案在子节点」是常态（id 覆盖仅 5.62%），
+    #: text/id 全空、文案在子节点」是常态（id 覆盖仅 4.2%），
     #: 自愈重探索时这一条往往是唯一能区分同类型兄弟的线索 ——
     #: 见 `_pick_repair_candidate` 的第 2 档。
     text_deep: str = ''

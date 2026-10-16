@@ -570,7 +570,7 @@ def _spec_of(s: Any) -> Dict[str, Any]:
     同一个 driver 留痕有两条沉淀路径（这里与 `tools/trace_to_case.py`），
     必须产出**同质量**的规格。`node_spec` 是留痕时按「id 优先、文案兜底
     （可点容器自身文案常为空，落到子节点文案）」记下来的；只走 `node_path`
-    反解只能拿到 `type`/`id` —— 真机 id 覆盖仅 5.62%，会退化成按 type 歧义匹配。
+    反解只能拿到 `type`/`id` —— 真机 id 覆盖仅 4.2%，会退化成按 type 歧义匹配。
     旧留痕没有 `node_spec`，所以回落路径必须保留。
     """
     spec = dict(getattr(s, 'node_spec', None) or {})

@@ -127,7 +127,7 @@ LAYERS = [
             ("hdc.py", "hdc 命令封装 · 三档输入通路", False),
             ("vision.py", "多模态定位 · 可插拔 Provider", True),
             ("driver.py", "Driver 门面：定位→操作→断言→留痕", False),
-            ("devices.py", "设备形态档案（68 台 / 11 类型）", False),
+            ("devices.py", "设备形态档案（77 台 / 15 类型）", False),
             ("doctor.py", "环境自检", False),
         ],
     ),

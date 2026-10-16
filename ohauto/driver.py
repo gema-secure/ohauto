@@ -70,7 +70,7 @@ class Step:
     node_path: Optional[str] = None
     #: 可定位规格（id/text/text_deep/type）—— 用例沉淀的原料。
     #: 只记客观属性、**绝不记坐标**（红线）；留痕只有 node_path(type+id) 时，
-    #: 真机 id 覆盖率仅 5.62%，沉淀出的用例会退化成按 type 歧义匹配。
+    #: 真机 id 覆盖率仅 4.2%，沉淀出的用例会退化成按 type 歧义匹配。
     node_spec: Optional[Dict[str, Any]] = None
     coords: Optional[Tuple[int, int]] = None
     error: Optional[str] = None
@@ -201,7 +201,7 @@ class Driver:
         """留痕附带可定位规格 —— 用例沉淀的原料。
 
         只记「重放时能重新匹配到」的客观属性：
-          id 最稳（但真机覆盖率仅 5.62%）；文案次之 —— 可点容器自身
+          id 最稳（但真机覆盖率仅 4.2%）；文案次之 —— 可点容器自身
           id/text 常全空，文案在子节点上，所以 text 空时取 text_deep 兜底；
           type 不进 spec（同类型成堆，沉淀侧拿它必然歧义）。
         """

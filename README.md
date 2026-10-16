@@ -16,9 +16,10 @@ ohauto（OpenHarmony + Automation）是 OpenHarmony 应用 UI 自动化能力层
 精确定位受应用是否设置 id 限制；截图提供视觉语义，覆盖 Canvas 绘制、无标识图标等
 控件树盲区。两个通道的证据按统一契约融合裁决。
 
-单通道方案的不足有真机数据支撑：7 份控件树 / 6 个应用 / 800 个节点中，
-仅 45 个节点带 id（5.62%），带 text 的 59 个（7.4%）；其中系统设置与纯 Canvas
-绘制的时钟应用整棵树 id 数为 0，控件树通道在这类应用上完全失效。
+单通道方案的不足有真机数据支撑：14 份控件树 / 13 个应用 / 1648 个节点中，
+仅 70 个节点带 id（4.2%），带 text 的 149 个（9.0%）；其中系统设置与纯 Canvas
+绘制的时钟应用整棵树 id 数为 0（时钟应用的弹窗态重采样也仅 2 个），控件树
+通道在这类应用上完全失效。
 复现命令：`python tools/profile_locators.py datasets/gallery_13app`。
 
 ## 文档索引
@@ -49,7 +50,7 @@ ohauto（OpenHarmony + Automation）是 OpenHarmony 应用 UI 自动化能力层
 
 | 指标 | 实测值 | 口径说明 |
 |---|---|---|
-| 控件 id 覆盖率（全节点 / 可交互控件） | 5.62% / 42.3% | 55.8% 的可交互控件无任何语义标识 |
+| 控件 id 覆盖率（全节点 / 可交互控件） | 4.2% / 26.4% | 69.0% 的可交互控件无任何语义标识 |
 | 视觉定位与控件树标注的一致性 | 95.0%（19/20），扩充至 13 应用后 97.8%（45/46） | 是双通道一致性（IoU@0.5），不是绝对准确率；项目未建人工真值标注集 |
 | 自然语言生成用例静态可执行率 | 92.3%（24/26，两轮复跑一致） | 含 2 条固定负样本，均被校验闸正确拦截；可执行用例均具备实质动作与断言 |
 | 生成用例真机执行 | 用例级 23/24 与 22/24（两轮并列） | 两轮波动 1 条，根因均为断言目标落在控件树之外 |
@@ -137,7 +138,7 @@ L1–L4 合计 **25 个可校验模块**（24 个 `.py` 模块 + `static_arkts` 
 |---|---|---|
 | L5 应用与工装层（3 类） | `tools/` | 质量门禁 / 静态检查 / 离线评测 / 长稳编排（50 个脚本） |
 | | `examples/` | 冒烟 / 套件执行 / 探索 / 用例生成示例（7 个） |
-| | `tests/` | 单元与集成测试（57 个文件 / 1537 项，离线可跑） |
+| | `tests/` | 单元与集成测试（57 个文件 / 1540 项，离线可跑） |
 | L4 编排层（6 模块） | `runner.py` | 套件编排 / 重试 / 设备保活 / 内存趋势合并 |
 | | `explorer.py` | 自动探索 / 页面状态图 / 回归用例 |
 | | `generator.py` | 自然语言 → 用例（两阶段，多页上下文） |
@@ -152,7 +153,7 @@ L1–L4 合计 **25 个可校验模块**（24 个 `.py` 模块 + `static_arkts` 
 | L2 设备通道层（5 模块） | `hdc.py` | hdc 命令封装 + 三档输入通路（uitest / uinput / sendevent） |
 | | `vision.py` | 多模态定位（可插拔 Provider） |
 | | `driver.py` | Driver 门面：定位→操作→等待→断言→留痕 |
-| | `devices.py` | 设备形态档案，数据源为 DevEco `productConfig.json`（68 台 / 11 类型） |
+| | `devices.py` | 设备形态档案，数据源为 DevEco `productConfig.json`（77 台 / 15 类型） |
 | | `doctor.py` | 环境自检 |
 | L1 基元层（9 模块） | `layout.py` | 控件树 JSON 解析（字段别名宽进） |
 | | `matcher.py` | 多属性匹配器（对齐 UiTest ON 语义） |
@@ -242,7 +243,7 @@ steps:
   - back: true
 ```
 
-支持的动作：`start` `stop` `tap` `doubleTap` `longPress` `input` `swipe` `fling`
+支持的动作：`start` `stop` `tap` `double_tap` `long_press` `input` `swipe` `fling`
 `waitFor` `waitGone` `waitIdle` `assert` `screenshot` `back` `home` `key`。
 支持的断言：`exists`、`gone`、`text`（含 `equals`）、`visible`。
 
@@ -376,7 +377,7 @@ python -m unittest tests.test_core -v
 python -m unittest tests.test_integration_sim -v
 ```
 
-共 1537 项测试 / 57 个测试文件，全部不依赖真机。测试策略：每个修复对应一个
+共 1540 项测试 / 57 个测试文件，全部不依赖真机。测试策略：每个修复对应一个
 回归测试钉子，钉子只增不减；真机采集的控件树与截图作为离线夹具进入测试，
 使全部逻辑可在无设备环境复现。核心测试文件：
 
@@ -402,7 +403,7 @@ python tools/quality_gate.py --fast     # 跳过覆盖率，本地快速自测
 | 关卡 | 内容 | 阻断条件 |
 |---|---|---|
 | 1 | 静态检查（`tools/static_check.py`，仅标准库实现） | 存在 error |
-| 2 | 单元测试（1537 项） | 任一失败 |
+| 2 | 单元测试（1540 项） | 任一失败 |
 | 3 | 覆盖率 | 低于 70% |
 | 4 | 离线端到端（`examples/offline_demo.py`） | 非零退出 |
 

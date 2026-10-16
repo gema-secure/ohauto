@@ -21,7 +21,7 @@
 | `start` | `delegator.startAbility(want)` + `delayMs` |
 | `waitFor` / `wait` | `driver.waitForComponent(ON.xxx, ms)` + **判 undefined** |
 | `waitGone` | 轮询 `assertComponentExist` 至抛 17000003 |
-| `tap` / `doubleTap` / `longPress` | `findComponent(...)` 的对应 click 方法 |
+| `tap` / `double_tap` / `long_press` | `findComponent(...)` 的对应 click 方法 |
 | `tap_xy` | `driver.click(x, y)` |
 | `swipe` | `getDisplaySize()` + 方向/比例换算 → `driver.swipe(x1,y1,x2,y2)` |
 | `input` | `findComponent(...).inputText(v)` |
@@ -278,10 +278,11 @@ def _step_to_ts(step: Dict[str, Any], idx: int,
                 f'if (!gone{idx}) throw new Error("waitGone 超时({to}ms): {on}");')
 
     # ---- 操作 ---------------------------------------------------------
-    if a in ('tap', 'doubleTap', 'long_press', 'longPress'):
+    if a in ('tap', 'double_tap', 'doubleclick', 'long_press', 'longclick'):
         cond = _matcher_of(arg)
-        method = {'tap': 'click', 'doubleTap': 'doubleClick',
-                  'long_press': 'longClick', 'longPress': 'longClick'}[a]
+        method = {'tap': 'click', 'double_tap': 'doubleClick',
+                  'doubleclick': 'doubleClick', 'long_press': 'longClick',
+                  'longclick': 'longClick'}[a]
         # 外层 await 不能省。uitest 的 API 禁止并发调用：click() 返回 Promise，
         # 不 await 的话下一条 findComponent 会和它撞车，真机报
         #   uitest-api dose not allow calling concurrently,
@@ -365,11 +366,11 @@ def _step_to_ts(step: Dict[str, Any], idx: int,
     if a in known_unsupported:
         raise UnsupportedActionError(
             f'DSL action {a!r} 导出器未实现：{known_unsupported[a]}。'
-            f'已实现的 action: start/wait/waitFor/waitGone/tap/doubleTap/'
-            f'longPress/tap_xy/swipe/input/back/screenshot/assert')
+            f'已实现的 action: start/wait/waitFor/waitGone/tap/double_tap/'
+            f'long_press/tap_xy/swipe/input/back/screenshot/assert')
     raise UnsupportedActionError(
         f'未知 DSL action: {a!r}。已实现的 action: start/wait/waitFor/'
-        f'waitGone/tap/doubleTap/longPress/tap_xy/swipe/input/back/'
+        f'waitGone/tap/double_tap/long_press/tap_xy/swipe/input/back/'
         f'screenshot/assert')
 
 

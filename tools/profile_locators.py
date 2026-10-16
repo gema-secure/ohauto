@@ -60,6 +60,7 @@ def _new_stat() -> Dict[str, int]:
         'strong': 0,
         'weak': 0,
         'none': 0,
+        'with_id': 0,
         'with_text': 0,
         'with_description': 0,
         'with_hint': 0,
@@ -74,6 +75,8 @@ def _walk(node: Dict[str, Any], stat: Dict[str, int],
           path: str = '') -> None:
     attrs = _attrs(node)
     stat['nodes'] += 1
+    if _nonempty(attrs, 'id'):
+        stat['with_id'] += 1
     if _nonempty(attrs, 'text'):
         stat['with_text'] += 1
     if _nonempty(attrs, 'description'):
@@ -175,6 +178,8 @@ def print_report(result: Dict[str, Any]) -> None:
     print(f"  无任何语义标识                      : {total['none']}"
           f"  ({_ratio(total['none'], interactive)}%)")
     print()
+    print(f"  全节点带 id                          : {total['with_id']}"
+          f"  (占全部节点 {_ratio(total['with_id'], total['nodes'])}%)")
     print(f"  全节点带 text                       : {total['with_text']}"
           f"  (占全部节点 {_ratio(total['with_text'], total['nodes'])}%)")
     print(f"  全节点带 description                : {total['with_description']}")
