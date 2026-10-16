@@ -73,10 +73,10 @@ pip install -e ".[dev]"            # 可编辑安装 + 开发依赖（coverage�
 ohauto-doctor                      # 环境自检
 ```
 
-依赖统一声明在 `pyproject.toml`（`[project.dependencies]` 与
-`[project.optional-dependencies]`），`requirements.txt` 只留指引、不再重复列一遍。
-运行期要求 Python 3.9 及以上；`pyyaml>=6.0`（可选，缺失时用例 DSL 自动退化为 JSON）；
-`hdc`（来自 DevEco Studio 或 OpenHarmony 公开 SDK）。
+依赖统一声明在 `pyproject.toml`（`[project]` 表的 `dependencies` 键与
+`[project.optional-dependencies]` 表），`requirements.txt` 只留指引、不再重复列一遍。
+运行期要求 Python 3.9 及以上；`pyyaml>=6.0`（pip 安装随包装入；源码直用未装时，
+用例 DSL 自动退化为 JSON）；`hdc`（来自 DevEco Studio 或 OpenHarmony 公开 SDK）。
 
 ## 快速开始
 
@@ -138,7 +138,7 @@ L1–L4 合计 **25 个可校验模块**（24 个 `.py` 模块 + `static_arkts` 
 |---|---|---|
 | L5 应用与工装层（3 类） | `tools/` | 质量门禁 / 静态检查 / 离线评测 / 长稳编排（50 个脚本） |
 | | `examples/` | 冒烟 / 套件执行 / 探索 / 用例生成示例（7 个） |
-| | `tests/` | 单元与集成测试（57 个文件 / 1540 项，离线可跑） |
+| | `tests/` | 单元与集成测试（57 个文件 / 1541 项，离线可跑） |
 | L4 编排层（6 模块） | `runner.py` | 套件编排 / 重试 / 设备保活 / 内存趋势合并 |
 | | `explorer.py` | 自动探索 / 页面状态图 / 回归用例 |
 | | `generator.py` | 自然语言 → 用例（两阶段，多页上下文） |
@@ -377,7 +377,7 @@ python -m unittest tests.test_core -v
 python -m unittest tests.test_integration_sim -v
 ```
 
-共 1540 项测试 / 57 个测试文件，全部不依赖真机。测试策略：每个修复对应一个
+共 1541 项测试 / 57 个测试文件，全部不依赖真机。测试策略：每个修复对应一个
 回归测试钉子，钉子只增不减；真机采集的控件树与截图作为离线夹具进入测试，
 使全部逻辑可在无设备环境复现。核心测试文件：
 
@@ -403,7 +403,7 @@ python tools/quality_gate.py --fast     # 跳过覆盖率，本地快速自测
 | 关卡 | 内容 | 阻断条件 |
 |---|---|---|
 | 1 | 静态检查（`tools/static_check.py`，仅标准库实现） | 存在 error |
-| 2 | 单元测试（1540 项） | 任一失败 |
+| 2 | 单元测试（1541 项） | 任一失败 |
 | 3 | 覆盖率 | 低于 70% |
 | 4 | 离线端到端（`examples/offline_demo.py`） | 非零退出 |
 
@@ -442,7 +442,7 @@ python examples/dump_tree.py --bundle <包名>
 ## 依赖
 
 - Python 3.9+
-- pyyaml（可选，缺失时 DSL 退化为 JSON）
+- pyyaml>=6.0（pip 安装随包装入；源码直用未装时 DSL 退化为 JSON）
 - hdc（来自 DevEco Studio 或 OpenHarmony SDK）
 
 ## 许可证

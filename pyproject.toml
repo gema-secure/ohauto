@@ -17,7 +17,7 @@ license-files = ["LICENSE"]
 keywords = ["openharmony", "harmonyos", "ui-automation", "testing", "hdc"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent",
+    "Operating System :: Microsoft :: Windows",
     "Topic :: Software Development :: Testing",
 ]
 

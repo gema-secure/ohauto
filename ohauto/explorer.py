@@ -1057,7 +1057,7 @@ class Explorer:
     def explore(self, max_pages: Optional[int] = None,
                 budget: Optional[Budget] = None,
                 max_actions_per_page: Optional[int] = None,
-                max_seconds: Optional[float] = None,
+                max_seconds: Optional[float] = None, *,
                 return_back: bool = True) -> StateGraph:
         """从当前页面开始广度优先探索。
 

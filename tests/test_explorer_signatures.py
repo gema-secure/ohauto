@@ -448,6 +448,16 @@ class TestExploreOnSim(_SimCase):
                                  max_seconds=60, max_steps=100))
         self.assertEqual(len(g.states), 3)
 
+    def test_return_back_is_keyword_only(self):
+        """docstring 承诺 `return_back` 是 keyword-only，签名必须兑现。
+
+        它是行为开关而非资源上限，与前面四个参数不同层；
+        keyword-only 防止调用方按位置误传（explore(8, budget, 6, 300.0, False)）。
+        """
+        import inspect
+        param = inspect.signature(Explorer.explore).parameters['return_back']
+        self.assertEqual(param.kind, inspect.Parameter.KEYWORD_ONLY)
+
     def test_deprecated_kwargs_still_work_but_warn(self):
         """散参数已弃用：还能用，但必须**明确告警**，不能悄悄接受。"""
         import warnings
