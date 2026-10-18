@@ -6,6 +6,13 @@ ohauto（OpenHarmony + Automation）是 OpenHarmony 应用 UI 自动化能力层
 系统将人工测试流程转化为自动流程：自动探索应用页面结构，自动生成可执行的测试用例，
 自动执行与断言，失败时自动归因并修复定位，最终沉淀为可重放的回归集。
 
+## 提交材料
+
+| 材料 | 文件 |
+|---|---|
+| 参赛作品简介 | [`提交材料/01-参赛作品简介.md`](提交材料/01-参赛作品简介.md) |
+| 辅助材料 | [`docs/API手册.md`](docs/API手册.md) · [`docs/architecture.png`](docs/architecture.png) · [`docs/demo/onepager.html`](docs/demo/onepager.html) · [`docs/demo/gallery.html`](docs/demo/gallery.html) |
+
 ```
 采集（控件树 + 截图）→ 理解 → 定位 → 操作 → 断言 → 判定 → 沉淀
                                    ↓
