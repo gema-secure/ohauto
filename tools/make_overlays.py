@@ -58,11 +58,11 @@ def overlay(png_path: str, json_path: str, out_path: str, note: str) -> None:
                    fill=GREEN, width=2)
             n_r += 1
     font = ImageFont.truetype(FONT, 22)
+    # 计数只印在底部说明条里，不压在截图自带状态栏上
     d.rectangle([0, im.height - 46, im.width, im.height], fill=(255, 255, 255))
     d.text((12, im.height - 38), note, font=font, fill=INK)
-    d.text((12, 6), f'可交互 {n_i} · 文案行 {n_r}', font=font, fill=BLUE)
     im.save(out_path)
-    print('overlay:', out_path, f'interactive={n_i}')
+    print('overlay:', out_path, f'interactive={n_i} text={n_r}')
 
 
 def main(argv: List[str] = None) -> int:
