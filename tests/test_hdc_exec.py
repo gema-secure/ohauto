@@ -316,6 +316,37 @@ class TestTransientChannelFailure(_Base):
         self.assertFalse(res.ok)
         self.assertEqual(len(self.calls), 1 + self.hdc.transient_retries)
 
+    def test_zero_rc_exhausted_channel_raises(self):
+        """★ 反例：rc=0 且通道永远起不来，预算耗尽后**绝不能当成功**。
+
+        若按 rc 放行，调用方会以为 `uiInput click` 生效了 —— 实际设备侧
+        什么都没注入。这是最危险的一类假绿：报告全绿、界面没动。
+        """
+        self.sub._handler = lambda cmd, kw: _proc(rc=0, stdout=self._FAIL_STDOUT)
+        with self.assertRaises(HdcError):
+            self.hdc.run(['shell', 'uitest uiInput click 1 1'], check=True)
+        self.assertEqual(len(self.calls), 1 + self.hdc.transient_retries)
+
+    def test_zero_rc_exhausted_channel_is_not_ok_when_check_false(self):
+        """check=False 可以「不抛」，但结果必须**看起来是失败**。
+
+        rc 如实保留 0（设备确实这么回的），靠 `transient` 让 `ok` 转 False ——
+        否则 check=False 的调用方按 rc 判断会照样误判成功。
+        """
+        self.sub._handler = lambda cmd, kw: _proc(rc=0, stdout=self._FAIL_STDOUT)
+        res = self.hdc.run(['shell', 'cat x'])          # check=False 不抛
+        self.assertEqual(res.returncode, 0)
+        self.assertFalse(res.ok)
+        self.assertTrue(res.transient)
+
+    def test_successful_retry_is_still_ordinary_success(self):
+        """通道恢复后的正常结果不许被 transient 标记污染。"""
+        handler, _ = self._flaky_then_ok(fail_times=1)
+        self.sub._handler = handler
+        res = self.hdc.run(['shell', 'cat x'], check=True)
+        self.assertTrue(res.ok)
+        self.assertFalse(res.transient)
+
     def test_transient_retries_apply_even_with_check(self):
         """`check=True` 时也要重试 —— 通道没建好时抛错毫无意义。"""
         handler, state = self._flaky_then_ok(fail_times=1)

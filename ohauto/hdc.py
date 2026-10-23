@@ -21,7 +21,7 @@ import re
 import shutil
 import subprocess
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import (Any, Dict, List, Optional, Protocol, Sequence, Tuple,
                     runtime_checkable)
 
@@ -58,10 +58,14 @@ class ShellResult:
     #: 动态挂属性：`pull()` 的 `cat` 兜底要直接读它，属性是否存在不该
     #: 取决于走了哪条分支。`repr=False` 避免把整个文件塞进日志。
     raw: bytes = field(default=b'', repr=False, compare=False)
+    #: 命中「通道未就绪」标记（见 `TRANSIENT_MARKERS`）且重试预算已耗尽。
+    #: 此时 `returncode` 往往仍是 0，但**设备侧什么都没执行** —— 单看 rc 会把
+    #: 「命令没生效」记成成功。置 True 后 `ok` 转 False，让调用方无法误判。
+    transient: bool = False
 
     @property
     def ok(self) -> bool:
-        return self.returncode == 0
+        return self.returncode == 0 and not self.transient
 
     def __str__(self) -> str:
         return f'<ShellResult rc={self.returncode} cmd={self.command!r}>'
@@ -633,13 +637,24 @@ class Hdc:
                 # 通道未就绪：**check 是真是假、rc 是不是 0 都要重试** ——
                 # 它是环境状态不是命令缺陷，重发就好（实测隔两秒即成功）。
                 # ⚠️ 这一条必须放在 `if res.ok` **之前**：实测 rc=0 也会带 Fail 文本。
-                if (transient and attempt < self.transient_retries
-                        and self.is_transient_failure(res)):
-                    if self.verbose:
-                        print(f'[hdc] 通道未就绪，重试 {attempt + 1}/'
-                              f'{self.transient_retries}')
-                    time.sleep(0.8 * (attempt + 1))
-                    continue
+                if transient and self.is_transient_failure(res):
+                    if attempt < self.transient_retries:
+                        if self.verbose:
+                            print(f'[hdc] 通道未就绪，重试 {attempt + 1}/'
+                                  f'{self.transient_retries}')
+                        time.sleep(0.8 * (attempt + 1))
+                        continue
+                    # 预算耗尽、通道仍未就绪 —— **不许按 rc 放行**。
+                    # 这种时候 rc 通常还是 0，但 uitest 的注入根本没落到设备上；
+                    # 放行等于把「命令没生效」记成成功，比抛错危险得多。
+                    res = replace(res, transient=True)
+                    last_err = HdcError(
+                        f'hdc 通道未就绪且重试耗尽'
+                        f'（{self.transient_retries + 1} 次仍失败）: {" ".join(cmd)}\n'
+                        f'{(res.stdout or "")[:300]}')
+                    if not check:
+                        return res        # check=False 不抛，但 res.ok 已是 False
+                    break
                 if res.ok:
                     return res
                 if not check and attempt >= retries:
