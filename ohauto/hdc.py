@@ -985,6 +985,57 @@ class Hdc:
         res = self.shell(f'pidof {bundle}')
         return bool(res.stdout.strip())
 
+    # ------------------------------------------------------------ 前台校验
+    #
+    # 为什么要有它：动作注入是「按坐标点」，不看前台是谁。真机上一条系统
+    # 弹窗（USB 连接方式、权限确认）就能把点击吃掉，而调用方拿到的仍然是
+    # 「点击成功」——冒烟测试因此在弹窗上「全绿通过」，被测应用一下没碰。
+    # 这里用 WindowManagerService 的焦点窗口 Pid 与 pidof(bundle) 比对：
+    # 两者都来自系统，不需要猜控件树里的 bundleName（弹窗盖住时被测应用
+    # 仍在树里，那个字段区分不了「在」和「在前台」）。
+
+    def foreground_window(self) -> Optional[Tuple[int, str]]:
+        """返回焦点窗口 (pid, window_name)；取不到返回 None。"""
+        try:
+            res = self.shell("hidumper -s WindowManagerService -a '-a'")
+        except Exception:                                   # noqa: BLE001
+            return None
+        out = res.stdout or ''
+        m = re.search(r'Focus window:\s*(\d+)', out)
+        if not m:
+            return None
+        win_id = m.group(1)
+        for line in out.splitlines():
+            parts = line.split()
+            # WindowName DisplayId Pid WinId ...
+            if len(parts) >= 4 and parts[3] == win_id and parts[2].isdigit():
+                return int(parts[2]), parts[0]
+        return None
+
+    def pid_of(self, bundle: str) -> Optional[int]:
+        try:
+            res = self.shell(f'pidof {bundle}')
+        except Exception:                                   # noqa: BLE001
+            return None
+        txt = (res.stdout or '').strip().split()
+        for t in txt:
+            if t.isdigit():
+                return int(t)
+        return None
+
+    def foreground_is(self, bundle: str) -> Tuple[bool, str]:
+        """前台窗口是否属于 bundle。返回 (是否, 说明)。"""
+        fg = self.foreground_window()
+        pid = self.pid_of(bundle)
+        if fg is None:
+            return True, 'unknown(取不到焦点窗口，跳过校验)'
+        if pid is None:
+            return False, f'{bundle} 没有进程（未启动或已退出）'
+        if fg[0] != pid:
+            return False, f'前台是 {fg[1]}(pid={fg[0]})，不是 {bundle}(pid={pid})'
+        return True, f'{fg[1]}(pid={pid})'
+
+
     # ------------------------------------------------------------ 日志
 
     def hilog(self, lines: int = 200, grep: Optional[str] = None) -> str:

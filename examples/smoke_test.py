@@ -89,12 +89,30 @@ def main():
         print(f'         hdc shell aa start -b {args.bundle} -a {args.ability}')
         return 1
 
+    # 拉起成功 ≠ 前台是它：系统弹窗（USB 连接方式 / 权限确认）会盖在前面，
+    # 点击于是落在弹窗上，而每一步都「成功」—— 第三台真机上抓到的那次
+    # 假通过就是这么来的。用焦点窗口 Pid 校验，确认了再往下走。
+    fg_ok, fg_why = d.hdc.foreground_is(args.bundle)
+    if not fg_ok:
+        print(f'  [失败] 拉起后前台不是被测应用：{fg_why}')
+        print('         多半是系统弹窗盖在前面；处置后重跑，本次不计为通过。')
+        return 1
+    print(f'  [通过] 前台校验：{fg_why}')
+
     # ---------------------------------------------------------- 4
     step(4, '导出并解析控件树')
     try:
         tree = d.refresh()
         all_nodes = flatten(tree, only_visible=True)
         inter = flatten(tree, only_visible=True, only_interactive=True)
+        # 只保留属于被测应用窗口的控件：同一棵树上还挂着状态栏/导航栏，
+        # 它们同样可点击，点下去就是「点在系统 UI 上」。
+        app_wins = {str(n.attributes.get('hostWindowId'))
+                    for n in tree.walk()
+                    if n.attributes.get('bundleName') == args.bundle}
+        if app_wins:
+            inter = [n for n in inter
+                     if str(n.attributes.get('hostWindowId')) in app_wins]
         print(f'  [通过] 根={tree.type}  可见节点={len(all_nodes)}  '
               f'可交互={len(inter)}')
         print('  前 12 个可交互控件:')

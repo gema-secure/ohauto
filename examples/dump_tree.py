@@ -67,6 +67,17 @@ def main():
             hdc.start_ability(args.bundle, args.ability)
             import time
             time.sleep(3)
+            # 拉起返回成功 ≠ 前台是它：ability 名解析失败时 aa 只是报错退出，
+            # 屏幕上还是上一个应用，树也就抓成了别人的（第三台真机上踩过：
+            # 要的 com.ohos.settings，抓到的是音乐播放器）。这里一次校验，
+            # 抓错就如实失败，不让错树进分析、进数据集。
+            fg_ok, fg_why = hdc.foreground_is(args.bundle)
+            if not fg_ok:
+                print(f'[失败] 前台不是 {args.bundle}：{fg_why}')
+                print('       检查 --ability（设置类是 com.ohos.settings.MainAbility），'
+                      '或先手动处置系统弹窗。')
+                return 2
+            print(f'前台校验: {fg_why}')
 
         # ------------------------------------------------------ 抓取
         print('导出控件树 ...')
