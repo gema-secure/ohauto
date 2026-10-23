@@ -24,10 +24,14 @@ _out/
 *.log
 # ★★ 例外：真机夹具里有 .log 文件（崩溃日志原文），**必须上传**！
 #    否则依赖它们的测试会 FAIL。
-#    实测踩坑：`*.log` 曾把 tests/fixtures/c4/cppcrash_real.log 一起排除掉，
+#    实测踩坑：`*.log` 曾把 tests/fixtures/signals/cppcrash_real.log 一起排除掉，
 #    而那是 3 个端到端测试的输入。例外规则必须写在排除规则**之后**才生效。
 !tests/fixtures/**/*.log
 !**/tests/fixtures/**/*.log
+
+# 视频素材：只有 提交材料/ 下的成品入库，渲染中间件与历史版本不入库
+*.mp4
+!提交材料/*.mp4
 
 # 设备与工具
 hdc.config.json
@@ -46,8 +50,8 @@ desktop.ini
 #
 #   tests/fixtures/         真机夹具（崩溃日志、控件树、截图）
 #                           —— 部分测试直接依赖，缺了会 FAIL
-#   tests/fixtures/c3/      跨形态真机夹具（Mate X7 桌面两态）
-#   tests/fixtures/c4/      C4 信号采集夹具
+#   tests/fixtures/crossform/   跨形态真机夹具（桌面两态）
+#   tests/fixtures/signals/     信号采集夹具
 #   ohauto/devices/form_profiles.json    77 条形态档案（代码依赖）
 #   cases/*.yaml            用例
 #   .gitcode/workflows/     AtomGit 流水线（目录名不能改）
