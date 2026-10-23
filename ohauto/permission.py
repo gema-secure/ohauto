@@ -134,7 +134,10 @@ def detect_permission_dialog(
     """
     if root is None:
         return PermissionDialogVerdict()
-    for win in root.children:
+    # 根节点自己也要试一次：部分版本的 `dumpLayout` 直接把权限窗口当根返回
+    # （不套外层 Root），只遍历 children 的话这种形态会整体漏检 —— 漏检的
+    # 后果是弹窗没被作答、后续步骤全在弹窗上点空。
+    for win in (root, *root.children):
         owner = _window_owner(win)
         if not owner or not any(owner.startswith(b) for b in bundles):
             continue

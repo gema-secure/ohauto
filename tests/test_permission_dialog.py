@@ -254,5 +254,45 @@ class ExplorerPermissionIntegrationTest(unittest.TestCase):
         self.assertIsInstance(ex.permission, PermissionDialogVerdict)
 
 
+class TestDialogWindowAsRoot(unittest.TestCase):
+    """有些版本的 `dumpLayout` **直接把权限窗口当根节点返回**（不套外层 Root）。
+
+    只遍历 `root.children` 会整体漏检。漏检的后果不是「少一条日志」，而是
+    弹窗没被作答、后续每一步都点在弹窗上。
+    """
+
+    def _root(self):
+        import json
+        return parse_layout(json.dumps({
+            'attributes': {'type': 'Root', 'id': 'perm',
+                           'bundleName': 'com.ohos.permissionmanager',
+                           'bounds': '[0,0][720,1280]', 'visible': 'true'},
+            'children': [
+                {'attributes': {'type': 'Text',
+                                'text': '允许“计算器”使用多设备协同？',
+                                'bounds': '[40,400][680,460]', 'visible': 'true'}},
+                {'attributes': {'type': 'Button', 'text': '允许',
+                                'clickable': 'true', 'bounds': '[40,600][340,680]',
+                                'visible': 'true', 'enabled': 'true'}},
+                {'attributes': {'type': 'Button', 'text': '禁止',
+                                'clickable': 'true', 'bounds': '[380,600][680,680]',
+                                'visible': 'true', 'enabled': 'true'}},
+            ]}))
+
+    def test_root_itself_is_checked(self):
+        v = detect_permission_dialog(self._root())
+        self.assertTrue(v.is_permission_dialog)
+        self.assertEqual(v.allow.text.strip(), '允许')
+        self.assertEqual(v.deny.text.strip(), '禁止')
+
+    def test_plain_page_is_still_not_a_dialog(self):
+        """反例：根节点不带权限 UI 的 bundleName 时不许误判。"""
+        v = detect_permission_dialog(parse_layout(
+            '{"attributes": {"type": "Root", "bounds": "[0,0][720,1280]"},'
+            ' "children": [{"attributes": {"type": "Text", "text": "允许",'
+            '   "clickable": "true", "bounds": "[0,0][100,50]"}}]}'))
+        self.assertFalse(v.is_permission_dialog)
+
+
 if __name__ == '__main__':
     unittest.main()
