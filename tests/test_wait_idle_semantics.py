@@ -117,5 +117,90 @@ class TestWaitIdleSemantics(unittest.TestCase):
                          '签名必须来自刚重取的树')
 
 
+class TestRefreshCommandShape(unittest.TestCase):
+    """`Driver.refresh()` 拼出的命令必须能被执行。
+
+    flags 若用 `('-i' if ...) + ('-a' if ...)` 直接拼接，发出的是
+    `uitest dumpLayout-i-a -p ...` —— 缺空格，设备侧按未知参数拒绝，而这条
+    路径的失败只表现为「取不到控件树」，很难追到拼接处。
+    """
+
+    class _Hdc:
+        tmp_dir = '/data/local/tmp'
+
+        def __init__(self):
+            self.cmds = []
+
+        def shell(self, cmd, **kw):
+            self.cmds.append(cmd)
+            return ShellResult(0, '{"attributes": {}}', '', cmd)
+
+    def test_flags_are_space_separated(self):
+        h = self._Hdc()
+        d = Driver(bundle='com.demo', hdc=h, verbose=False)
+        d.refresh(unfiltered=True, with_attrs=True)
+        cmd = h.cmds[0]
+        self.assertIn('uitest dumpLayout -i -a -p', cmd)
+        self.assertNotIn('dumpLayout-i', cmd)
+
+    def test_plain_refresh_has_no_stray_flags(self):
+        h = self._Hdc()
+        d = Driver(bundle='com.demo', hdc=h, verbose=False)
+        d.refresh()
+        self.assertIn('uitest dumpLayout -p', h.cmds[0])
+        self.assertNotIn('-i', h.cmds[0].split(' -p ')[0])
+
+
+class TestInputUsesPostFocusCoords(unittest.TestCase):
+    """`input()` 必须按**聚焦之后**的位置发 `inputText`。
+
+    聚焦会拉起软键盘、触发 `adjustResize` 滚动，点击前的坐标此刻可能已经指到
+    别处；而 `inputText` 的 rc 不可靠，注错位置还可能静默通过。这里让同一个
+    `id` 的输入框在聚焦后从 y=100 移到 y=600，断言注入用的是新坐标。
+    """
+
+    _BEFORE = ('{"attributes": {"type": "Root", "bounds": "[0,0][720,1280]"},'
+               ' "children": [{"attributes": {"type": "TextInput", "id": "box",'
+               '   "bounds": "[0,50][200,150]", "clickable": "true"}}]}')
+    _AFTER = ('{"attributes": {"type": "Root", "bounds": "[0,0][720,1280]"},'
+              ' "children": [{"attributes": {"type": "TextInput", "id": "box",'
+              '   "bounds": "[0,550][200,650]", "clickable": "true"}}]}')
+
+    class _Hdc:
+        tmp_dir = '/data/local/tmp'
+
+        def __init__(self, before, after):
+            self.trees = (before, after)
+            self.dumps = 0
+            self.clicked = None
+            self.typed = []
+
+        def shell(self, cmd, **kw):
+            if 'dumpLayout' in cmd:
+                i = 0 if self.dumps == 0 else 1
+                self.dumps += 1
+                return ShellResult(0, self.trees[i], '', cmd)
+            return ShellResult(0, '', '', cmd)
+
+        def click(self, x, y):
+            self.clicked = (x, y)
+
+        def input_text(self, x, y, text):
+            self.typed.append((x, y, text))
+
+        def key_event(self, *a, **kw):
+            pass
+
+    def test_input_text_uses_refocused_position(self):
+        from ohauto.matcher import Matcher
+        h = self._Hdc(self._BEFORE, self._AFTER)
+        d = Driver(bundle='com.demo', hdc=h, verbose=False,
+                   sleep_fn=lambda s: None)
+        d.input(Matcher().id('box'), 'hi', timeout=800)
+        self.assertEqual(h.clicked, (100, 100), '聚焦仍按点击前的坐标')
+        self.assertEqual(h.typed, [(100, 600, 'hi')],
+                         '输入必须落在聚焦后的位置上')
+
+
 if __name__ == '__main__':
     unittest.main()

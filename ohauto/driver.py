@@ -234,7 +234,14 @@ class Driver:
             self.hdc.pull(dev, local)
             self._root = parse_layout(local)
         else:
-            flags = ('-i' if unfiltered else '') + ('-a' if with_attrs else '')
+            # 每个开关**自带前导空格**：原来写成
+            # ('-i' if ...) + ('-a' if ...) 直接拼接，会发出
+            # `uitest dumpLayout-i-a -p ...` —— 缺空格，设备侧必然报参数错误。
+            flags = ''
+            if unfiltered:
+                flags += ' -i'
+            if with_attrs:
+                flags += ' -a'
             # 设备侧临时目录：由 HdcLike 契约保证存在，不再 getattr 兜底 ——
             # 兜底会把「实现没满足契约」悄悄伪装成「用了默认目录」。
             dev = f'{self.hdc.tmp_dir}/ohauto_layout.json'
@@ -516,26 +523,47 @@ class Driver:
             self._record(step)
 
     def double_tap(self, target, timeout: Optional[int] = None) -> LayoutNode:
-        node = self._resolve_target(target, timeout)
-        self.hdc.double_click(*node.center)
-        self.wait_idle(timeout=self.default_timeout)
-        return node
-
-    def long_press(self, target, timeout: Optional[int] = None,
-                   ms: int = 800) -> LayoutNode:
-        node = self._resolve_target(target, timeout)
-        step = self._new_step('longPress', str(target), ms)
-        step.coords = node.center
-        self._fill_node_spec(step, node)
+        """双击。与 `tap()` 同样留痕 —— 动作失败时报告里必须有这一步。"""
+        step = self._new_step('doubleTap', str(target))
         t0 = time.time()
         try:
-            self.hdc.long_click(*node.center)
-            self._sleep(ms / 1000.0)
+            node = self._resolve_target(target, timeout)
+            step.node_path, step.coords = node.path, node.center
+            self._fill_node_spec(step, node)
+            self.hdc.double_click(*node.center)
+            self._mark_mutated()
             self.wait_idle(timeout=self.default_timeout)
+            return node
+        except Exception as e:                          # noqa: BLE001 —— 记录后原样抛出
+            step.ok, step.error = False, str(e)[:400]
+            raise
         finally:
             step.elapsed_ms = int((time.time() - t0) * 1000)
             self._record(step)
-        return node
+
+    def long_press(self, target, timeout: Optional[int] = None,
+                   ms: int = 800) -> LayoutNode:
+        # step 必须在 `_resolve_target` **之前**建：目标解析本身就可能抛
+        # （超时/找不到），原来解析在 try 之外，这种情况下报告里连一步都没有。
+        step = self._new_step('longPress', str(target), ms)
+        t0 = time.time()
+        try:
+            node = self._resolve_target(target, timeout)
+            step.node_path, step.coords = node.path, node.center
+            self._fill_node_spec(step, node)
+            self.hdc.long_click(*node.center)
+            self._mark_mutated()
+            self._sleep(ms / 1000.0)
+            self.wait_idle(timeout=self.default_timeout)
+            return node
+        except Exception as e:                          # noqa: BLE001 —— 记录后原样抛出
+            # 只有 finally 时异常照抛，但 step.ok 留在默认的 True，
+            # 报告里这一步会显示成「成功」。
+            step.ok, step.error = False, str(e)[:400]
+            raise
+        finally:
+            step.elapsed_ms = int((time.time() - t0) * 1000)
+            self._record(step)
 
     def input(self, target, text: str, timeout: Optional[int] = None,
               clear_first: bool = True) -> LayoutNode:
@@ -559,6 +587,19 @@ class Driver:
             self.hdc.click(x, y)              # 先聚焦输入框
             self._mark_mutated()
             self.wait_idle(timeout=2000)
+
+            # 聚焦会拉起软键盘、触发 adjustResize 滚动 —— 点击前的坐标此刻可能
+            # 已经指到别处。重新取树、对同一目标重新定位，用聚焦后的真实位置发
+            # inputText；重定位不成就退回旧坐标，但**必须留痕**，否则「用了新
+            # 坐标」和「拿旧坐标硬发」在报告里长得一模一样。
+            after = self._relocate_after_focus(target)
+            if after is None:
+                step.extra['refocus'] = '聚焦后重定位失败，沿用点击前坐标'
+            else:
+                if after != (x, y):
+                    step.extra['refocus'] = f'{x},{y} -> {after[0]},{after[1]}'
+                x, y = after
+                step.coords = (x, y)
 
             if clear_first:
                 # Ctrl+A 全选 —— **这里刻意不再发 Del(2075)**。
@@ -655,8 +696,18 @@ class Driver:
             self._record(step)
 
     def home(self) -> None:
-        self.hdc.home()
-        self.wait_idle(timeout=3000)
+        step = self._new_step('home')
+        t0 = time.time()
+        try:
+            self.hdc.home()
+            self._mark_mutated()
+            self.wait_idle(timeout=3000)
+        except Exception as e:                          # noqa: BLE001 —— 记录后原样抛出
+            step.ok, step.error = False, str(e)[:400]
+            raise
+        finally:
+            step.elapsed_ms = int((time.time() - t0) * 1000)
+            self._record(step)
 
     def _resolve_target(self, target, timeout: Optional[int]) -> LayoutNode:
         if isinstance(target, LayoutNode):
@@ -667,6 +718,24 @@ class Driver:
                 return self.wait_for(target, timeout=timeout)
             return node
         raise TypeError(f'target 必须是 Matcher 或 LayoutNode，收到 {type(target)}')
+
+    def _relocate_after_focus(self, target) -> Optional[Tuple[int, int]]:
+        """聚焦后按同一目标重新定位，返回新的中心点；拿不到返回 None。
+
+        为什么需要：`input()` 先按旧坐标 click 聚焦，软键盘弹出 / `adjustResize`
+        滚动之后同一个输入框的位置会变，继续用旧坐标发 `inputText` 会把文本
+        注入到别处（而 `inputText` 的 rc 不可靠，失败还会静默通过）。
+
+        只对 `Matcher` 生效：传 `LayoutNode` 的调用方给的是一个**对象**，
+        它不随刷新更新，按它重算没有意义。
+        """
+        if not isinstance(target, Matcher):
+            return None
+        try:
+            fresh = self.find(target, refresh=True)
+        except Exception:                                  # noqa: BLE001 —— 旁路
+            return None
+        return fresh.center if fresh is not None else None
 
     # -------------------------------------------------------- 屏幕
 
