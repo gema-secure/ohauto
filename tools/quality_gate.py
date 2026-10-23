@@ -4,10 +4,11 @@
 
 | 要求 | 本脚本的关卡 |
 |---|---|
-| 静态检查 | [1/3] `tools/static_check.py`（零依赖，见该文件说明） |
-| 单元测试 | [2/3] `unittest discover`（1537 项） |
-| 覆盖率 ≥70% | [2/3] `coverage report`（`.coveragerc` 里 `fail_under`） |
-| 模拟端到端 | [3/3] `examples/offline_demo.py`（不需要真机） |
+| 静态检查 | [1/5] `tools/static_check.py`（零依赖，见该文件说明） |
+| 导出产物 | [2/5] `.ets` 的 ArkTS/hypium 规则 |
+| 单元测试 | [3/5] `unittest discover`（1552 项） |
+| 覆盖率 ≥70% | [4/5] `coverage report`（`.coveragerc` 里 `fail_under`） |
+| 模拟端到端 | [5/5] `examples/offline_demo.py`（不需要真机） |
 | 门禁：失败即阻断 | 任一步失败 → 退出码非 0 |
 
 ★ 设计要点
