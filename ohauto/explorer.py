@@ -956,6 +956,19 @@ class Explorer:
             items.append((pr, idx, n))
 
         if prioritized:
+            # 容器 vs 子控件：设置页是「整张卡片可点击、卡片里每一行也可点击」
+            # 的结构，卡片中心往往正落在某个子行上 —— 点下去是子行，日志和
+            # 状态图却记成卡片，标题、归属一起错位（第三台真机上就是这样把
+            # 「WLAN」记成了「声音」）。中心被更小候选覆盖的外层，直接去掉。
+            keep: List[Tuple[int, int, LayoutNode]] = []
+            for pr, idx, n in items:
+                cx, cy = n.rect.center
+                covered = any(m is not n and m.rect.area < n.rect.area
+                              and m.rect.contains(cx, cy)
+                              for _p, _i, m in items)
+                if not covered:
+                    keep.append((pr, idx, n))
+            items = keep
             # 档位降序；同档保持控件树顺序（稳定排序），保证可复现
             items.sort(key=lambda it: (-it[0], it[1]))
         return [n for _, _, n in items]
