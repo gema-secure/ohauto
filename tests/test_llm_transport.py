@@ -119,6 +119,17 @@ class TestParsers(unittest.TestCase):
             llm_transport.extract_json_array('```json\n[{"a": 1}]\n```'),
             [{'a': 1}])
 
+    def test_extract_json_array_survives_brackets_in_prose(self):
+        """正文里出现方括号时不许整体解析失败。
+
+        `re.search(r'\\[.*\\]', s, re.S)` 是贪婪的：从第一个 `[` 取到最后一个
+        `]`，一旦模型先说了「[按钮]」再给数组，整段拿去 json.loads 必然失败，
+        然后被当成「图中无目标」**静默**返回 []。
+        """
+        text = '我看到了 [按钮] 和 [输入框]，结果是：\n[{"label": "登录", "bbox": [1,2,3,4]}]'
+        self.assertEqual(llm_transport.extract_json_array(text),
+                         [{'label': '登录', 'bbox': [1, 2, 3, 4]}])
+
     @mock.patch.dict(os.environ, {'T_URL': 'http://env', 'T_KEY': 'k-env'})
     def test_env_triple_override_wins(self):
         base, key, model, missing = llm_transport.env_triple(

@@ -82,14 +82,22 @@ def extract_json_array(text: str) -> List[Dict[str, Any]]:
     m = _FENCE_RE.search(s)
     if m:
         s = m.group(1).strip()
-    m = re.search(r'\[.*\]', s, re.S)
-    if not m:
-        return []
-    try:
-        arr = json.loads(m.group(0))
-    except json.JSONDecodeError:
-        return []
-    return arr if isinstance(arr, list) else []
+    # 从每个 `[` 位置**逐个尝试解析**，而不用 `\[.*\]` 贪婪截取：
+    # 模型正文里出现「[按钮]」「[1]」这类方括号时，贪婪匹配会把第一个 `[`
+    # 到最后一个 `]` 整段拿去 json.loads，必然失败，然后被当成
+    # 「图中无目标」静默返回 [] —— 那是把解析失败伪装成正常结论。
+    decoder = json.JSONDecoder()
+    pos = 0
+    while True:
+        start = s.find('[', pos)
+        if start < 0:
+            return []
+        try:
+            obj, _end = decoder.raw_decode(s, start)
+        except json.JSONDecodeError:
+            pos = start + 1
+            continue
+        return obj if isinstance(obj, list) else []
 
 
 def env_triple(url_names: Sequence[str], key_names: Sequence[str],
