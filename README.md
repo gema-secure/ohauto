@@ -11,6 +11,9 @@ ohauto（OpenHarmony + Automation）是 OpenHarmony 应用 UI 自动化能力层
 | 材料 | 文件 |
 |---|---|
 | 参赛作品简介 | [`提交材料/01-参赛作品简介.md`](提交材料/01-参赛作品简介.md) |
+| 开发设计文档 | [`提交材料/02-开发设计文档.docx`](提交材料/02-开发设计文档.docx) |
+| 答辩演示文稿 | [`提交材料/03-答辩PPT.pptx`](提交材料/03-答辩PPT.pptx) |
+| 演示视频 | [`提交材料/04-演示视频.mp4`](提交材料/04-演示视频.mp4) |
 | 辅助材料 | [`docs/API手册.md`](docs/API手册.md) · [`docs/architecture.png`](docs/architecture.png) · [`docs/demo/onepager.html`](docs/demo/onepager.html) · [`docs/demo/gallery.html`](docs/demo/gallery.html) |
 
 ```
