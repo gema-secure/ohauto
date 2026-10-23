@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
-"""真机端到端冒烟 —— 一次跑完 A/B 两边的全部模块。
+"""真机端到端冒烟 —— 一次跑完全部模块的五个阶段。
 
 为什么有这个东西
 ----------------
-B 的交付包请求 C「集成日顺手带一次真机冒烟（探索 + 生成 + 归因 + 压测各跑一遍）」，
-理由是他自己所有数字都是**模拟设备自测**、不是独立验收。
-A 同理：A1 视觉通道、A3 降级链与自愈也只在 `FakeHdc` 上验过。
+各模块的既有数字大多来自**模拟设备自测**，缺少一次独立的真机交叉验证：
+视觉通道、降级链与自愈只在 `FakeHdc` 上验过，探索、生成与归因同样如此。
 
-这个脚本就是那两个请求的载体：在**真机**上把五个阶段各跑一遍，
+这个脚本承担这项验证：在**真机**上把五个阶段各跑一遍，
 每阶段独立报告，任一阶段失败**不阻断其余阶段**（冒烟的价值在于一次性看全貌，
 而不是遇到第一个错误就退出）。
 
@@ -143,7 +142,7 @@ def stage_locator(args, d):
 # --------------------------------------------------------------------- 2
 
 def stage_explore(args, d):
-    """B1/B2：真机探索与覆盖度。会真的点击，默认只点计算器（无副作用）。"""
+    """探索与覆盖度。会真的点击，默认只点计算器（无副作用）。"""
     stage(2, 'B · 探索（真机 BFS + 覆盖度）')
     if args.skip_explore:
         print('  （--skip-explore，跳过）')
@@ -165,7 +164,7 @@ def stage_explore(args, d):
         print(f'  可交互控件      {cov.interactive_visited}/{cov.interactive_total}')
         print(f'  覆盖度          {getattr(cov, "ratio", float("nan")):.1%}')
         print(f'  被安全策略拦下  {cov.blocked}')
-        # C3：权限弹窗是**有副作用的动作**（点了就等于替人作答），必须显式报出来
+        # 权限弹窗是**有副作用的动作**（点了就等于替人作答），必须显式报出来
         if ex.permission_events:
             print(f'  权限弹窗        策略={ex.permission_policy} '
                   f'作答 {len(ex.permission_events)} 次')
@@ -195,7 +194,7 @@ def stage_explore(args, d):
 # --------------------------------------------------------------------- 3
 
 def stage_generate(args, d):
-    """B3：自然语言转用例。没配模型时用 ScriptedProvider 走链路（不碰网络）。"""
+    """自然语言转用例。没配模型时用 ScriptedProvider 走链路（不碰网络）。"""
     stage(3, 'B · 生成（描述 → 测试点 → DSL）')
     try:
         page = d.refresh()
@@ -213,7 +212,7 @@ def stage_generate(args, d):
         record('用例生成链路（ScriptedProvider）', len(steps) > 0, f'{len(steps)} 步')
     except Exception as e:
         # 空回复下 GenerationError 是**预期**结果：说明它没硬凑一条看起来能跑的用例，
-        # 而是明确报出「拿不到可执行用例」。这本身就是 B3 想要的语义。
+        # 而是明确报出「拿不到可执行用例」。这就是该阶段要求的语义。
         name = type(e).__name__
         reason = getattr(e, 'reason', None) or getattr(e, 'reject_reason', None)
         print(f'  {name}: {e}')
@@ -227,7 +226,7 @@ def stage_generate(args, d):
 # --------------------------------------------------------------------- 4
 
 def stage_diagnose(args, d):
-    """B4：失败归因。真机跑一条注定失败的用例，看能否正确归类。"""
+    """失败归因。真机跑一条注定失败的用例，看能否正确归类。"""
     stage(4, 'B · 归因（真机失败样本 → 四分类）')
     try:
         case = {'name': 'smoke_locate_fail',
@@ -260,7 +259,7 @@ def stage_diagnose(args, d):
 # --------------------------------------------------------------------- 5
 
 def stage_stress(args, d):
-    """B5：压测用例生成 + 分片执行（DSL 无循环，靠 run_suite 层重复）。"""
+    """压测用例生成 + 分片执行（DSL 无循环，靠 run_suite 层重复）。"""
     stage(5, 'B · 压测（生成 + 分片执行）')
     try:
         cases = stress_cases('重复点击', chunks=args.chunks, bundle=args.bundle,

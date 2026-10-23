@@ -4,11 +4,11 @@
 
 - record_locator_failure 幂等 —— locate() 落空 + 执行器回写
          必须只计一次（修复前 consecutive_failures == 2）；
-- C 2.1  自愈验证失败必须真回滚 —— spec 线索逐字段相等、generation 不
+- 自愈验证失败必须真回滚 —— spec 线索逐字段相等、generation 不
          自增、consecutive_failures 不清零（修复前「报已回滚但没回滚」）；
-- B @A   A5 摘要器/控件清单双向覆盖 + 借子节点文案 —— 真机样本
+- 摘要器与控件清单双向覆盖 + 借子节点文案 —— 真机样本
          app_settings（0 id）/ sample_calc（19/20 只有 id）上必须可用；
-- C 2.3  vision L1 补 deep 线索 + 取最紧匹配；保守版（默认）要求最紧
+- vision L1 补 deep 线索 + 取最紧匹配；保守版（默认）要求最紧
          候选文案与指令完全相等，激进版由 l1_require_exact=False 打开。
 
 全部离线运行：不需要真机、不需要 key、不需要网络。
@@ -46,7 +46,7 @@ def real_tree(name):
         return parse_layout(json.load(f))
 
 
-# ================================================================ C 2.2 幂等
+# ================================================================ 记账幂等
 
 class TestFailureIdempotency(unittest.TestCase):
     """验收原文：locate() 落空 + 执行器回写后
@@ -114,7 +114,7 @@ class TestFailureIdempotency(unittest.TestCase):
         self.assertEqual(m.health(spec.locator_id).consecutive_failures, 4)
 
 
-# ================================================================ C 2.1 真回滚
+# ================================================================ 自愈真回滚
 
 class TestRepairRollback(unittest.TestCase):
     """验证失败必须把 spec 恢复原状。
@@ -182,10 +182,10 @@ class TestRepairRollback(unittest.TestCase):
         self.assertEqual(m.health(spec.locator_id).consecutive_failures, 0)
 
 
-# ================================================================ B @A A5 清单
+# ================================================================ 控件清单
 
 class TestTreesumBorrowChildText(unittest.TestCase):
-    """B@A：真机上 app_settings 0 个 id（标签在子 Text 上）、
+    """真机上 app_settings 0 个 id（标签在子 Text 上）、
     sample_calc 19/20 只有 id —— 清单/摘要必须双向覆盖 + 借子节点文案。"""
 
     def test_real_app_settings_borrowed_text_present(self):
@@ -219,10 +219,10 @@ class TestTreesumBorrowChildText(unittest.TestCase):
         out = summarize_tree(tree)
         head = out.splitlines()[0]
         ratio = float(head.split('（')[1].rstrip('%）'))
-        self.assertLess(ratio, 50.0, '真机树压缩率必须 < 50%（A5 验收口径）')
+        self.assertLess(ratio, 50.0, '真机树压缩率必须 < 50%（摘要器验收口径）')
 
 
-# ================================================================ C 2.3 vision L1
+# ================================================================ vision L1
 
 class _ExplodingProvider:
     """只要被调用就炸 —— 用来证明 L1 真的没调模型。"""

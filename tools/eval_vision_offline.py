@@ -89,7 +89,7 @@ try:
                                TieredVisionLocator, VisionError,
                                VisionProvider, build_provider)
 except ModuleNotFoundError as exc:                      # pragma: no cover
-    # 交付包里只带了 tools/ 和 datasets/，没带 ohauto/ ——
+    # 单独分发时只带 tools/ 和 datasets/、没带 ohauto/ ——
     # 独立解压会在这里炸成一句看不懂的 ModuleNotFoundError。
     # 说清楚怎么用，比让人去猜 sys.path 强。
     raise SystemExit(

@@ -43,7 +43,7 @@ def _reset_exploration_state(ex: Explorer) -> None:
     视觉页缓存与 vision_stats——缓存跨轮留存正是 B14 的测量口径。
 
     台账清单与 ``Explorer.__init__`` 一一对应；放在工具侧而不是加公开
-    reset 方法，是为了不改探索器本体（B 侧模块，测量工装自兜底）。"""
+    reset 方法，是为了不改探索器本体（测量工装自兜底）。"""
     from ohauto.explorer import DialogVerdict, StateGraph
     ex.graph = StateGraph()
     ex._universe = set()
@@ -110,7 +110,7 @@ def main(argv: List[str] = None) -> int:
         for rnd in range(1, args.rounds + 1):
             # 每轮冷启动：唤醒（防息屏）→ force-stop → MainAbility 显式拉起
             # （`aa start -b` 隐式拉起对扩展型应用不可靠且 rc=0 说谎）→
-            # 等 8s+（冷启动 6s+，交接红线）
+            # 等 8s+（冷启动实测 6s+）
             guard.ensure_awake()
             hdc.shell('aa force-stop %s; aa start -a %s -b %s'
                       % (args.bundle, args.ability, args.bundle), timeout=30)

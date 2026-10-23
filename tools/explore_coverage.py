@@ -80,7 +80,7 @@ def main() -> int:
     ap.add_argument('--max-pages', type=int, default=8)
     ap.add_argument('--actions-per-page', type=int, default=4)
     ap.add_argument('--tarpit-off', action='store_true',
-                    help='关闭防粘滞（对照 B7 的「tarpit 是否误伤」）')
+                    help='关闭防粘滞（用于对照「tarpit 是否误伤」）')
     args = ap.parse_args()
 
     print('=' * 70)

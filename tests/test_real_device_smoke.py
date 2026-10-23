@@ -146,7 +146,7 @@ class TestDialogOnRealTrees(unittest.TestCase):
         应用    hostWindowId=<各自> [0,72][720,1208]
 
     —— 四个窗口，判据恒真。后果不是「偶尔误报」，是**弹窗置顶永远生效**
-    （HIGH 档覆盖一切），B2 的四档优先级整体失效。
+    （HIGH 档覆盖一切），四档优先级整体失效。
 
     现在改成几何判据：两个窗口**重叠面积 ≥ 屏幕 5%** 才算叠加
     （状态栏与系统窗只重叠 2.5%，真弹窗 ≥ 9%）。
@@ -352,7 +352,7 @@ class TestStressTargetOnRealTrees(unittest.TestCase):
 
 
 class TestCatalogOnRealTrees(unittest.TestCase):
-    """控件清单在「没有 id」的真机页面上仍然可用（B3 发提示词要用）。"""
+    """控件清单在「没有 id」的真机页面上仍然可用（生成用例时要用）。"""
 
     def test_settings_page_catalog_is_built_from_text(self):
         catalog = control_catalog(parse_layout(_load('app_settings')))

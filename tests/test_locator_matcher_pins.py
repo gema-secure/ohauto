@@ -1,11 +1,11 @@
 """验收钉子：自愈幂等代次 / within 边界 / 未注册 spec。
 
-- A-0（P0）：`locator.py::_count_failure` 的幂等键只用 `_locate_seq`，
+- 缺陷一（P0）：`locator.py::_count_failure` 的幂等键只用 `_locate_seq`，
   而执行器走 matcher/layout **从不调 locate()** → 代次恒 0 → 回写全被
   当重复记账丢掉 → `consecutive_failures` 停在 1 → 自愈永不触发。
-- A-1（高危）：`matcher.py::within()` ①嵌套容器重复命中（`nth` 取错控件）
+- 缺陷二（高危）：`matcher.py::within()` ①嵌套容器重复命中（`nth` 取错控件）
   ②`walk()` 不过滤 visible，把调用方过滤掉不可见节点重新捞回。
-- A-2（高危）：`locator.py::_resolve_spec` 只补 `_specs` 不补 `_health`
+- 缺陷三（高危）：`locator.py::_resolve_spec` 只补 `_specs` 不补 `_health`
   → 传未注册 `LocatorSpec` 给 `locate()` 第一行就 KeyError。
 
 全部离线运行：不需要真机、不需要 key、不需要网络。
@@ -37,7 +37,7 @@ def node(type_, id='', text='', bounds=(0, 0, 10, 10), clickable=False,
     return n
 
 
-# ============================================================ A-0 幂等代次
+# ============================================================ 缺陷一 幂等代次
 
 class TestA0AttemptIdempotency(unittest.TestCase):
     """`record_locator_failure(locator_id, reason, attempt=None)`：
@@ -88,7 +88,7 @@ class TestA0AttemptIdempotency(unittest.TestCase):
     def test_a0d_threshold_reached_so_self_heal_can_fire(self):
         """阈值口径回归：3 次连续 attempt 就必须够得着默认阈值。
 
-        这是 A-0 的**业务后果**钉子 —— 修复前 consecutive_failures 停在 1，
+        这是缺陷一的**业务后果**钉子 —— 修复前 consecutive_failures 停在 1，
         `failure_threshold=3` 永远达不到，自愈的入口条件直接不成立。
         """
         mgr = LocatorManager(failure_threshold=3)
@@ -136,17 +136,17 @@ class TestA0AttemptIdempotency(unittest.TestCase):
         self.assertEqual(mgr.health(lid).consecutive_failures, 2)
 
     def test_a0g_unknown_id_write_is_still_a_noop(self):
-        """未知 locator_id 的失败回写仍然是无副作用 no-op（B「缺 id 不调」契约）。
+        """未知 locator_id 的失败回写仍然是无副作用 no-op（缺 id 不调契约）。
 
-        A-2 的修法给错漏的账本"就地补建"，但**不能**让失败回写顺手把
-        账本建出来 —— 那会让 B 侧契约形同虚设，还会给垃圾 id 留账本。
+        缺陷三的修法给错漏的账本"就地补建"，但**不能**让失败回写顺手把
+        账本建出来 —— 那会让失败回写契约形同虚设，还会给垃圾 id 留账本。
         """
         mgr = LocatorManager()
         self.assertFalse(mgr._count_failure('L_NOT_EXIST', '缺 id'))
         self.assertNotIn('L_NOT_EXIST', mgr.all_health())
 
 
-# ========================================================= A-1 within 两个洞
+# ========================================================= 缺陷二 within 两个洞
 
 class TestA1WithinHoles(unittest.TestCase):
     """`Matcher.within()` 的三条约束型语义（详见 matcher.py 的 docstring）。"""
@@ -227,7 +227,7 @@ class TestA1WithinHoles(unittest.TestCase):
         self.assertEqual(hits, [])
 
 
-# ======================================================== A-2 未注册 spec
+# ======================================================== 缺陷三 未注册 spec
 
 class TestA2UnregisteredSpec(unittest.TestCase):
 
@@ -274,7 +274,7 @@ class TestA2UnregisteredSpec(unittest.TestCase):
     def test_a2e_health_query_stays_strict(self):
         """查询接口仍然严格：未知 id 抛 KeyError，不返回空账本。
 
-        A-2 的教训是"注册链路必须补账本"，不是"查错 id 也该给个默认可信
+        缺陷三的教训是"注册链路必须补账本"，不是"查错 id 也该给个默认可信
         对象" —— 后者会把调用方拼错 id 的 bug 藏起来。
         """
         mgr = LocatorManager()

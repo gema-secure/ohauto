@@ -105,7 +105,7 @@ class TestPromptsFile(unittest.TestCase):
 
     def test_shipped_prompts_file_is_usable(self):
         """仓库里那份补充描述必须真的读得出 5 条（不含注释）。"""
-        p = os.path.join(ROOT, 'tools', 'b8_prompts_calc.txt')
+        p = os.path.join(ROOT, 'tools', 'prompts_calc.txt')
         self.assertTrue(os.path.isfile(p), p)
         got = ev.load_prompts_file(p)
         self.assertEqual(len(got), 5, got)

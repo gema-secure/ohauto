@@ -1,22 +1,17 @@
 # -*- coding: utf-8 -*-
 """把执行失败回写接到定位器自愈上。
 
-契约原文
---------
-> **你也要给出去**：执行失败时调用 A 的 `record_locator_failure` 回写，
-> 让自愈有输入。
+问题
+----
+两处的接口**对不上**：
 
-断在哪
-------
-两边的接口**对不上**：
-
-| 侧 | 手里有什么 | 对方要什么 |
+| 位置 | 手里有什么 | 需要什么 |
 |---|---|---|
-| C 的 `Runner` | **目标规格**（DSL 里写的 `{'id': '7'}`） | — |
-| A 的 `LocatorManager` | **`locator_id`**（`L001_7`，它自己册子里发的水号） | — |
+| `Runner` | **目标规格**（DSL 里写的 `{'id': '7'}`） | — |
+| `LocatorManager` | **`locator_id`**（`L001_7`，注册时生成的水号） | — |
 
 执行器的定位走 `matcher`/`layout`，**从来没经过 `LocatorManager`**，所以
-runner 手里根本没有那个号。A 交付说明里写的路径是「执行时先 `locate()` 拿
+runner 手里根本没有那个号。另一条路径是「执行时先 `locate()` 拿
 `LocateResult.locator_id`」—— 那要求把 `LocatorManager` 塞进执行链路，
 改动面很大。
 

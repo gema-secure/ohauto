@@ -2,7 +2,7 @@
 
 验收句是「note_stability 类
 用例可在真机产出内存趋势曲线**并入报告**」。采集与分析已在
-tests/test_h_perf_asserts.py 钉过；本文件钉的是**最后一公里**：
+tests/test_perf_asserts.py 钉过；本文件钉的是**最后一公里**：
 
 1. `Runner(collect_perf=False)`（默认）零额外设备往返，曲线为 None；
 2. 开启后每步采一轮，曲线挂 `CaseResult.perf`，多用例合并进

@@ -581,8 +581,7 @@ class TestContract(unittest.TestCase):
 class TestInjectedSamples20(_TmpCase):
     """验收本身：注入四类故障各 5 例，准确率 ≥ 80%。
 
-    样例全部在 `FakeHdc` 上造，**不需要真机** —— 这也是「B 不碰真机」这条
-    分工约定下唯一可行的做法。
+    样例全部在 `FakeHdc` 上造，**不需要真机**，这是离线验收唯一可行的做法。
 
     ★ 扩容：原 20 条**原样保留**（对应验收原文，动一条
     对比基线就断了），另增 `_extra_samples()` 四类各 5 例——机制不变、

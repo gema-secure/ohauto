@@ -104,7 +104,7 @@
 | `python tools/measure_locate_latency.py --rounds 20 --label <场景>` | 定位延迟分段测量（设备侧/宿主侧） |
 | `python tools/case_health.py` | 用例健康度（可失败性校验） |
 | `python tools/crossform_run.py --device <实例> --baseline open --target close` | 跨形态差异比对（退出码见 §三） |
-| `python tools/stability_telemetry.py` / `stability_trend.py` / `b15_app_stability.py` | 长稳遥测与趋势（用法见 §六） |
+| `python tools/stability_telemetry.py` / `stability_trend.py` / `app_stability.py` | 长稳遥测与趋势（用法见 §六） |
 | `python tools/export_hypium.py` / `sign_hap.py` | hypium 脚本导出与 HAP 签名 |
 | `python tools/emulator_cli.py start --skip-check` | DevEco 模拟器管理（用法见 §六） |
 | `python examples/collect_signals.py --bundle <包名> [--sim]` | 信号采集 CLI（`--sim` 无真机走通） |
@@ -166,7 +166,7 @@ sig: Signals = collect_signals(hdc, bundle='com.ohos.note')
 
 > key 只走环境变量，不落盘、不入库。
 
-### 系统权限弹窗（C3）
+### 系统权限弹窗
 
 应用冷启动常弹系统权限门（属主 `com.ohos.permissionmanager`）。它盖住内容区时
 `dumpLayout` 返回的是**弹窗的树**，定位、探索、压测会一起卡在上面 —— 真机实测过

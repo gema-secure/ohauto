@@ -1,7 +1,6 @@
 """Tarpit 防粘滞的单测 —— 「点一下、文案变一点」的页面不许把 BFS 队列灌满。
 
-背景见 explorer.py 的 TarpitPolicy 段与
-项目内部调研档案（仓库外）§三（HapTest --simk）。
+背景见 explorer.py 的 TarpitPolicy 段，做法参考 HapTest 的 --simk。
 
 红线（也是这里的验收口径）：
   拦截只影响「要不要入队探索」，**不影响记账** —— 状态照加、边照记、

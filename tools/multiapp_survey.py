@@ -114,7 +114,7 @@ def collect_one(hdc: Hdc, guard: DeviceGuard, name: str, bundle: str,
     time.sleep(1)
     pre = pull_shot(hdc, f'_{name}_pre', out_dir)   # 拉起前基线（防假绿）
     hdc.shell(f'aa start -a {ability} -b {bundle}', timeout=30)
-    time.sleep(6)                                  # 冷启动 6s+（交接红线）
+    time.sleep(6)                                  # 冷启动实测 6s+
     post = pull_shot(hdc, name, out_dir)
     if not post:
         return False, f'{bundle}: screenCap 失败'

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""应用长稳遥测采样器（B15）—— CLI 壳。
+"""应用长稳遥测采样器 —— CLI 壳。
 
 采样与分析原语已收编进 `ohauto/perf.py`，
 本文件只保留命令行入口：参数解析、采样循环、结论打印。周期采样与趋势曲线
@@ -9,15 +9,15 @@
 
     # 采样（与 run_suite 并行跑，直到 Ctrl+C 或 --duration 到期）
     python tools/stability_telemetry.py --target 127.0.0.1:5555 \\
-        --bundle com.huawei.hmos.settings --out tools/_out/b15/telemetry.jsonl
+        --bundle com.huawei.hmos.settings --out tools/_out/stability/telemetry.jsonl
 
     # 采样一轮立即退出（自检用）
     python tools/stability_telemetry.py --once --target ...
 
     # 分析：PSS 斜率 / 负载趋势 / 缺样本统计
-    python tools/stability_telemetry.py --analyze tools/_out/b15/telemetry.jsonl --strict
+    python tools/stability_telemetry.py --analyze tools/_out/stability/telemetry.jsonl --strict
 
-设计约定（继承自 ohauto/perf.py，即原「B15 应用长稳执行设计」）：
+设计约定（继承自 ohauto/perf.py，即原「应用长稳执行设计」）：
 - 采样失败**记 None + 警告字段**，绝不编造、绝不中断——「缺样本 ≠ 正常」；
 - 单次采样 < 2 秒（60 秒间隔下占空比 ~3%，不影响被测跑测的延迟口径）；
 - 零依赖：hdc 交互复用 `ohauto.hdc`。
@@ -85,13 +85,13 @@ def analyze(path: str, strict: bool = False) -> int:
 # ---------------------------------------------------------------- 驱动
 
 def main(argv: List[str] = None) -> int:
-    ap = argparse.ArgumentParser(description='应用长稳遥测采样器（B15）')
+    ap = argparse.ArgumentParser(description='应用长稳遥测采样器')
     # target/bundle 只在**采样模式**必填（分析模式不需要设备）——
     # 不能用 argparse 的 required=True：它会在解析阶段强制校验，
     # 把 `--analyze` 单独调用也拦下来（自检踩过）。
     ap.add_argument('--target', default=None, help='hdc 目标（真机串号或模拟器 host:port）')
     ap.add_argument('--bundle', default=None, help='被测应用包名')
-    ap.add_argument('--out', default='tools/_out/b15_telemetry.jsonl',
+    ap.add_argument('--out', default='tools/_out/stability_telemetry.jsonl',
                     help='输出 jsonl（追加写）')
     ap.add_argument('--interval', type=int, default=DEFAULT_INTERVAL)
     ap.add_argument('--duration', type=int, default=0,
@@ -121,7 +121,7 @@ def main(argv: List[str] = None) -> int:
         if args.partial and os.path.isfile(args.partial):
             try:
                 # cycles 文件是 **JSONL**（每周期一行）——整文件 json.load 会炸，
-                # 只读最后一行的 totals.cycles（B15 首跑踩过）。
+                # 只读最后一行的 totals.cycles（首版实现踩过）。
                 with open(args.partial, encoding='utf-8') as f:
                     last = ''
                     for line in f:

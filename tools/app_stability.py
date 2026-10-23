@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""B15 应用长稳编排器 v2 —— 带前台核验的混合套件 2 小时连续压力。
+"""应用长稳编排器 v2 —— 带前台核验的混合套件 2 小时连续压力。
 
 v1 的教训：hmos.settings 是**扩展型应用（无 MainAbility）**，
 `aa start -b` 的隐式拉起时灵时不灵，而 **rc 照样是 0**（shell 通道成功 ≠
@@ -15,12 +15,12 @@ v2 的每周期流程（约 2 分钟）::
 
 用法::
 
-    python tools/b15_app_stability.py --target 127.0.0.1:5555 \\
-        --bundle com.huawei.hmos.settings --suite-dir tools/_out/b15_suite \\
-        --cycles 90 --out tools/_out/b15_run \\
+    python tools/app_stability.py --target 127.0.0.1:5555 \\
+        --bundle com.huawei.hmos.settings --suite-dir tools/_out/explore_traces \\
+        --cycles 90 --out tools/_out/stability_run \\
         --fold-instance "Mate X7" --fold-every 10
 
-先 --cycles 1 自测，再上 2 小时全量。判据见项目内部 B15 执行设计（仓库外）。
+先 --cycles 1 自测，再上 2 小时全量。判据见 `docs/API手册.md`。
 """
 from __future__ import annotations
 
@@ -58,8 +58,8 @@ def _log(msg: str) -> None:
 
 def _dump_texts_and_icon(hdc: Hdc) -> Tuple[set, Optional[Tuple[int, int]]]:
     """dump 一次，返回 (全部 text 集合, 桌面设置图标的点击中心)。"""
-    hdc.shell('uitest dumpLayout -p /data/local/tmp/b15_fg.json', timeout=30)
-    r = hdc.shell('cat /data/local/tmp/b15_fg.json', timeout=30)
+    hdc.shell('uitest dumpLayout -p /data/local/tmp/app_fg.json', timeout=30)
+    r = hdc.shell('cat /data/local/tmp/app_fg.json', timeout=30)
     raw = (r.stdout or '').strip()
     texts: set = set()
     icon: Optional[Tuple[int, int]] = None
@@ -147,12 +147,12 @@ def _fold(hdc_target: str, instance: str, state: str) -> bool:
 
 
 def main(argv: List[str] = None) -> int:
-    ap = argparse.ArgumentParser(description='B15 应用长稳编排器 v2（前台核验版）')
+    ap = argparse.ArgumentParser(description='应用长稳编排器 v2（前台核验版）')
     ap.add_argument('--target', required=True, help='模拟器 hdc 目标')
     ap.add_argument('--bundle', required=True)
     ap.add_argument('--suite-dir', required=True)
     ap.add_argument('--cycles', type=int, default=90)
-    ap.add_argument('--out', default='tools/_out/b15_run')
+    ap.add_argument('--out', default='tools/_out/stability_run')
     ap.add_argument('--fold-instance', default=None)
     ap.add_argument('--fold-every', type=int, default=10)
     ap.add_argument('--fold-states', default='close,open')

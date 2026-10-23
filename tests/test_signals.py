@@ -100,7 +100,7 @@ class TestParseRealCrashLog(unittest.TestCase):
         self.assertEqual(r.process_life_time, '6s')
 
     def test_reason_is_parsed_into_signal(self):
-        """`Reason:Signal:...` 是 B4 判「应用缺陷」的核心依据。"""
+        """`Reason:Signal:...` 是归因判「应用缺陷」的核心依据。"""
         self.assertEqual(self.rec.signal, 'SIGSEGV')
 
     def test_stack_head_is_collected(self):
@@ -154,7 +154,7 @@ class TestParseTempCrashLog(unittest.TestCase):
         """★ 关键：取不到的字段必须是 None，不能填 False。
 
         填 False 会把「没采到这个字段」误报成「后台崩溃」—— 那是**结论**，
-        不是客观证据，B4 会因此判错。
+        不是客观证据，归因会因此判错。
         """
         self.assertIsNone(self.rec.foreground)
         self.assertEqual(self.rec.reason,
@@ -543,7 +543,7 @@ class TestWhiteScreen(unittest.TestCase):
         这是修 P1 时补的测试。此前的缺陷是：`FakeHdc()` 默认写纯色截图，
         于是「什么都没发生」的干净场景也被判成 WHITE_SCREEN 0.99，
         而 `examples/collect_signals.py --sim`（文档推荐的离线路径）正是走默认值。
-        B4 一旦消费 `sig.has('WHITE_SCREEN')`，就会把正常执行判成「应用缺陷：白屏」。
+        归因一旦消费 `sig.has('WHITE_SCREEN')`，就会把正常执行判成「应用缺陷：白屏」。
 
         测的是「默认值对不对」，而不是「判据分支对不对」——
         判据的真/假两个分支上面两个测试已经覆盖了，但它们挡不住默认值踩坑。
@@ -715,7 +715,7 @@ class TestProcessAndHilog(unittest.TestCase):
 class TestSignalsContract(unittest.TestCase):
 
     def test_to_dict_matches_the_documented_field_list(self):
-        """契约字段一个都不能少 —— B4 要按它写归因规则。"""
+        """契约字段一个都不能少 —— 归因规则按它来写。"""
         sig = collect_signals(FakeHdc(), BUNDLE, out_dir=out_dir())
         d = sig.to_dict()
         for key in ('bundle', 'captured_at', 'device_time', 'hilog_tail',

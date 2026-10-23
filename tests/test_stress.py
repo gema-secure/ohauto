@@ -4,8 +4,8 @@
     「能生成并在真机跑通至少 1 个压测场景」
     「**swipe 起止点离屏幕左右边缘各留 150–200px**，否则会误触系统返回手势」
 
-B 不碰真机（分工约定），所以「真机跑通」这一条我做到的最强形式是：
-**用 C 的契约接口 `run(cases, {'sim': True})` 真的把压测用例跑一遍**，
+真机不在场时无法验收「真机跑通」，本文件能做到的最强形式是：
+**通过执行器的契约接口 `run(cases, {'sim': True})` 真的把压测用例跑一遍**，
 而不是只断言「生成的步骤长什么样」。见 `TestStressRunsThroughRunner`。
 
 本文件里最重要的一组是 `TestSwipeMathMatchesDriver`：
@@ -375,11 +375,11 @@ class TestEntrypoints(_SimCase):
 # ================================================================ ★ 验收：真的跑一遍
 
 class TestStressRunsThroughRunner(_SimCase):
-    """★ B5 的验收：**能跑通至少 1 个压测场景**。
+    """★ 验收要求：**能跑通至少 1 个压测场景**。
 
-    B 不碰真机，所以这里用 C 的契约接口 `run(cases, device={'sim': True})`
+    这里通过执行器的契约接口 `run(cases, device={'sim': True})`
     把压测用例真的执行一遍 —— 比断言「步骤长什么样」强得多。
-    真机那一遍留给集成日（交付包 §4 C-6）。
+    真机执行由 `tools/e2e_smoke_real.py` 覆盖。
     """
 
     def _run(self, cases, **kw):

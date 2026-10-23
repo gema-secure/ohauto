@@ -390,7 +390,7 @@ class Driver:
         ★ 反向依赖声明：「一次新鲜
         采样即可判稳」的证据强度，依赖 explorer 对页面签名/候选的**无条件
         refresh 兜底**（晚到跳转在那里被捕获，见 `_page_signatures` 文档；
-        钉子：tests/test_f_wait_idle_semantics.py）。若有调用方脱离该兜底、
+        钉子：tests/test_wait_idle_semantics.py）。若有调用方脱离该兜底、
         直接拿本函数返回值做导航决策，必须为它禁用基线种子，恢复
         「动作后连取两次」的语义 —— 降级必须显式，不能靠默认值蒙混。
         """

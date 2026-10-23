@@ -293,7 +293,7 @@ def build_descriptions_from_pages(pages: Sequence[Tuple[str, Any]],
                                   maximum: int) -> List[str]:
     """多页模式下的描述集：把**每一页**派生出的描述并起来（去重、按页序保序）。
 
-    ★ 为什么需要它（B8 样本量的直接原因）：入口页（`com.example.myapplication`
+    ★ 为什么需要它（样本量的直接原因）：入口页（`com.example.myapplication`
     的 Index）只有 1 个「可交互且带文案/id」的控件 —— 实测派生出的正样本就
     **只有 1 条**，加 2 条固定负样本总共 3 条。验收口径要的是「**20 条**描述生成后
     逐条执行」：样本量上不去，`executable_rate` 的分母就不是 20，报出来的百分比
@@ -437,7 +437,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument('--label', default='', help='本次运行的页面标签（写进报告）')
     ap.add_argument('--multi-page', action='store_true',
                     help='多页采集：沿 PAGE_HOPS 走一遍，把每一页的控件清单'
-                         '都喂给生成器（B8 路线①）；不加则与旧口径一致')
+                         '都喂给生成器（路线①）；不加则与旧口径一致')
     ap.add_argument('--prompts', default='', help='额外追加的描述文件（每行一条）')
     ap.add_argument('--require-samples', type=int, default=0,
                     help='正样本描述条数的下限（验收口径要求 20）。不足时打印醒目'
@@ -477,7 +477,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     pages: List[Tuple[str, Any]] = []
     if args.multi_page:
-        print('多页采集（B8 路线①：把每一页的控件清单都给模型）…')
+        print('多页采集（路线①：把每一页的控件清单都给模型）…')
         pages = _collect_pages(hdc, root, args.out)
         # 采完回到入口页重来一遍：描述派生与 L3 执行都从入口页开始
         root = _launch_and_capture(hdc, args.bundle, args.ability)

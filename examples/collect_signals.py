@@ -22,7 +22,7 @@
 
 产物::
 
-    <out>/signals.json          结构化结果（可直接喂给 B4）
+    <out>/signals.json          结构化结果（可直接作为归因输入）
     <out>/cppcrash-*.log        崩溃日志原文
     <out>/screen.png            失败时刻截图
     <out>/layout.json           采集到的控件树

@@ -91,7 +91,7 @@ REPRO = [
     ('异常注入', 'python tools/verify_signals_injection_real.py'),
     ('降级链验证', 'python tools/verify_locator_degrade.py          # 真机树 A/B/C/D'),
     ('用例生成评测', 'python tools/eval_nl_generation_real.py --bundle ohos.samples.distributedcalc '
-                     '--max 20 --require-samples 20 --execute --prompts tools/b8_prompts_calc.txt'
+                     '--max 20 --require-samples 20 --execute --prompts tools/prompts_calc.txt'
                      '   # 需 key + 真机；本轮 24 正 + 2 负 = 92.3%'),
 ]
 

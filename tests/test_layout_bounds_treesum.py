@@ -1,6 +1,6 @@
 """bounds 解析加固 + 控件树摘要器 的单元测试。
 
-全部不需要真机：A5 的验收直接跑在 C 提供的真机 fixture
+全部不需要真机：摘要器验收直接跑在真机采集的 fixture
 （real_dayu200_usb_dialog.json，DAYU200 实测 dump）上。
 """
 import json

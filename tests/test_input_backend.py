@@ -3,7 +3,7 @@
 钉三类规则：
 
 1. **契约**：三个 backend 都满足 `InputBackend`；删掉任一方法即不再满足
-   （与 `tests/test_d_interface_contract.py` 同法）。
+   （与 `tests/test_interface_contract.py` 同法）。
 2. **探测降级**：uitest → uinput → sendevent 首个可用者胜出；三者皆无则
    落「不可交互」档，写操作**响亮失败**（不是静默空操作）。
 3. **模拟同构**：`FakeHdc` 认 uinput / sendevent 命令，且换通路后动作语义

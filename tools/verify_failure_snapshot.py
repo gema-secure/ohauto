@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """验证「失败时留控件树快照」真的把归因置信度从 0.6 提到 0.85。
 
-背景（B 的交付包 C-2）：
+背景：
     `runner.StepResult` 原本只带 kind / attempts，没有控件树快照。
     `diagnose._locator()` 判「定位失败」靠的是「目标控件在**所有**快照里都不存在」
     这条硬证据；没有快照时它只能退回运行器分类，置信度下调。
@@ -68,7 +68,7 @@ def main() -> int:
         print(f'  落盘的控件树  : {files}')
 
         if not step.trees:
-            print('\n[FAIL] 失败步没有快照 —— C-2 没生效')
+            print('\n[FAIL] 失败步没有快照 —— 快照留存没生效')
             return 2
 
         print()
@@ -85,7 +85,7 @@ def main() -> int:
         with_snap = ExecutionRecord.from_case_result(
             res, expected_target=MISSING, bundle=BUNDLE,
             expected_page=expect_page)
-        # 手工把快照抹掉，模拟「C-2 没做」时的归因输入
+        # 手工把快照抹掉，模拟「快照未留存」时的归因输入
         without = ExecutionRecord.from_case_result(
             res, expected_target=MISSING, bundle=BUNDLE,
             expected_page=expect_page, trees=[])
@@ -119,7 +119,7 @@ def main() -> int:
 
         ok = len(with_snap.trees) == 2 and delta > 0
         print()
-        print('[PASS] C-2 生效：失败现场已留存，归因置信度提升'
+        print('[PASS] 快照留存生效：失败现场已留存，归因置信度提升'
               if ok else
               '[WARN] 快照有了，但置信度没提升 —— 看上面的 evidence 判断是否正常')
         return 0 if ok else 1   # 约定见 docs/API手册.md §三：1=未达标，不造 3
