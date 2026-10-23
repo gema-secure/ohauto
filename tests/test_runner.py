@@ -567,15 +567,28 @@ class TestArtifactPruning(unittest.TestCase):
         self.assertLessEqual(left, 10, f'轮转后仍有 {left} 个文件')
 
     def test_failed_step_artifacts_are_protected(self):
+        """失败步的产物必须留下 —— 而且当步号与文件序号**错位**时也不能删错。
+
+        产物文件名来自 `driver._art()` 的全局采集序号，input/assert/sleep 这类
+        步骤不产文件，序号与步号一错位就整体平移。这里刻意造出这种场景：
+        第 7 步失败，它的控件树是 `0005_layout.json`（中间 2 步不产文件）。
+
+        旧的「按步号当前缀」实现会去找 `0007_*`（那是第 5 步的成功产物），
+        把真正的失败证据当旧文件删掉。
+        """
         self._seed(40)
         _, d = make_driver(artifact_dir=self.tmp)
         res = R.CaseResult(name='t', bundle='com.demo')
-        res.steps = [R.StepResult(index=i, action='tap', ok=(i != 3))
+        res.steps = [R.StepResult(index=i, action='tap', ok=(i != 7))
                      for i in range(1, 41)]
+        # 第 7 步失败时抓的控件树 —— 序号已与步号错开
+        res.steps[6].trees = [os.path.join(self.tmp, '0005_layout.json')]
         make_runner(artifact_budget=8)._prune_artifacts(d, res)
         names = os.listdir(self.tmp)
-        self.assertTrue(any(n.startswith('0003_') for n in names),
-                        f'失败步骤的产物被删了：{sorted(names)}')
+        self.assertIn('0005_layout.json', names,
+                      f'失败步的真实产物被当成旧文件删了：{sorted(names)}')
+        # 同时确认轮转**真的在删** —— 否则「保护」可能只是「根本没删」
+        self.assertNotIn('0001_layout.json', names)
 
     def test_no_prune_when_within_budget(self):
         self._seed(3)
@@ -977,10 +990,19 @@ class TestContractEntry(unittest.TestCase):
         rep = R.run([short_case()], {'sim': True}, **self.FAST)
         self.assertIsNone(rep.kpi_ok)
 
-    def test_empty_cases_returns_empty_report(self):
-        rep = R.run([], {'sim': True}, **self.FAST)
-        self.assertEqual(rep.total, 0)
-        self.assertIsInstance(rep, RunReport)
+    def test_empty_cases_raises_instead_of_reporting_success(self):
+        """空用例集**不是通过**。
+
+        原来返回 total=0 的报告，其 `ok` 为 True —— CI 里用例 glob 写错、
+        目录为空都会拿到「全绿」，而实际上一个用例都没跑。
+        """
+        with self.assertRaises(ValueError):
+            R.run([], {'sim': True}, **self.FAST)
+
+    def test_empty_suite_is_not_ok(self):
+        """空套件的 `ok` 不能是 True（`all([])` 的陷阱）。"""
+        self.assertFalse(R.SuiteResult().ok)
+        self.assertFalse(R.SuiteResult(cases=[]).ok)
 
     def test_rejects_bad_case_type(self):
         with self.assertRaises(TypeError):
@@ -1149,6 +1171,34 @@ class TestScreenSizeHonesty(unittest.TestCase):
         d = Driver(bundle='b', hdc=self._DumbHdc(), verbose=False)
         with self.assertRaises(RuntimeError):
             d.swipe('up')
+
+
+class TestRetryBudgetFollowsLatestKind(unittest.TestCase):
+    """重试预算必须**跟着最新一次失败的类别**走，且只收紧不放松。
+
+    首次是 hdc 故障（DEVICE，预算 3），重试后确认「控件根本不存在」
+    （ASSERT，预算 1）—— 原来上限在第 1 次失败时就定死了，后面仍按 3 次
+    继续重试，等于违反「断言失败绝不重试」。
+    """
+
+    def test_assert_after_device_failure_stops_immediately(self):
+        from unittest import mock
+        seq = [HdcError('hdc 执行失败 rc=1: boom'),
+               AssertionError('断言失败: 元素不存在')]
+        calls = []
+
+        def fake(driver, action, arg):
+            calls.append(action)
+            raise seq[min(len(calls) - 1, len(seq) - 1)]
+
+        _, d = make_driver()
+        r = make_runner()
+        with mock.patch.object(R, 'exec_action', fake):
+            sr = r.run_step(d, 1, 'assert', {'exists': {'id': 'nope'}})
+        self.assertFalse(sr.ok)
+        self.assertEqual(sr.kind, R.FailureKind.ASSERT)
+        self.assertEqual(len(calls), 2,
+                         '第 2 次已判断言失败，不该按旧预算继续重试')
 
 
 if __name__ == '__main__':

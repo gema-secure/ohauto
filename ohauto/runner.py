@@ -632,11 +632,15 @@ class CaseResult:
         return self.failed == 0
 
     def kpi_ok(self, target: float = 0.95) -> bool:
-        """引擎健壮性 KPI。**整体不健康时直接判不通过**，不管那个率多漂亮。
+        """引擎健壮性 KPI。
 
-        两道闸缺一不可（见 `health_ok` 的说明）：
-        ① `health_ok` —— 有步骤失败就不算通过；
-        ② `non_cascade_failure_rate >= target` —— 失败也没大量连累后面。
+        ⚠️ **第二个条件在当前定义下恒真**：`health_ok` 是「零失败」，而零失败时
+        `non_cascade_failure_rate` 必然等于 1.0，所以本方法实际等价于
+        `health_ok`。保留它的理由是**口径位**：将来若要放宽 `health_ok`
+        （例如只追究级联失败），第二个条件立刻成为真正的闸。
+
+        报告里不要把它说成「两道独立的闸」—— 读者会以为存在
+        「整体失败但 KPI 通过」的情形，那不可能发生。
         """
         return self.health_ok and self.non_cascade_failure_rate >= target
 
@@ -780,13 +784,19 @@ class SuiteResult:
 
     @property
     def ok(self) -> bool:
-        return all(c.ok for c in self.cases)
+        """全部用例通过。**空套件不算通过** —— 见下。
+
+        原来写的是 `all(c.ok for c in self.cases)`，空列表时 `all()` 返回 True，
+        于是 CI 里用例 glob 写错、目录为空都会拿到「全绿」。那不是「都通过了」，
+        是「什么都没跑」。
+        """
+        return bool(self.cases) and all(c.ok for c in self.cases)
 
     def kpi_ok(self, target: float = 0.95) -> bool:
-        """执行引擎 验收：**整体健康** 且 非级联失败率达标（默认 95%）。
+        """执行引擎验收：整体健康 且 非级联失败率达标（默认 95%）。
 
-        两道闸缺一不可 —— 只靠那个率会让「大部分同类失败」的用例集
-        拿到漂亮分数（见 `CaseResult.health_ok` 的说明）。
+        与 `CaseResult.kpi_ok` 同样：第二个条件在 `health_ok` 成立时恒真，
+        它定义的是口径位而不是独立判据。
         """
         return self.health_ok and self.non_cascade_failure_rate >= target
 
@@ -1074,9 +1084,14 @@ class Runner:
                     error=f'{type(e).__name__}: {e}',
                     elapsed_ms=int((time.time() - t0) * 1000)))
 
-                # 首轮就定下该类别的尝试上限
-                if attempt == 1:
-                    max_attempts = self.policy.attempts_for(kind)
+                # 类别可能**在重试过程中变化**：首次是 hdc 超时（TIMEOUT，预算 3），
+                # 重试后确认「控件根本不存在」（ASSERT，预算 1）。原来只在第 1 次
+                # 失败时按当时的 kind 定死上限，后面换了类别仍按旧预算继续重试 ——
+                # 那会违反「断言失败绝不重试」。所以每次按最新类别重算，且只收紧
+                # 不放松：放宽会让抖动中的失败反复消耗设备往返。
+                budget = self.policy.attempts_for(kind)
+                max_attempts = (budget if attempt == 1
+                                else min(max_attempts, budget))
 
                 exhausted = attempt >= max_attempts
                 too_long = (time.time() - t_step) * 1000 >= self.policy.max_total_ms
@@ -1429,16 +1444,41 @@ class Runner:
             return
 
         protected = set()
-        # 失败步骤对应的产物（按步骤序号前缀匹配）
-        bad_prefixes = {f'{s.index:04d}' for s in res.steps if not s.ok}
+        # ---- 主保护：步骤自己记下的产物路径
+        #
+        # 原来按「步骤号 → 文件名前缀」猜归属，但产物文件名来自
+        # `driver._art()` 的**全局采集序号**，不是步号：input / assert / sleep
+        # 这类步骤不产文件，第一次出现后序号就和步号整体错位 —— 失败步的
+        # 截图/控件树会被当成「旧文件」优先删掉，恰好删掉最该留的证据
+        # （同一件事 `diagnose.load_snapshots` 早就订正过，见其 docstring）。
+        keep = [s for s in res.steps if not s.ok] + list(res.steps[-3:])
+        keep_idx = {s.index for s in keep}
+        protected_names = set()
+        for s in keep:
+            for t in (getattr(s, 'trees', None) or []):
+                protected_names.add(os.path.basename(str(t)))
+        for s in (getattr(driver, 'steps', None) or []):
+            if s.index not in keep_idx:
+                continue
+            for p in (s.screenshot, s.layout_json, s.extra.get('layout_after')):
+                if p:
+                    protected_names.add(os.path.basename(str(p)))
+
+        # ---- 兜底：目录里**最新**的几个文件一定属于最近的操作
+        #
+        # 上面那条依赖 runner.StepResult.index 与 driver.Step.index 对得上。
+        # 真机上两者未必严格同步（一个 DSL 步可能产生多个 driver Step），
+        # 所以再按 mtime 保一批 —— 这一步不依赖任何编号假设。
+        newest: list = []
+        try:
+            newest = sorted(files, key=lambda p: os.path.getmtime(p))[-8:]
+        except OSError:
+            newest = []
+        for f in newest:
+            protected_names.add(os.path.basename(f))
+
         for f in files:
-            base = os.path.basename(f)
-            if base[:4] in bad_prefixes:
-                protected.add(f)
-        # 末尾若干步
-        tail_prefixes = {f'{s.index:04d}' for s in res.steps[-3:]}
-        for f in files:
-            if os.path.basename(f)[:4] in tail_prefixes:
+            if os.path.basename(f) in protected_names:
                 protected.add(f)
 
         removable = sorted((f for f in files if f not in protected),
@@ -1567,7 +1607,12 @@ def run(cases: Sequence[Any], device: Any = None, *,
         else:
             raise TypeError(f'用例必须是 dict 或文件路径，收到 {type(c).__name__}')
     if not norm:
-        return RunReport(name='(空)', total=0, passed=0, failed=0)
+        # 空用例集**不是通过**。原来这里返回 total=0 的报告，其 ok 为 True，
+        # 于是「glob 写错」和「全部通过」在 CI 里长得一模一样 —— 直接抛，
+        # 让调用方拿到非零退出码。
+        raise ValueError(
+            '没有可执行的用例：cases 为空。'
+            '若来自目录/通配符，请先确认用例文件确实存在且能被解析。')
 
     # 底座 bundle/ability：首用例兜底，设备 dict 优先（向后兼容原行为）。
     # ★ 多用例时每个用例可自带 bundle/ability 覆盖底座 —— 不能只取 norm[0]，
