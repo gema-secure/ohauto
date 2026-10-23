@@ -47,7 +47,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 from .action import DslError, dump_case, spec_to_matcher
-from .explorer import SafetyPolicy
+from .explorer import SafetyPolicy, matchable_label
 from .layout import LayoutNode, flatten, parse_layout
 
 
@@ -1783,7 +1783,10 @@ def pick_stress_target(page: Any, *, hint_keywords: Sequence[str] = STRESS_TAP_H
         bad, _ = policy.is_dangerous(n)
         if bad:
             continue
-        blob = f'{n.text} {n.id} {n.descr}'.lower()
+        # 与安全策略同一口径（matchable_label）：自身无文案时取子树文案，
+        # 否则「登录 / 搜索 / 提交」这类关键词在真机行上永远提不了权；
+        # 而页面级容器会被该函数挡掉，不会把整页文案当自己的。
+        blob = f'{matchable_label(n)} {n.id} {n.descr}'.lower()
         (hinted if any(k.lower() in blob for k in hint_keywords) else plain).append(n)
 
     ordered = hinted + plain

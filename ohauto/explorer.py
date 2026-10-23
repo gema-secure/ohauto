@@ -51,7 +51,7 @@ from .permission import (POLICY_ALLOW, POLICY_DENY,  # noqa: E402
 
 DEFAULT_DENY_PATTERNS = [
     # —— 中文
-    r'删除', r'移除', r'清除', r'清空', r'格式化', r'重置',
+    r'删除', r'移除', r'清除', r'清空', r'格式化', r'重置', r'恢复出厂',
     r'支付', r'付款', r'购买', r'下单', r'充值', r'转账',
     r'退出登录', r'注销', r'登出', r'解绑',
     r'卸载', r'停止', r'关闭账号', r'取消订单',
@@ -93,6 +93,28 @@ DEFAULT_DENY_PATTERNS = [
 ]
 
 
+def matchable_label(node: LayoutNode) -> str:
+    """用于**语义匹配**（危险词、关键词加权）的文案。
+
+    与 `LayoutNode.label` 的分工：那个是给人看的最友好名称（还含 descr/hint/id），
+    这里只回答「这个控件按文案该被算成什么」。
+
+    规则：
+      * 自身有文案 → 用自身（最精确）；
+      * 自身无文案、且子树里**没有**别的可交互控件 → 用它整棵子树的文案。
+        真机上可交互行就是这形态：`Flex(text='')` + 子节点 `Text('恢复出厂设置')`；
+      * 自身无文案、但子树里还有可交互控件 → 返回空。那是**容器**（页面根、
+        滚动区），把它的子树文案拼进来会让「整页含删除按钮」把页面本身也判成
+        危险控件 —— 放开拦截时容器被置顶成 URGENT，排序和覆盖都会失真。
+    """
+    if node.text:
+        return node.text
+    for child in node.walk():
+        if child is not node and (child.clickable or child.is_interactive()):
+            return ''
+    return node.text_deep
+
+
 def _matches_danger(node: LayoutNode, patterns: Sequence[str]) -> Tuple[bool, str]:
     """「这个控件语义上是不是危险控件」—— 与策略是否放行无关。
 
@@ -100,7 +122,10 @@ def _matches_danger(node: LayoutNode, patterns: Sequence[str]) -> Tuple[bool, st
     只是策略允许点它（此时要置顶到 URGENT）。如果把「危险」和「是否放行」
     混在一个判断里，放开之后这些控件就再也识别不出来了。
     """
-    blob = f'{node.text} {node.id} {node.descr} {node.hint}'
+    # 真机上可交互容器自身 text 常为空、文案在子节点上（设置页 12/12 都是这形态），
+    # 只用 node.text 会让「恢复出厂设置」「删除」变成合法候选点下去。
+    label = matchable_label(node)
+    blob = f'{label} {node.id} {node.descr} {node.hint}'
     for p in patterns:
         if re.search(p, blob, re.I):
             return True, p
@@ -402,7 +427,10 @@ def classify_priority(node: LayoutNode, *, in_dialog: bool = False,
         return Priority.LOW
     if in_dialog:
         return Priority.HIGH
-    blob = f'{node.text} {node.id} {node.descr} {node.hint}'.lower()
+    # 关键词加权同样要看得见子节点文案，否则真机行（自身 text 为空）上的
+    # 「登录 / 搜索 / 提交」永远提不了权，档位排序退化成按位置。
+    blob = (f'{matchable_label(node)} {node.id} '
+            f'{node.descr} {node.hint}').lower()
     if any(k.lower() in blob for k in HIGH_KEYWORDS):
         return Priority.HIGH
     if node.clickable or node.is_interactive():

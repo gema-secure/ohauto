@@ -33,6 +33,8 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 from ohauto.layout import parse_layout                        # noqa: E402
+from ohauto.explorer import SafetyPolicy                       # noqa: E402
+from ohauto.generator import pick_stress_target                # noqa: E402
 
 #: 真机样本（设备自带「设置」页）
 REAL_SAMPLES = os.path.join(ROOT, 'datasets', 'gallery_13app')
@@ -123,6 +125,76 @@ class TestTextDeep(unittest.TestCase):
                    if any(k in n.text_deep for k in danger)]
         self.assertTrue(visible, '真机形态下危险控件的文案取不到 —— 安全策略会失效')
         self.assertIn('恢复出厂设置', visible)
+
+
+class TestSafetyPolicyUsesDeepText(unittest.TestCase):
+    """安全策略与压测挑目标必须按「人能看到的文案」判定。
+
+    真机上可交互容器的 `text` 为空、文案在子节点，只查自身属性会让
+    「恢复出厂设置」「删除」这类按钮变成**合法候选** —— 自动探索会点下去，
+    压测会对它连点。上面那条 `test_danger_text_is_now_visible` 只证明了
+    文案取得到，没有证明策略拦得住，两者是两件事。
+    """
+
+    def _row(self, label, cid=''):
+        """一行的真机形态：可交互 Flex（无自身文案）+ 一个 Text 子节点。"""
+        tree = _tree([{
+            'attributes': {'type': 'Flex', 'id': cid, 'text': '',
+                           'bounds': _b(0, 0, 720, 100), 'clickable': 'true',
+                           'visible': 'true', 'enabled': 'true'},
+            'children': [_node('Text', '', label, _b(40, 20, 300, 60))]}])
+        page = parse_layout(tree)
+        rows = [n for n in page.walk() if getattr(n, 'clickable', False)]
+        self.assertEqual(len(rows), 1)
+        return page, rows[0]
+
+    def test_reset_row_is_not_a_clickable_candidate(self):
+        """「恢复出厂设置」这一行不许成为候选（id 为空是最常见的真机形态）。"""
+        _, row = self._row('恢复出厂设置')
+        ok, why = SafetyPolicy().is_clickable_candidate(row)
+        self.assertFalse(ok, f'危险控件成了合法候选：{row.label!r}')
+        self.assertIn('dangerous', why)
+
+    def test_reset_row_is_blocked_even_with_own_id(self):
+        """带 id 时也要拦 —— 两条路径不能只有一条生效。"""
+        _, row = self._row('恢复出厂设置', cid='item_reset')
+        ok, _ = SafetyPolicy().is_clickable_candidate(row)
+        self.assertFalse(ok)
+
+    def test_delete_row_is_not_picked_for_stress(self):
+        """整页只有一行「删除」时，压测不许挑中它。"""
+        page, _ = self._row('删除')
+        self.assertIsNone(pick_stress_target(page),
+                          '压测把「删除」挑成了目标')
+
+    def test_ordinary_row_still_passes(self):
+        """反例：正常行不许被误拦，否则安全策略会把功能一起关掉。"""
+        _, row = self._row('显示与亮度')
+        ok, why = SafetyPolicy().is_clickable_candidate(row)
+        self.assertTrue(ok, f'正常控件被误拦：{why}')
+
+    def test_container_with_dangerous_child_is_not_flagged(self):
+        """整页容器子树里有危险按钮，容器自己**不许**被判成危险控件。
+
+        容器把子树文案当自己的，一旦放开拦截就会被置顶成 URGENT，
+        排序和覆盖一起失真（真机上就是页面根节点抢到第一顺位）。
+        """
+        tree = _tree([{
+            'attributes': {'type': 'Flex', 'id': 'pageRoot', 'text': '',
+                           'bounds': _b(0, 0, 720, 1000), 'clickable': 'true',
+                           'visible': 'true', 'enabled': 'true'},
+            'children': [{
+                'attributes': {'type': 'Flex', 'id': 'item_del', 'text': '',
+                               'bounds': _b(0, 200, 720, 300), 'clickable': 'true',
+                               'visible': 'true', 'enabled': 'true'},
+                'children': [_node('Text', '', '删除', _b(40, 220, 200, 250))]}]}])
+        page = parse_layout(tree)
+        by_id = {n.id: n for n in page.walk() if n.id}
+        pol = SafetyPolicy()
+        self.assertTrue(pol.is_dangerous(by_id['item_del'])[0],
+                        '真正该拦的那一行没拦')
+        self.assertFalse(pol.is_dangerous(by_id['pageRoot'])[0],
+                         '整页容器被判成了危险控件')
 
 
 class TestRealDeviceSamples(unittest.TestCase):
