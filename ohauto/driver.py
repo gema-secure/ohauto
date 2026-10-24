@@ -124,7 +124,7 @@ class Driver:
         verbose: bool = True,
         sleep_fn: Callable[[float], None] = time.sleep,
         idle_error_tolerance: int = 3,
-    ):
+    ) -> None:
         self.bundle = bundle
         self.ability = ability
         self.hdc = hdc or Hdc()

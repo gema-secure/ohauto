@@ -180,5 +180,35 @@ class TestRepoState(unittest.TestCase):
             'LAYERS 里有不存在（或子包占位之外）的模块')
 
 
+class TestSubprocessEncoding(unittest.TestCase):
+    """`doctor.py` 的子进程必须固定解码方式。
+
+    `text=True` 不带 `encoding` 时按平台默认编码解码（中文 Windows 是 cp936）。
+    hdc 输出含 UTF-8 中文就抛 `UnicodeDecodeError`，被 except 吞成 WARN/BAD ——
+    doctor 在正常的机器上报假失败，而且与 `Hdc.run`（utf-8 解码）口径不一致。
+    用 ast 扫，新增的子进程调用也一起管住。
+    """
+
+    def test_every_subprocess_run_pins_utf8(self):
+        path = os.path.join(ROOT, 'ohauto', 'doctor.py')
+        with open(path, encoding='utf-8') as f:
+            tree = ast.parse(f.read())
+        missing = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            fn = node.func
+            if not (isinstance(fn, ast.Attribute) and fn.attr == 'run'):
+                continue
+            base = fn.value
+            if not (isinstance(base, ast.Name) and base.id == 'subprocess'):
+                continue
+            kw = {k.arg for k in node.keywords}
+            if 'text' in kw and 'encoding' not in kw:
+                missing.append(node.lineno)
+        self.assertEqual(missing, [],
+                         f'这些 subprocess.run 没固定解码编码：{missing}')
+
+
 if __name__ == '__main__':
     unittest.main()

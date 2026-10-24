@@ -114,7 +114,9 @@ def main() -> int:
 
     # ---------------------------------------------------------- 4 hdc 版本
     try:
-        r = subprocess.run([hdc, '-v'], capture_output=True, text=True, timeout=20)
+        r = subprocess.run(
+            [hdc, '-v'], capture_output=True, text=True,
+            encoding='utf-8', errors='replace', timeout=20)
         ver = (r.stdout or r.stderr).strip()
         check('hdc 可运行', OK, ver)
     except Exception as e:
@@ -124,7 +126,7 @@ def main() -> int:
     # ---------------------------------------------------------- 5 设备
     try:
         r = subprocess.run([hdc, 'list', 'targets'], capture_output=True,
-                           text=True, timeout=25)
+                           text=True, encoding='utf-8', errors='replace', timeout=25)
         out = (r.stdout or '').strip()
         if not out or 'Empty' in out:
             check('设备连接', BAD,
@@ -145,7 +147,7 @@ def main() -> int:
     # 还会让任何「N 秒内应超时」这类断言失效。所以独立列一项。
     try:
         r = subprocess.run([hdc, 'shell', 'date'], capture_output=True,
-                           text=True, timeout=20)
+                           text=True, encoding='utf-8', errors='replace', timeout=20)
         out = ((r.stdout or '') + (r.stderr or '')).strip()
         year_now = datetime.datetime.now().year
         m = re.search(r'\b(20\d{2})\b', out)
@@ -166,7 +168,7 @@ def main() -> int:
     uitest_ok = False
     try:
         r = subprocess.run([hdc, 'shell', 'uitest --version'], capture_output=True,
-                           text=True, timeout=25)
+                           text=True, encoding='utf-8', errors='replace', timeout=25)
         out = ((r.stdout or '') + (r.stderr or '')).strip()
         uitest_ok = (r.returncode == 0 and bool(out)
                      and 'not found' not in out.lower())
@@ -198,9 +200,11 @@ def main() -> int:
     try:
         p = '/data/local/tmp/ohauto_doctor.png'
         r = subprocess.run([hdc, 'shell', f'uitest screenCap -p {p}'],
-                           capture_output=True, text=True, timeout=30)
+                           capture_output=True, text=True,
+                           encoding='utf-8', errors='replace', timeout=30)
         r2 = subprocess.run([hdc, 'shell', f'ls -l {p}'],
-                            capture_output=True, text=True, timeout=20)
+                            capture_output=True, text=True,
+                            encoding='utf-8', errors='replace', timeout=20)
         if p.split('/')[-1] in (r2.stdout or ''):
             check('截图能力', OK, (r2.stdout or '').strip()[:120])
         else:
@@ -212,9 +216,11 @@ def main() -> int:
     try:
         p = '/data/local/tmp/ohauto_doctor.json'
         subprocess.run([hdc, 'shell', f'uitest dumpLayout -p {p}'],
-                       capture_output=True, text=True, timeout=40)
+                       capture_output=True, text=True,
+                       encoding='utf-8', errors='replace', timeout=40)
         r2 = subprocess.run([hdc, 'shell', f'ls -l {p}'],
-                            capture_output=True, text=True, timeout=20)
+                            capture_output=True, text=True,
+                            encoding='utf-8', errors='replace', timeout=20)
         if p.split('/')[-1] in (r2.stdout or ''):
             check('控件树导出', OK, (r2.stdout or '').strip()[:120] + '\n'
                   '-> 建议接着跑: python examples/dump_tree.py 核对真实 JSON 结构')
@@ -228,7 +234,8 @@ def main() -> int:
         try:
             r = subprocess.run([hdc, 'shell',
                                 f'aa start -b {args.bundle} -a {args.ability}'],
-                               capture_output=True, text=True, timeout=30)
+                               capture_output=True, text=True,
+                               encoding='utf-8', errors='replace', timeout=30)
             out = ((r.stdout or '') + (r.stderr or '')).strip()
             # ⚠️ 判据只能看**输出**，不能看 rc —— hdc shell 的 rc 表示
             # 「shell 通道本身成功」，aa start 拉起失败时 rc 照样是 0。
