@@ -526,12 +526,23 @@ class Hdc:
         return None
 
     @classmethod
-    def _from_config(cls) -> Optional[str]:
-        """从配置文件读取 hdc 路径。只读，不写。"""
-        import json as _json
-        cands = []
+    def _config_candidates(cls) -> List[str]:
+        """配置文件候选路径，**按优先级**排列。
 
-        # 从当前工作目录逐级向上找
+        顺序：工作目录逐级向上 → 用户级（`~/.ohauto/`）→ 包目录。
+
+        最后一段为什么必须有：`tools/configure_hdc.py` 的历史默认写入位置在
+        包内（`ohauto/hdc.config.json`），而「从 cwd 向上找」永远**下探**不到
+        子目录 —— 写了也读不到，`_locate()` 静默退回「常见安装位置」，
+        等于换了另一个 hdc 二进制而没有任何提示。
+        排在最后：用户在工作目录里放的配置仍然优先。
+
+        刻意**不把仓库根**加进来：那会让「临时目录里的配置」被仓库根的配置
+        穿透（测试与多项目共用一台机器时都会踩到），而 cwd 在仓库内时
+        向上查找本来就能找到它。
+        """
+        cands: List[str] = []
+
         cur = os.path.abspath(os.getcwd())
         for _ in range(6):
             for name in cls.CONFIG_NAMES:
@@ -541,12 +552,21 @@ class Hdc:
                 break
             cur = parent
 
-        # 用户级配置
         home = os.path.expanduser('~')
         for name in cls.CONFIG_NAMES:
             cands.append(os.path.join(home, '.ohauto', name))
 
-        for c in cands:
+        pkg_dir = os.path.dirname(os.path.abspath(__file__))
+        for name in cls.CONFIG_NAMES:
+            cands.append(os.path.join(pkg_dir, name))
+        return cands
+
+    @classmethod
+    def _from_config(cls) -> Optional[str]:
+        """从配置文件读取 hdc 路径。只读，不写。"""
+        import json as _json
+
+        for c in cls._config_candidates():
             if not os.path.isfile(c):
                 continue
             try:

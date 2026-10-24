@@ -460,6 +460,24 @@ class TestLocate(unittest.TestCase):
              mock.patch('glob.glob', lambda *a: []):
             self.assertIsNone(Hdc._locate())
 
+    def test_package_dir_config_is_a_candidate(self):
+        """包目录与仓库根也要进候选，且排在用户工作目录之后。
+
+        `tools/configure_hdc.py` 的历史默认写入位置是 `ohauto/hdc.config.json`，
+        而「从 cwd 向上找」永远**下探**不到子目录 —— 写了读不到，`_locate()`
+        静默退回「常见安装位置」，等于换了另一个 hdc 二进制还没有提示。
+        """
+        import ohauto.hdc as hdcm
+        cands = Hdc._config_candidates()
+        pkg = os.path.dirname(os.path.abspath(hdcm.__file__))
+        self.assertIn(os.path.join(pkg, 'hdc.config.json'), cands)
+        self.assertLess(
+            cands.index(os.path.join(os.getcwd(), 'hdc.config.json')),
+            cands.index(os.path.join(pkg, 'hdc.config.json')),
+            '用户工作目录里的配置必须仍然优先')
+        self.assertEqual(cands.count(os.path.join(pkg, 'hdc.config.json')), 1,
+                         '包目录候选被重复添加')
+
     def test_config_file_is_used(self):
         p = self._real_file()
         cfg = os.path.join(self.tmp.name, 'hdc.config.json')
