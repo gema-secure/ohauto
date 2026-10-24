@@ -45,7 +45,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from .action import RunReport, exec_action
+from .action import RunReport, exec_action, split_step
 from .driver import Driver, DriverError
 from .hdc import DeviceNotFound, HdcError
 
@@ -1339,7 +1339,25 @@ class Runner:
                     break
                 continue
 
-            action, arg = next(iter(st.items()))
+            if len(st) > 1:
+                # 一步多动作：`next(iter(...))` 只会执行第一个键，后面的
+                # （往往是断言）被静默丢弃。判定为用例缺陷，不执行、不重试。
+                msg = (f'第 {i} 步有 {len(st)} 个动作'
+                       f'（{"、".join(str(k) for k in st)}）：'
+                       f'一步只能有一个动作，请拆成多步')
+                sr = StepResult(index=i, action='?', target=str(list(st))[:60],
+                                ok=False, kind=FailureKind.DSL,
+                                attempts=[StepAttempt(attempt=1, ok=False,
+                                                      kind=FailureKind.DSL,
+                                                      error=msg)])
+                res.steps.append(sr)
+                if first_failure is None:
+                    first_failure = i
+                if not self.continue_on_fail:
+                    break
+                continue
+
+            action, arg = split_step(st, i)
             sr = self.run_step(driver, i, action, arg)
             # 每步跑完看一眼内存/负载水位。sample() 是旁路，
             # 采不到只记警告绝不中断 —— 「缺样本 ≠ 正常」的降级纪律

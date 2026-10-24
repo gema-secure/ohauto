@@ -269,6 +269,18 @@ class TestValidateCase(unittest.TestCase):
             {'start': True}, {'tap': {'id': 'btn_login'}}]), self._page())
         self.assertEqual(issues, [])
 
+    def test_multi_action_step_is_dsl_invalid(self):
+        """一步两个动作要报 DSL_INVALID。
+
+        生成侧与执行侧原来共用「只取第一个键」的逻辑，模型合并步骤时
+        断言被静默丢掉 —— 校验跟着绿。
+        """
+        issues = validate_case(self._case([
+            {'start': True},
+            {'tap': {'id': 'btn_login'}, 'assert': {'equals': 'x'}}]),
+            self._page())
+        self.assertTrue(any(i.reason == RejectReason.DSL_INVALID for i in issues))
+
     def test_missing_start_is_invalid(self):
         issues = validate_case(self._case([{'tap': {'id': 'btn_login'}}]),
                                self._page())

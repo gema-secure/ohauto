@@ -436,6 +436,36 @@ class TestCaseSerialization(unittest.TestCase):
         case = {'name': '中文用例名', 'steps': [{'tap': {'text': '登录'}}]}
         self.assertIn('中文用例名', dump_case(case))
 
+    def test_multi_action_step_is_rejected(self):
+        """一步两个动作必须拒绝。
+
+        `{"tap": …, "assert": …}` 是模型合并步骤的常见形态。原来加载器放行、
+        执行器只取第一个键 —— 断言不执行也不报错，用例「绿」了但什么都没验证。
+        """
+        from ohauto.action import DslError
+        case = {'name': 'x', 'steps': [
+            {'start': True},
+            {'tap': {'id': 'a'}, 'assert': {'equals': 'b'}}]}
+        with self.assertRaises(DslError) as ctx:
+            load_case(case)
+        self.assertIn('只能有一个动作', str(ctx.exception))
+
+    def test_run_steps_rejects_multi_action_step(self):
+        """不经加载器直接执行时也要拦住，且一个动作都不执行。"""
+        from ohauto.action import run_steps
+
+        class _D:
+            bundle = 'com.demo'
+
+            def log(self, msg):
+                pass
+
+        rep = run_steps(_D(), [{'tap': {'id': 'a'},
+                                'assert': {'equals': 'b'}}])
+        self.assertEqual(rep.failed, 1)
+        self.assertEqual(rep.passed, 0)
+        self.assertIn('只能有一个动作', rep.errors[0]['error'])
+
 
 # ================================================================ 视觉融合
 

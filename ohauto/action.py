@@ -173,7 +173,15 @@ def run_steps(driver: Driver, steps: List[Dict[str, Any]],
             if stop_on_error:
                 break
             continue
-        action, arg = next(iter(st.items()))
+        try:
+            action, arg = split_step(st, i)
+        except DslError as e:
+            rep.failed += 1
+            rep.errors.append({'step': i, 'action': '', 'arg': {},
+                               'error': str(e)[:500]})
+            if stop_on_error:
+                break
+            continue
         try:
             _exec_one(driver, action, arg)
             rep.passed += 1
@@ -364,13 +372,38 @@ def _guard_case_text(text: str) -> None:
                        f'—— 再深会让 YAML 解析器撞栈')
 
 
+def split_step(st: Dict[str, Any], index: int = 0) -> Tuple[Any, Any]:
+    """把单步映射拆成 `(动作, 参数)`。**一步只允许一个动作。**
+
+    `{"tap": {...}, "assert": {...}}` 是模型合并步骤的常见产物，而
+    `next(iter(st.items()))` 只取第一个键 —— 断言不执行、不报错。更糟的是
+    生成侧校验用的也是「只取第一个」，两边行为一致，所以永远发现不了。
+
+    这里统一拒绝，让问题在加载 / 生成期就响亮地失败，而不是执行时静默少做一件事。
+    """
+    if len(st) != 1:
+        where = f'第 {index} 步' if index else '该步骤'
+        names = '、'.join(str(k) for k in st)
+        raise DslError(f'{where}有 {len(st)} 个动作（{names}）：'
+                       f'一步只能有一个动作，请拆成多步')
+    return next(iter(st.items()))
+
+
 def _require_case_mapping(data: Any, where: str) -> Dict[str, Any]:
     """用例定义的顶层必须是映射（含 `name` / `steps`）。
 
     顶层 list / 标量 / 空文件是最常见的三类手误 —— 在这里响亮地失败，
     好过让 `run_case` 靠 `case.get('steps')` 拿 None 然后空转 0 步。
+
+    顺带拒绝「一步多动作」：那种形态下后一个动作会被执行器静默丢弃
+    （见 `split_step`）。
     """
     if isinstance(data, dict):
+        steps = data.get('steps')
+        if isinstance(steps, (list, tuple)):
+            for i, st in enumerate(steps, 1):
+                if isinstance(st, dict) and len(st) > 1:
+                    split_step(st, i)          # 抛 DslError
         return data
     got = 'None（空文件？）' if data is None else type(data).__name__
     raise DslError(f'{where}的顶层必须是映射（name / steps），收到 {got}')

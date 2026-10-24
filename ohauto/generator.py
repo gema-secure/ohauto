@@ -833,6 +833,17 @@ def validate_case(case: Case, page: Any = None, *,
         issues.append(ValidationIssue(RejectReason.EMPTY, '步骤序列为空'))
         return issues
 
+    # 一步只允许一个动作。`{"tap": {...}, "assert": {...}}` 这种合并形态下
+    # `_iter_steps` 只取第一个键，断言会被静默丢弃 —— 而生成校验与执行器
+    # 用的是同一份「只取第一个」的逻辑，所以不在这里拦就永远发现不了。
+    for i, st in enumerate(case.steps, 1):
+        if isinstance(st, dict) and len(st) > 1:
+            issues.append(ValidationIssue(
+                RejectReason.DSL_INVALID,
+                f'第 {i} 步有 {len(st)} 个动作（{"、".join(str(k) for k in st)}）：'
+                f'一步只能有一个动作，请拆成多步',
+                step_index=i))
+
     first_action = next(_iter_steps(case.steps), (0, '', None))[1]
     if first_action not in ('start', 'launch'):
         issues.append(ValidationIssue(

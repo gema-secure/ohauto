@@ -1223,6 +1223,22 @@ class TestActionStepAccounting(unittest.TestCase):
         self.assertTrue(d._tree_dirty, 'fling 之后还复用旧树，只读步骤会看到过期页面')
 
 
+    def test_multi_action_step_is_dsl_failure(self):
+        """一步两个动作判 DSL 缺陷，且**不执行任何动作**。
+
+        原来执行器只取第一个键：断言被静默丢弃，报告还是绿的。
+        """
+        _, d = make_driver()
+        r = make_runner()
+        res = r.run_case(d, {'name': 'x', 'bundle': 'com.demo', 'steps': [
+            {'tap': {'id': 'username'},
+             'assert': {'exists': {'id': 'btn_login'}}}]})
+        self.assertFalse(res.ok)
+        self.assertEqual(res.failed, 1)
+        self.assertEqual(res.steps[0].kind, R.FailureKind.DSL)
+        self.assertEqual(d.steps, [], '多键步骤不该执行任何动作')
+
+
 class TestDiagnoseStartedAt(unittest.TestCase):
     """归因必须拿到**本步开始时间**，而且要是设备时钟域。
 
