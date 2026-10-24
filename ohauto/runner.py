@@ -629,7 +629,10 @@ class CaseResult:
 
         所以 KPI 判定要**两个条件同时**满足，报告里两个数并排打。
         """
-        return self.failed == 0
+        # 零步骤的用例不算健康：`steps: null`、空的轨迹沉淀都会走到这里，
+        # 而 `failed == 0` 在 total=0 时恒真 —— 那份「全绿」的意思其实是
+        # 「什么都没跑」。
+        return self.total > 0 and self.failed == 0
 
     def kpi_ok(self, target: float = 0.95) -> bool:
         """引擎健壮性 KPI。
@@ -670,7 +673,8 @@ class CaseResult:
 
     @property
     def ok(self) -> bool:
-        return self.failed == 0
+        """用例是否通过 —— 与 `health_ok` 同源，**零步骤不算通过**。"""
+        return self.health_ok
 
     def failures_by_kind(self) -> Dict[str, int]:
         out: Dict[str, int] = {}
@@ -779,8 +783,13 @@ class SuiteResult:
 
     @property
     def health_ok(self) -> bool:
-        """所有用例都健康 —— 与 `non_cascade_failure_rate` **并列**。"""
-        return self.failed == 0
+        """所有用例都健康 —— 与 `ok` 同源。
+
+        不能只看 `failed == 0`：一条零步骤用例会让 failed 保持 0 而 `ok=False`
+        （见 `CaseResult.health_ok`），套件层就会报「健康」、用例层报「不通过」，
+        两层口径打架。
+        """
+        return self.ok
 
     @property
     def ok(self) -> bool:
