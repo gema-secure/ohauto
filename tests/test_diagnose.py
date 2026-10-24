@@ -160,6 +160,26 @@ class TestAppDefect(_TmpCase):
         self.assertGreaterEqual(v.confidence, APP_CONFIDENCE_FLOOR)
 
 
+    def test_hilog_without_bundle_mention_does_not_decide(self):
+        """没提到被测应用的 hilog 异常栈不能单票定案。
+
+        `collect_signals` 的 hilog 是系统级 tail + 关键词过滤，不按进程过滤 ——
+        任何进程的 abort/ANR/OOM 都会落进 500 行窗口。原来「没提到 bundle」
+        仍给 CONF_WEAK = 0.7，高于 `APP_CONFIDENCE_FLOOR = 0.5`，于是单票定案。
+        """
+        rec = ExecutionRecord(
+            bundle=BUNDLE, step=_failed_step(),
+            trees=[_good_page()],
+            hilog=['09-21 10:00:01.456  2222  2222 F C04200/cppcrash: '
+                   'Fault thread info: pid=2222 com.other.app',
+                   '09-21 10:00:01.457  2222  2222 F C04200/cppcrash: '
+                   '#00 pc 00000000000bda libentry.so(SIGSEGV)'])
+        v = diagnose(rec)
+        self.assertNotEqual(v.category, Category.APP_DEFECT,
+                            f'别的应用的崩溃被算成了应用缺陷：{v.evidence}')
+        self.assertNotIn('hilog', v.signals_used)
+
+
 class TestWeakEvidenceDoesNotDecide(_TmpCase):
     """信号采集明确标注「别把它单独当结论用」的弱证据，不能把失败判成应用缺陷。"""
 

@@ -607,6 +607,35 @@ def _crash_matches(rec: ExecutionRecord, crash: Any) -> Tuple[bool, str]:
     return True, ''
 
 
+#: hilog 行里形如 `com.example.app` 的包名（≥3 段 —— 避开 `libentry.so` 这类文件名）。
+_PKG_NAME_RE = re.compile(r'\b[a-zA-Z][\w]*(\.[a-zA-Z][\w]*){2,}\b')
+
+
+def _hilog_attribution(hits: Sequence[str], bundle: str) -> Tuple[bool, str]:
+    """hilog 的异常栈痕迹能不能算到被测应用头上。返回 `(是否采用, 理由)`。
+
+    系统级 hilog 是「tail + 关键词过滤」，**不按进程过滤** —— 别的应用崩了、
+    甚至系统进程 OOM，都会落进同一个尾部窗口。判据取**有反证才排除**：
+
+      * 行里出现了被测 bundle               → 采用（`self`，置信度按中档）
+      * 行里出现**别的**包名、且没提到被测 → 排除（`other`，这是明确反证）
+      * 行里没有任何包名（如 `Out of memory: killed process 1234`）
+                                           → 采用（`nopkg`，按弱档）
+        这类行的格式本来就不带应用名，拿它当反证会把真 OOM 一起否掉。
+    """
+    if not hits:
+        return False, 'none'
+    joined = '\n'.join(hits)
+    if bundle and bundle in joined:
+        return True, 'self'
+    others = {m.group(0) for h in hits for m in _PKG_NAME_RE.finditer(h)}
+    if bundle:
+        others.discard(bundle)
+    if others:
+        return False, f'提到的包名是 {"、".join(sorted(others)[:2])}，不是被测应用'
+    return True, 'nopkg'
+
+
 def _app_defect(rec: ExecutionRecord) -> Tuple[float, List[str], List[str]]:
     """崩溃 / 白屏 / 无响应 / 日志异常栈 → 应用缺陷。返回 (置信度, 证据, 用到的信号)。"""
     ev: List[str] = []
@@ -661,13 +690,16 @@ def _app_defect(rec: ExecutionRecord) -> Tuple[float, List[str], List[str]]:
     # ---- ④ hilog 异常栈
     hits = _stack_traces(_hilog_lines(rec))
     if hits:
-        used.append('hilog')
-        mentions = bool(rec.bundle) and any(rec.bundle in h for h in hits)
-        conf = max(conf, CONF_MID if mentions else CONF_WEAK)
-        ev.append(f'hilog 出现异常栈痕迹（{len(hits)} 行）'
-                  + (f'，且其中提到被测应用 {rec.bundle}' if mentions
-                     else '，但没直接提到被测应用（阈值按下限取）')
-                  + f'，首行：{hits[0]}')
+        attributed, why = _hilog_attribution(hits, rec.bundle)
+        if attributed:
+            used.append('hilog')
+            conf = max(conf, CONF_MID if why == 'self' else CONF_WEAK)
+            ev.append(f'hilog 出现异常栈痕迹（{len(hits)} 行）'
+                      + ('，且提到被测应用' if why == 'self'
+                         else '，未含包名信息（按关键词认定）')
+                      + f'，首行：{hits[0]}')
+        else:
+            ev.append(f'（hilog 出现异常栈痕迹（{len(hits)} 行），但{why} —— 只记不判）')
 
     return conf, ev, used
 
