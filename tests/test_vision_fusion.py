@@ -402,5 +402,51 @@ class HintsCollectionIsShared(unittest.TestCase):
         self.assertNotIn('tv_title', ids)
 
 
+class TestCacheHonesty(unittest.TestCase):
+    """缓存的两条硬约束：负结果不缓存、命中返回副本。
+
+    这两条都不影响正常路径的命中率，只堵「找不到之后就永远找不到」和
+    「调用方改坏了缓存」两个坑。
+    """
+
+    def test_negative_result_is_not_cached(self):
+        """第一次没找到，第二回目标真的出现了必须能找到。"""
+        tp = CountingProvider([])
+        tl = TieredVisionLocator(provider=tp)
+        page = simple_page()
+        self.assertIsNone(tl.locate(page, 'x.png', '绝不存在', 720, 1280))
+        tp.targets = [VisualTarget(label='v', rect=Rect(1, 2, 3, 4), confidence=0.9)]
+        hit = tl.locate(page, 'x.png', '绝不存在', 720, 1280)
+        self.assertIsNotNone(hit, '负结果被缓存了：目标出现了仍返回 None')
+        self.assertEqual(tp.calls, 2)
+
+    def test_cache_hit_returns_copy(self):
+        """调用方改返回对象的 rect，不许污染缓存条目。"""
+        tp = CountingProvider([VisualTarget(label='v', rect=Rect(1, 2, 3, 4),
+                                           confidence=0.9)])
+        tl = TieredVisionLocator(provider=tp)
+        page = simple_page()
+        first = tl.locate(page, 'x.png', '绝不存在', 720, 1280)
+        first.rect = Rect(99, 99, 99, 99)
+        again = tl.locate(page, 'x.png', '绝不存在', 720, 1280)
+        self.assertEqual((again.rect.left, again.rect.top), (1, 2),
+                         '缓存被调用方改坏了')
+        self.assertEqual(tp.calls, 1, '第二次应命中缓存')
+
+    def test_crop_offsets_bbox_back_to_screen(self):
+        """裁剪图坐标必须换算回全屏 —— 否则整条 L2 系统性偏到左上角。"""
+        root = simple_page()
+        node('Button', id='btn_a', text='搜索设置', bounds=(100, 200, 300, 400),
+             clickable=True, parent=root)
+        tp = CountingProvider([VisualTarget(label='v', rect=Rect(10, 10, 60, 50),
+                                            confidence=0.9)])
+        tl = TieredVisionLocator(provider=tp, crop_fn=lambda p, r: p)
+        # 指令与 deep（'搜索设置'）不相等 → 保守口径升级 L2，区域取 btn_a
+        t = tl.locate(root, 'x.png', '搜索', 720, 1280)
+        self.assertIsNotNone(t)
+        self.assertEqual((t.rect.left, t.rect.top), (110, 210),
+                         f'裁剪坐标没换算回全屏：{t.rect}')
+
+
 if __name__ == '__main__':
     unittest.main()

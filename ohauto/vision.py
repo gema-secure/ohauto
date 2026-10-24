@@ -16,6 +16,7 @@ Provider 是可插拔的：换模型、换供应商、退化成纯规则，都�
 from __future__ import annotations
 
 import base64
+import copy
 import json
 import os
 import re
@@ -454,8 +455,10 @@ class TieredVisionLocator:
         #   False（激进版 D）—— 只要取到最紧就返回。实测 100% 免调、
         #     19/19（唯一错例的标注本身无效）。跑一段时间看误命中率再放开。
         self.l1_require_exact = l1_require_exact
-        # 缓存与统计（进程内即可；跨进程持久化留给 runner 的报告层）
-        self._cache: Dict[Tuple[str, str], Optional[VisualTarget]] = {}
+        # 缓存与统计（进程内即可；跨进程持久化留给 runner 的报告层）。
+        # **只存正结果**：负结果（没找到）缓存下来后，即使目标随后真的出现了
+        # 也会一直返回「无目标」，直到进程结束。
+        self._cache: Dict[Tuple[str, str], VisualTarget] = {}
         self.cache_hits = 0
         self.cache_misses = 0
         self.model_ms = 0.0
@@ -464,6 +467,15 @@ class TieredVisionLocator:
     def _log(self, msg: str) -> None:
         if self.verbose:
             print(f'[tiered] {msg}')
+
+    def _remember(self, key: Tuple[str, str], target: VisualTarget) -> None:
+        """写缓存时**存副本**，读的时候也返回副本 —— 缓存与外界完全隔离。
+
+        为什么两边都要隔：调用方拿到结果后会拿 rect 去点击、也常原地改字段；
+        第一次返回的对象如果就是缓存里那一个，调用方一改就把缓存改坏了
+        （实测第二次命中拿到的是被改成 (99,99) 的 rect）。
+        """
+        self._cache[key] = copy.deepcopy(target)
 
     @property
     def cache_hit_rate(self) -> float:
@@ -540,7 +552,9 @@ class TieredVisionLocator:
         if key in self._cache:
             self.cache_hits += 1
             self._log(f'缓存命中 rate={self.cache_hit_rate:.2f} key={key[1]!r}')
-            return self._cache[key]
+            # 返回副本：命中方会拿 rect 去点击、也可能原地改字段，
+            # 直接给缓存对象等于让调用方改坏缓存。
+            return copy.deepcopy(self._cache[key])
         self.cache_misses += 1
 
         # --- L1：静态候选（不调模型） ---
@@ -566,7 +580,7 @@ class TieredVisionLocator:
                 result = VisualTarget(
                     label=str(h.get('text') or h.get('id') or h.get('type')),
                     rect=r, confidence=0.65, source='tree')
-                self._cache[key] = result
+                self._remember(key, result)
                 return result
             # 保守口径：最紧候选的文案与指令不相等 → 宁可多花一次模型调用
             self._log(f'L1 最紧候选文案与指令不相等（exact=False），'
@@ -574,18 +588,31 @@ class TieredVisionLocator:
 
         # --- L2：候选区域送模型 ---
         if static:
-            context = self._region_context(static, hints)
             # 有 PIL 钩子时真正裁剪，否则整图 + 局部上下文
             img = image_path
+            off_x = off_y = 0
+            w, h = screen_w, screen_h
+            context = self._region_context(static, hints)
             if self.crop_fn is not None:
                 region = Rect.parse(static[0].get('bounds'))
                 img = self.crop_fn(image_path, region)
+                # 模型看到的是**裁剪图**，返回的 bbox 也是裁剪图坐标 ——
+                # 不换算回全屏，整条 L2 会系统性地偏到左上角。
+                off_x, off_y = region.left, region.top
+                w, h = region.width, region.height
+                # 局部上下文里的 bounds 是全屏坐标，与裁剪图不是同一个坐标空间，
+                # 传下去只会把模型带偏；裁剪图上只给图像和描述。
+                context = ''
             targets = [t for t in self._call_model(
-                img, instruction, screen_w, screen_h, context, 'L2 区域')
+                img, instruction, w, h, context, 'L2 区域')
                 if t.confidence >= self.min_confidence]
+            if off_x or off_y:
+                for t in targets:
+                    t.rect = Rect(t.rect.left + off_x, t.rect.top + off_y,
+                                  t.rect.right + off_x, t.rect.bottom + off_y)
             if targets:
                 best = max(targets, key=lambda x: x.confidence)
-                self._cache[key] = best
+                self._remember(key, best)
                 return best
 
         # --- L3：全屏兜底（最贵，仅 L1/L2 都没结果时） ---
@@ -593,7 +620,10 @@ class TieredVisionLocator:
             image_path, instruction, screen_w, screen_h, hints, 'L3 全屏')
             if t.confidence >= self.min_confidence]
         best = max(targets, key=lambda x: x.confidence) if targets else None
-        self._cache[key] = best
+        if best is not None:
+            # 负结果不缓存：缓存下来之后目标真出现了也会一直返回「无目标」，
+            # 直到进程结束（视觉缓存命中率会因此虚高，且定位永远失败）。
+            self._remember(key, best)
         return best
 
     # ------------------------------------------------------ 工具
