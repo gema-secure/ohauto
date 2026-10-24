@@ -681,6 +681,12 @@ class Driver:
         t0 = time.time()
         try:
             self.hdc.dirc_fling(direction, velocity)
+            # fling 会翻页 —— 不标脏的话，下一次只读取树会复用过期页面
+            # （swipe 一直有这一步，fling 漏了）。
+            self._mark_mutated()
+        except Exception as e:                          # noqa: BLE001 —— 记录后原样抛出
+            step.ok, step.error = False, str(e)[:400]
+            raise
         finally:
             step.elapsed_ms = int((time.time() - t0) * 1000)
             self._record(step)
@@ -690,7 +696,11 @@ class Driver:
         t0 = time.time()
         try:
             self.hdc.back()
+            self._mark_mutated()
             self.wait_idle(timeout=3000)
+        except Exception as e:                          # noqa: BLE001 —— 记录后原样抛出
+            step.ok, step.error = False, str(e)[:400]
+            raise
         finally:
             step.elapsed_ms = int((time.time() - t0) * 1000)
             self._record(step)
