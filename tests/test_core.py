@@ -277,6 +277,21 @@ class TestMatcher(unittest.TestCase):
         self.root = login_tree()
         self.pool = flatten(self.root)
 
+    def test_nested_bounded_quantifier_is_rejected(self):
+        """`(a{1,2})+` 是真指数级回溯，形状闸必须拦。
+
+        内层字符类原来只认 `*` / `+`，这个形状直接漏过去；实测
+        n=22 0.0035s → n=30 0.0867s，而长度闸 `MAX_REGEX_INPUT=4096` 根本等不到它。
+        """
+        from ohauto.matcher import Matcher, RegexSafetyError
+        with self.assertRaises(RegexSafetyError):
+            Matcher().text_matches(r'(a{1,2})+x')
+
+    def test_branching_group_with_quantifier_is_allowed(self):
+        """反例：`(a|b)+` 是完全正常的写法，不许误拒。"""
+        from ohauto.matcher import Matcher
+        Matcher().text_matches(r'(a|b)+$')
+
     def hits(self, m: Matcher):
         return m.filter(self.pool)
 
