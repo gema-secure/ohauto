@@ -1232,5 +1232,48 @@ class TestParseLsLineShortDate(unittest.TestCase):
                              '补出的未来时刻没有回退一年')
 
 
+class TestDeviceClockOffset(unittest.TestCase):
+    """`device_clock_offset` 的口径：**设备时间 = 本机时间 + 返回值**。
+
+    runner 用它把「本步开始」换到设备时钟域，再和崩溃日志时间戳比。
+    方向搞反会让所有崩溃都判成窗口外 —— 归因从此永不承认应用缺陷。
+    """
+
+    class _Hdc:
+        def __init__(self, out):
+            self.out = out
+
+        def shell(self, cmd, **kw):
+            from types import SimpleNamespace
+            return SimpleNamespace(stdout=self.out, returncode=0)
+
+    def test_offset_is_device_minus_local(self):
+        from unittest import mock
+        from ohauto.signals import device_clock_offset
+        with mock.patch('ohauto.signals.time.time', return_value=1_766_000_000.0):
+            off = device_clock_offset(self._Hdc('1766000100'))
+        self.assertAlmostEqual(off, 100.0)
+
+    def test_millisecond_epoch_is_normalised(self):
+        from unittest import mock
+        from ohauto.signals import device_clock_offset
+        with mock.patch('ohauto.signals.time.time', return_value=1_766_000_000.0):
+            off = device_clock_offset(self._Hdc('1766000100000'))
+        self.assertAlmostEqual(off, 100.0)
+
+    def test_unreadable_clock_falls_back_to_zero(self):
+        from ohauto.signals import device_clock_offset
+        self.assertEqual(device_clock_offset(self._Hdc('not-a-time')), 0.0)
+
+    def test_hdc_error_falls_back_to_zero(self):
+        from ohauto.signals import device_clock_offset
+
+        class Boom:
+            def shell(self, cmd, **kw):
+                raise OSError('hdc 挂了')
+
+        self.assertEqual(device_clock_offset(Boom()), 0.0)
+
+
 if __name__ == '__main__':
     unittest.main()

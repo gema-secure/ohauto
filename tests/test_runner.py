@@ -630,11 +630,28 @@ class TestResultModel(unittest.TestCase):
         self.assertEqual(r.success_rate, 0.5)
         self.assertEqual(r.non_cascade_failure_rate, 0.75)
 
-    def test_empty_case_is_perfect(self):
+    def test_empty_step_case_is_not_ok(self):
+        """一条步骤都没跑的用例不是「通过」。
+
+        `ok` 原来是 `failed == 0`，total=0 时恒真 —— 手写 YAML 的
+        `steps: null`、trace 沉淀出的空产物都会整单绿灯，而生成闸的
+        EMPTY 拦不住绕过生成器的入口。
+        """
+        r = R.CaseResult(name='x', bundle='y')
+        self.assertEqual(r.total, 0)
+        self.assertFalse(r.ok, '空步骤用例被判成通过了')
+        self.assertFalse(r.kpi_ok())
+
+    def test_empty_case_rates_are_one(self):
+        """零步骤时两个「率」按 1.0 处理 —— 分母为 0 不是「全失败」。
+
+        注意 `ok` **不在此列**：零步骤不算通过，见
+        `test_empty_step_case_is_not_ok`。原来这条测试把 `ok=True` 也一并锁住了，
+        那是把「什么都没跑」写成「跑得很好」。
+        """
         r = R.CaseResult(name='t', bundle='b')
         self.assertEqual(r.success_rate, 1.0)
         self.assertEqual(r.non_cascade_failure_rate, 1.0)
-        self.assertTrue(r.ok)
 
     def test_rescue_rate_zero_attempts_is_one(self):
         r = self._res([(True, None, False)])
@@ -1171,6 +1188,94 @@ class TestScreenSizeHonesty(unittest.TestCase):
         d = Driver(bundle='b', hdc=self._DumbHdc(), verbose=False)
         with self.assertRaises(RuntimeError):
             d.swipe('up')
+
+
+class TestActionStepAccounting(unittest.TestCase):
+    """动作失败必须记在账上。
+
+    异常照抛、但 `step.ok` 留在默认 True 是最坏的一种：日志打印 OK，
+    `steps_failed` 不加一，报告据此说「这一步成功了」。
+    `long_press` 已经修过同类问题，`fling` / `back` 是漏网的两个。
+    """
+
+    def test_fling_failure_is_recorded(self):
+        _, d = make_driver()
+        d.hdc.dirc_fling = lambda *a, **k: (_ for _ in ()).throw(HdcError('注入'))
+        with self.assertRaises(HdcError):
+            d.fling(2)
+        self.assertFalse(d.steps[-1].ok, 'fling 失败了，账上却是成功')
+        self.assertEqual(d.summary()['steps_failed'], 1)
+
+    def test_back_failure_is_recorded(self):
+        _, d = make_driver()
+        d.hdc.back = lambda *a, **k: (_ for _ in ()).throw(HdcError('注入'))
+        with self.assertRaises(HdcError):
+            d.back()
+        self.assertFalse(d.steps[-1].ok, 'back 失败了，账上却是成功')
+        self.assertEqual(d.summary()['steps_failed'], 1)
+
+    def test_fling_marks_tree_dirty(self):
+        """fling 会翻页，之后必须重新取树（与 swipe 一致）。"""
+        _, d = make_driver()
+        d.refresh()
+        self.assertFalse(d._tree_dirty)
+        d.fling(2)
+        self.assertTrue(d._tree_dirty, 'fling 之后还复用旧树，只读步骤会看到过期页面')
+
+
+class TestDiagnoseStartedAt(unittest.TestCase):
+    """归因必须拿到**本步开始时间**，而且要是设备时钟域。
+
+    崩溃日志的时间窗（`CRASH_WINDOW_TOLERANCE_S`）拿 `ExecutionRecord.started_at`
+    和日志时间戳比；不传就是 `None`、整段比对跳过 —— 上一轮遗留的同 bundle 崩溃
+    会被当成本次失败的证据，以 0.9 置信度定案成应用缺陷。这道防线写了很久，
+    但唯一的生产接入点一直没接线。
+    """
+
+    def test_step_records_start_time(self):
+        _, d = make_driver()
+        r = make_runner()
+        sr = r.run_step(d, 1, 'tap', {'id': 'username'})
+        self.assertTrue(sr.ok)
+        self.assertIsNotNone(sr.started_at, '没记本步开始时间，归因无法换算时钟域')
+
+    def test_diagnose_receives_device_clock_start(self):
+        from unittest import mock
+        captured = {}
+
+        def fake(step, **kw):
+            captured.update(kw)
+            return None
+
+        _, d = make_driver()
+        r = make_runner(diagnose_failures=True, diagnose_signals=True)
+        sr = R.StepResult(index=1, action='tap')
+        sr.started_at = 1000.0
+        with mock.patch('ohauto.signals.device_clock_offset', return_value=100.0), \
+                mock.patch('ohauto.diagnose.diagnose_failed_step', fake):
+            r._diagnose_step(d, sr)
+        self.assertAlmostEqual(
+            captured.get('started_at'), 1100.0,
+            msg='started_at 必须是「本机时间 + 设备时钟偏移」')
+
+    def test_no_clock_round_trip_without_signal_collection(self):
+        """不采信号时不许多花一次设备往返（每步失败都调一次太贵）。"""
+        from unittest import mock
+        captured = {}
+
+        def fake(step, **kw):
+            captured.update(kw)
+            return None
+
+        _, d = make_driver()
+        r = make_runner(diagnose_failures=True, diagnose_signals=False)
+        sr = R.StepResult(index=1, action='tap')
+        sr.started_at = 1000.0
+        with mock.patch('ohauto.signals.device_clock_offset',
+                        side_effect=AssertionError('不该被调用')), \
+                mock.patch('ohauto.diagnose.diagnose_failed_step', fake):
+            r._diagnose_step(d, sr)
+        self.assertIsNone(captured.get('started_at'))
 
 
 class TestRetryBudgetFollowsLatestKind(unittest.TestCase):

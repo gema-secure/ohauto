@@ -455,6 +455,10 @@ class StepResult:
     kind: Optional[FailureKind] = None
     attempts: List[StepAttempt] = field(default_factory=list)
     elapsed_ms: int = 0
+    #: 本步**第一次尝试开始**时的本机时间（`time.time()`）。
+    #: 归因侧要把它换算到设备时钟域，用来判断崩溃日志是否落在本步窗口内 ——
+    #: 不传的话「上一轮遗留的崩溃」会被当成这次失败的证据。
+    started_at: Optional[float] = None
     recovered: bool = False       # 这步通过设备恢复才救回来
     cascade: bool = False         # 疑似被前面某步的失败带崩
     cascade_of: Optional[int] = None   # 追溯到哪一步
@@ -1052,11 +1056,28 @@ class Runner:
             # 只有显式开了 diagnose_signals 才把 hdc 传下去 —— 传了它就会去采
             # 崩溃日志/截图/控件树，那是每步失败一次设备往返。
             hdc = getattr(driver, 'hdc', None) if self.diagnose_signals else None
+            # 崩溃日志的时间窗（CRASH_WINDOW_TOLERANCE_S）比对的是**设备时钟域**。
+            # `started_at` 不传时 `ExecutionRecord.started_at is None`，整段时间校验
+            # 直接跳过 —— 上一轮遗留的同 bundle 崩溃会被当成本次失败的证据，
+            # 以 0.9 置信度定案成应用缺陷。
+            started_at = None
+            local_start = getattr(sr, 'started_at', None)
+            if hdc is not None and local_start is not None:
+                try:
+                    from .signals import device_clock_offset
+                    started_at = local_start + device_clock_offset(hdc)
+                except Exception as e:                  # noqa: BLE001 —— 旁路
+                    # 读不到设备时钟不该丢掉整次归因：没有时间窗仍能判其他类别
+                    self.diagnose_errors.append(
+                        f'步骤 {sr.index} 取设备时钟失败（本次归因不带时间窗）: '
+                        f'{type(e).__name__}: {e}')
+                    started_at = None
             return diagnose_failed_step(
                 sr,
                 bundle=getattr(driver, 'bundle', '') or '',
                 ability=getattr(driver, 'ability', 'EntryAbility') or 'EntryAbility',
                 artifact_dir=adir, hdc=hdc, out_dir=adir,
+                started_at=started_at,
                 locator_sink=self.diagnose_locator_sink)
         except Exception as e:
             self.diagnose_errors.append(
@@ -1074,6 +1095,7 @@ class Runner:
         kind = FailureKind.UNKNOWN
         max_attempts = 1
         t_step = time.time()
+        sr.started_at = t_step          # 归因要用（换算到设备时钟域）
 
         attempt = 0
         while True:

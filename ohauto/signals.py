@@ -703,6 +703,26 @@ def _device_clock_offset(hdc) -> Tuple[float, str, Optional[str]]:
     return epoch - time.time(), text, None
 
 
+def device_clock_offset(hdc) -> float:
+    """设备时钟相对本机的偏移（秒）：**设备时间 = 本机时间 + 返回值**。
+
+    只做一次 `date +%s`（不像 `_device_clock_offset` 还要再读一遍可读文本），
+    给「把某个本机时刻换算到设备时钟域」这类轻量用途用。
+
+    读不到返回 0.0：调用方按「两个时钟一致」处理。窗口判断会放宽，
+    但绝不会因为读不到时钟把归因搞崩（与 `_device_clock_offset` 同口径）。
+    """
+    try:
+        res = hdc.shell('date +%s', timeout=15)
+        out = (getattr(res, 'stdout', '') or '').strip()
+        if re.fullmatch(r'\d{9,13}', out):
+            epoch = float(out) / (1000.0 if len(out) > 10 else 1.0)
+            return epoch - time.time()
+    except Exception:                                        # noqa: BLE001
+        pass
+    return 0.0
+
+
 def _to_iso(epoch: float) -> str:
     """本机时间 → 带本地时区偏移的 ISO 8601。"""
     return datetime.fromtimestamp(epoch, tz=timezone.utc).astimezone().isoformat(
