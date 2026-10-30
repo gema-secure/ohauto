@@ -53,7 +53,7 @@
 | `generate` / `generate_many` | 模块级便捷入口 |
 | `LLMProvider` / `ScriptedProvider` / `NullProvider` / `OpenAICompatibleProvider` / `MockProvider` | Provider 抽象与实现（环境变量 `OHAUTO_LLM_BASE_URL` / `OHAUTO_LLM_MODEL` / `OHAUTO_LLM_API_KEY`） |
 | `Case` / `TestPoint` / `RejectReason` / `ValidationIssue` / `GenerationReport` | 用例对象与校验产物（实质内容闸 `NO_SUBSTANCE` / 测试点闸 `NO_TEST_POINT`） |
-| `generate_stress` / `stress_cases` / `SwipeSafety` | 压测用例生成与滑动安全检查 |
+| `generate_stress` / `stress_cases` / `SwipeSafety` | 压力测试用例生成与滑动安全检查 |
 
 ### 失败归因与自愈
 
@@ -104,7 +104,7 @@
 | `python tools/measure_locate_latency.py --rounds 20 --label <场景>` | 定位延迟分段测量（设备侧/宿主侧） |
 | `python tools/case_health.py` | 用例健康度（可失败性校验） |
 | `python tools/crossform_run.py --device <实例> --baseline open --target close` | 跨形态差异比对（退出码见 §三） |
-| `python tools/stability_telemetry.py` / `stability_trend.py` / `app_stability.py` | 长稳遥测与趋势（用法见 §六） |
+| `python tools/stability_telemetry.py` / `stability_trend.py` / `app_stability.py` | 长时间运行遥测与趋势（用法见 §六） |
 | `python tools/export_hypium.py` / `sign_hap.py` | hypium 脚本导出与 HAP 签名 |
 | `python tools/emulator_cli.py start --skip-check` | DevEco 模拟器管理（用法见 §六） |
 | `python examples/collect_signals.py --bundle <包名> [--sim]` | 信号采集 CLI（`--sim` 无真机走通） |
@@ -169,7 +169,7 @@ sig: Signals = collect_signals(hdc, bundle='com.ohos.note')
 ### 系统权限弹窗
 
 应用冷启动常弹系统权限门（属主 `com.ohos.permissionmanager`）。它盖住内容区时
-`dumpLayout` 返回的是**弹窗的树**，定位、探索、压测会一起卡在上面 —— 真机实测过
+`dumpLayout` 返回的是**弹窗的树**，定位、探索、压力测试会一起卡在上面 —— 真机实测过
 一整套冒烟因为一个弹窗从 6/6 掉到 4/6。
 
 `Explorer` 会在把当前页当页面之前先识别并按策略作答，动作记进
@@ -191,7 +191,7 @@ ex = Explorer(driver, permission_policy='deny')   # 或读 OHAUTO_PERMISSION_POL
 
 ## 六、常见操作要点
 
-### 长稳测试
+### 长时间运行测试
 
 ```bash
 python -u examples/run_suite.py examples/cases/calculator.yaml \
