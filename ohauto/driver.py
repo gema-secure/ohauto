@@ -953,6 +953,13 @@ class Driver:
             self._mark_mutated()
             if wait:
                 self.wait_idle(timeout=timeout)
+                # 冷启动后系统弹窗（USB 连接方式 / 权限确认）会盖住应用：
+                # 此时抓树只拿到弹窗、点击也被吃掉。先清场再报启动完成。
+                closed = self.dismiss_dialogs()
+                if closed:
+                    step.extra['dialogs_closed'] = closed
+                    self.log(f'启动后点掉 {closed} 个系统弹窗，重新等稳定')
+                    self.wait_idle(timeout=timeout)
             elapsed = int((time.time() - t_start) * 1000)
             step.extra['startup_ms'] = elapsed
             self.log(f'应用已拉起，冷启动耗时约 {elapsed}ms')
@@ -966,6 +973,59 @@ class Driver:
 
     def stop(self) -> None:
         self.hdc.force_stop(self.bundle)
+
+    # -------------------------------------------------------- 系统弹窗
+
+    #: 系统弹窗上「确认并关掉」的按钮：先按 id 前缀认，认不到再按文案兜底。
+    #: 前缀来自实测（USB 连接方式的确定键是 `advanced_dialog_button_0`），
+    #: 文案来自权限确认、只充电提示这几个高频弹窗。
+    DIALOG_BUTTON_ID_PREFIX = 'advanced_dialog_button_'
+    DIALOG_BUTTON_TEXTS = ('确定', '允许', '仅充电', '同意', '知道了')
+
+    @classmethod
+    def _find_dialog_button(cls, root: LayoutNode) -> Optional[LayoutNode]:
+        """在控件树里找「关掉弹窗」的按钮；找不到返回 None。"""
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            if (node.id or '').startswith(cls.DIALOG_BUTTON_ID_PREFIX):
+                return node
+            label = (node.text or '').strip()
+            if label and label in cls.DIALOG_BUTTON_TEXTS:
+                return node
+            stack.extend(node.children)
+        return None
+
+    def dismiss_dialogs(self, max_rounds: int = 3) -> int:
+        """点掉挡住被测应用的系统弹窗，返回关掉的个数。
+
+        为什么要有它（真机实测）：`uitest dumpLayout` 只抓**最上层窗口**，
+        一条系统弹窗（USB 连接方式、权限确认）就能让整棵树变成弹窗节点 ——
+        被测应用明明在跑，抓回来却「看起来空白」；动作注入是**按坐标点**的，
+        弹窗还会把点击吃掉，而调用方拿到的仍然是「点击成功」（冒烟测试因此
+        在弹窗上全绿通过，被测应用一下没碰）。
+
+        只在**前台不是被测应用**时才动 —— 正常路径零开销；`foreground_is`
+        取不到焦点窗口时会返回「跳过」，不会误点。
+        """
+        probe = getattr(self.hdc, 'foreground_is', None)
+        if probe is None:              # 该 HdcLike 没有前台校验能力，静默跳过
+            return 0
+        closed = 0
+        for _ in range(max_rounds):
+            ok, why = probe(self.bundle)
+            if ok:
+                return closed
+            button = self._find_dialog_button(self.refresh(unfiltered=True))
+            if button is None:
+                self.log(f'前台不是 {self.bundle}（{why}），但没有可点的弹窗按钮')
+                return closed
+            cx, cy = button.center
+            self.hdc.shell(f'uitest uiInput click {int(cx)} {int(cy)}')
+            closed += 1
+            self._mark_mutated()
+            self._sleep(0.8)
+        return closed
 
     # -------------------------------------------------------- 导出
 
