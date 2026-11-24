@@ -19,6 +19,13 @@
     python tools/e2e_smoke_real.py
     python tools/e2e_smoke_real.py --skip-explore          # 跳过会真点击的探索
     python tools/e2e_smoke_real.py --bundle com.ohos.note --ability MainAbility
+
+    # 换靶应用时**必须连探针与压测目标一起换**，否则定位 0/3、压测全败，
+    # 看起来像能力坏了，其实是靶子上没有那些控件：
+    python tools/e2e_smoke_real.py --bundle com.example.myapplication \\
+        --ability EntryAbility \\
+        --probe-id btn_go_second --probe-text 探针A：无条件渲染 \\
+        --stress-target btn_go_second
 """
 from __future__ import annotations
 
@@ -43,6 +50,17 @@ from preflight import require_device                  # noqa: E402
 DEFAULT_BUNDLE = 'ohos.samples.distributedcalc'
 DEFAULT_ABILITY = 'MainAbility'
 DEVICE_HDC = None    # None = 走 Hdc 自动定位；本机路径写 hdc.config.json（隐私项不入源码）
+
+# 探针与压测目标 —— 默认对着设备自带计算器，**换成别的靶应用必须一起换**。
+#
+# 为什么要有这几个开关：原来这两组控件是写死在代码里的（探针 `{'id':'7'}` /
+# `{'text':'计算器'}`、压测 `target={'id':'7'}`）。拿它指向别的应用时，
+# 定位阶段必然 0/3、压测每段必败 —— 表现和"能力坏了"一模一样，实际是靶子
+# 不匹配。这种情况最容易被误判成缺陷，所以留出参数位。
+DEFAULT_PROBE_ID = '7'
+DEFAULT_PROBE_MISSING_ID = 'plus_should_not_exist'
+DEFAULT_PROBE_TEXT = '计算器'
+DEFAULT_STRESS_TARGET_ID = '7'
 
 RESULTS: list = []
 
@@ -110,7 +128,10 @@ def stage_locator(args, d):
 
         lm = LocatorManager()
         # 三个探针：存在的 id / 不存在的 id（应走降级链或落空）/ text 线索
-        probes = [{'id': '7'}, {'id': 'plus_should_not_exist'}, {'text': '计算器'}]
+        # 取值来自命令行，默认仍是计算器的那一组（零回归）
+        probes = [{'id': args.probe_id},
+                  {'id': args.probe_missing_id},
+                  {'text': args.probe_text}]
         hits = 0
         for spec in probes:
             try:
@@ -262,8 +283,14 @@ def stage_stress(args, d):
     """压测用例生成 + 分片执行（DSL 无循环，靠 run_suite 层重复）。"""
     stage(5, 'B · 压测（生成 + 分片执行）')
     try:
+        # 压测必须从**已知起始页**开跑：前面几阶段（探索/归因）会把应用导航走，
+        # 目标控件可能已经不在当前页 —— 那样每步都 LOCATE 失败，看着像压测坏了。
+        # 实测就是这样踩到的：首页唯一的按钮点第 2 次就跳到第二页，后 3 步全败。
+        d.start(wait=True)
+        d.dismiss_dialogs()
         cases = stress_cases('重复点击', chunks=args.chunks, bundle=args.bundle,
-                             ability=args.ability, rounds=4, target={'id': '7'})
+                             ability=args.ability, rounds=4,
+                             target={'id': args.stress_target})
         print(f'  分片数          {len(cases)}')
         dicts = [c.to_dict() if hasattr(c, 'to_dict') else c for c in cases]
         # 注意：run_suite() 直接返回 SuiteResult（没有 .suite）；
@@ -306,6 +333,14 @@ def main() -> int:
     ap.add_argument('--actions-per-page', type=int, default=4,
                     help='每页最多尝试多少个控件 —— 覆盖率的主要限制项')
     ap.add_argument('--chunks', type=int, default=2)
+    ap.add_argument('--probe-id', default=DEFAULT_PROBE_ID,
+                    help='定位阶段的「存在的 id」探针（默认取计算器的 7）')
+    ap.add_argument('--probe-missing-id', default=DEFAULT_PROBE_MISSING_ID,
+                    help='定位阶段的「不存在的 id」探针，应落空或走降级链')
+    ap.add_argument('--probe-text', default=DEFAULT_PROBE_TEXT,
+                    help='定位阶段的「纯文案」探针（验 text 通道）')
+    ap.add_argument('--stress-target', default=DEFAULT_STRESS_TARGET_ID,
+                    help='压测反复点击的目标控件 id（默认取计算器的 7）')
     args = ap.parse_args()
 
     print('=' * 72)
