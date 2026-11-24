@@ -1,0 +1,23 @@
+name: 计算器加法（断言故意写错）
+bundle: ohos.samples.distributedcalc
+ability: MainAbility
+description: |
+  演示用：与 calc_right.yaml 只差最后一行断言。
+  断言找的是不存在的 id=result_typo，必然失败，用于现场演「归因」。
+steps:
+  - start: true
+  - waitFor:
+      id: "7"
+      timeout: 8000
+  - tap:
+      id: "7"
+  - tap:
+      id: "+"
+  - tap:
+      id: "8"
+  - tap:
+      id: "="
+  - assert:
+      exists:
+        id: "result_typo"
+        timeout: 3000

@@ -1,0 +1,23 @@
+name: 计算器加法（断言已改对）
+bundle: ohos.samples.distributedcalc
+ability: MainAbility
+description: |
+  演示用：与 calc_wrong.yaml 只差最后一行断言（result_typo → result）。
+  现场用来演示「改一行用例，重跑通过」。
+steps:
+  - start: true
+  - waitFor:
+      id: "7"
+      timeout: 8000
+  - tap:
+      id: "7"
+  - tap:
+      id: "+"
+  - tap:
+      id: "8"
+  - tap:
+      id: "="
+  - assert:
+      exists:
+        id: "result"
+        timeout: 3000

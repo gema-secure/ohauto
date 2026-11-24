@@ -83,6 +83,9 @@ def main():
     ap.add_argument('--perf', action='store_true',
                     help='每步采集设备内存/负载，产出内存趋势曲线并入报告'
                          '（长稳场景用；每步多两次设备往返，默认关）')
+    ap.add_argument('--diagnose', action='store_true',
+                    help='失败步跑归因，给出四分类结论（定位/时序/应用/用例）'
+                         '并附证据分；每步失败多花约 10 秒，默认关')
     ap.add_argument('--quiet', action='store_true', help='少打印')
     args = ap.parse_args()
 
@@ -165,6 +168,7 @@ def main():
                     continue_on_fail=not args.stop_on_fail,
                     artifact_budget=args.artifact_budget,
                     collect_perf=args.perf,
+                    diagnose_failures=args.diagnose,
                     verbose=verbose)
 
     # ---------------------------------------------------------- 执行
@@ -222,6 +226,30 @@ def main():
                                  'kpi_target': args.kpi,
                                  'retry_enabled': not args.no_retry,
                                  'mode': 'sim' if args.sim else 'device'})
+
+    # 归因结论并入报告：report.collect 读的是 Driver 的步骤记录，而归因挂在
+    # Runner 的 StepResult 上，两者不是同一个对象 —— 按步号对齐补进去。
+    # 只在单个用例、未重复时合并：多轮执行里步号会重复，按号对齐会串轮。
+    if args.diagnose and len(suite.cases) == 1:
+        _diag = {}
+        for _st in suite.cases[0].steps:
+            if getattr(_st, 'verdict', None) is not None:
+                _diag[_st.index] = (_st.verdict.to_dict()
+                                    if hasattr(_st.verdict, 'to_dict')
+                                    else _st.verdict)
+        for _st in (data.get('steps') or []):
+            _v = _diag.get(_st.get('index'))
+            if _v and not _st.get('verdict'):
+                _st['verdict'] = _v
+        # 报告渲染器读的是 data['case']['steps']（见 report.to_markdown）；
+        # 套件路径下 collect() 不产出 'case'，这里补上，否则 JSON 有归因、md/html 没有。
+        _case = data.setdefault('case', {})
+        if isinstance(_case, dict) and not _case.get('steps'):
+            _case['steps'] = data.get('steps') or []
+        for _st in (_case.get('steps') or []):
+            _v = _diag.get(_st.get('index'))
+            if _v and not _st.get('verdict'):
+                _st['verdict'] = _v
     paths = report.write_all(data, args.out, stem='suite_report')
     print('\n报告:')
     for k, v in paths.items():
@@ -380,6 +408,11 @@ def _print_summary(suite: SuiteResult, guard, args):
                 err = (last.error if last else '')[:110]
                 print(f'    #{s.index:<3} [{kind}] {s.action} {s.target[:26]}')
                 print(f'         {err}')
+                # 归因结论（--diagnose 才有时才有）：现场演示靠这一行说明
+                # 「是谁的问题」，所以必须打在失败明细里，而不是只落 JSON。
+                if getattr(s, 'verdict_cn', None):
+                    # verdict_cn 是给报告用的 Markdown 文本，终端里把 ** 去掉
+                    print(f'         归因: {s.verdict_cn.replace("**", "")}')
     print('=' * W)
 
 
